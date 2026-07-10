@@ -1,0 +1,13 @@
+# Dependencies and generated output
+node_modules/
+.next/
+dist/
+coverage/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+
+# Local backups
+backups/
