@@ -1,0 +1,27 @@
+model Organizer {
+
+  id                    String @id @default(cuid())
+
+  userId                String @unique
+
+  companyName           String
+
+  document              String?
+
+  logo                  String?
+
+  verified              Boolean @default(false)
+
+  createdAt             DateTime @default(now())
+
+  updatedAt             DateTime @updatedAt
+
+  user                  User @relation(fields:[userId], references:[id])
+
+  campaigns             Campaign[]
+
+  affiliates            Affiliate[]
+
+  gateway               Gateway?
+
+}

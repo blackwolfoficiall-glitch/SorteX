@@ -1,0 +1,97 @@
+model Campaign {
+
+  id                    String   @id @default(cuid())
+
+  organizerId           String
+
+  title                 String
+
+  slug                  String   @unique
+
+  description           String   @db.Text
+
+  status                CampaignStatus @default(DRAFT)
+
+  category              CampaignCategory
+
+  image                 String?
+
+  banner                String?
+
+  regulation            String? @db.Text
+
+  quotaPrice            Decimal
+
+  totalQuotas           Int
+
+  availableQuotas       Int
+
+  soldQuotas            Int @default(0)
+
+  reservedQuotas        Int @default(0)
+
+  minimumPurchase       Int @default(1)
+
+  maximumPurchase       Int?
+
+  drawDate              DateTime?
+
+  publishedAt           DateTime?
+
+  finishedAt            DateTime?
+
+  createdAt             DateTime @default(now())
+
+  updatedAt             DateTime @updatedAt
+
+  organizer             Organizer @relation(fields:[organizerId], references:[id])
+
+  prizes                Prize[]
+
+  quotas                Quota[]
+
+  orders                Order[]
+
+  promotions            Promotion[]
+
+  ads                   Ads[]
+
+}
+enum CampaignStatus {
+
+  DRAFT
+
+  SCHEDULED
+
+  ACTIVE
+
+  PAUSED
+
+  SOLD_OUT
+
+  DRAWING
+
+  FINISHED
+
+  CANCELED
+
+}
+enum CampaignCategory {
+
+  CAR
+
+  MOTORCYCLE
+
+  HOUSE
+
+  CASH
+
+  ELECTRONICS
+
+  TRAVEL
+
+  AGRICULTURE
+
+  OTHER
+
+}

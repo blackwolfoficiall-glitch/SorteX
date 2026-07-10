@@ -1,0 +1,23 @@
+model Prize {
+
+  id              String @id @default(cuid())
+
+  campaignId      String
+
+  title           String
+
+  description     String?
+
+  image           String?
+
+  value           Decimal?
+
+  position        Int
+
+  createdAt       DateTime @default(now())
+
+  updatedAt       DateTime @updatedAt
+
+  campaign        Campaign @relation(fields:[campaignId], references:[id])
+
+}

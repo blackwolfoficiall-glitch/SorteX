@@ -1,0 +1,51 @@
+model Payment {
+
+  id                String @id @default(cuid())
+
+  gatewayId         String
+
+  transactionId     String?
+
+  method            PaymentMethod
+
+  status            PaymentStatus
+
+  amount            Decimal
+
+  fee               Decimal?
+
+  paidAt            DateTime?
+
+  createdAt         DateTime @default(now())
+
+  updatedAt         DateTime @updatedAt
+
+  gateway           Gateway @relation(fields:[gatewayId], references:[id])
+
+  orders            Order[]
+
+}
+enum PaymentMethod {
+
+  PIX
+
+  CREDIT_CARD
+
+  DEBIT_CARD
+
+  BOLETO
+
+}
+enum PaymentStatus {
+
+  PENDING
+
+  APPROVED
+
+  REJECTED
+
+  REFUNDED
+
+  CANCELED
+
+}

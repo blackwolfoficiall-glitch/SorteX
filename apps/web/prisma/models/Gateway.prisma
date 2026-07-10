@@ -1,0 +1,42 @@
+model Gateway {
+
+  id                    String @id @default(cuid())
+
+  organizerId           String @unique
+
+  provider              GatewayProvider
+
+  accountName           String?
+
+  accountEmail          String?
+
+  accessToken           String?
+
+  refreshToken          String?
+
+  connected             Boolean @default(false)
+
+  sandbox               Boolean @default(true)
+
+  createdAt             DateTime @default(now())
+
+  updatedAt             DateTime @updatedAt
+
+  organizer             Organizer @relation(fields:[organizerId], references:[id])
+
+  payments              Payment[]
+
+}
+enum GatewayProvider {
+
+  MERCADO_PAGO
+
+  PAGBANK
+
+  STONE
+
+  ASAAS
+
+  PAGARME
+
+}

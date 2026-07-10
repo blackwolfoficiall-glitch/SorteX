@@ -1,0 +1,27 @@
+model Affiliate {
+
+  id                String @id @default(cuid())
+
+  organizerId       String
+
+  name              String
+
+  email             String?
+
+  phone             String?
+
+  commission        Decimal
+
+  totalSales        Decimal @default(0)
+
+  totalOrders       Int @default(0)
+
+  active            Boolean @default(true)
+
+  createdAt         DateTime @default(now())
+
+  updatedAt         DateTime @updatedAt
+
+  organizer         Organizer @relation(fields:[organizerId], references:[id])
+
+}

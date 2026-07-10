@@ -1,0 +1,64 @@
+model CRM {
+
+  id                    String @id @default(cuid())
+
+  buyerId               String @unique
+
+  organizerId           String
+
+  totalSpent            Decimal @default(0)
+
+  totalOrders           Int @default(0)
+
+  totalQuotas           Int @default(0)
+
+  averageTicket         Decimal @default(0)
+
+  lastPurchase          DateTime?
+
+  firstPurchase         DateTime?
+
+  lastInteraction       DateTime?
+
+  favoriteCategory      CampaignCategory?
+
+  favoriteCity          String?
+
+  favoriteState         String?
+
+  purchaseProbability   Int @default(0)
+
+  engagementScore       Int @default(0)
+
+  recoverableValue      Decimal @default(0)
+
+  abandonedPurchases    Int @default(0)
+
+  completedPurchases    Int @default(0)
+
+  status                CRMStatus @default(ACTIVE)
+
+  createdAt             DateTime @default(now())
+
+  updatedAt             DateTime @updatedAt
+
+  buyer                 Buyer @relation(fields:[buyerId], references:[id])
+
+  organizer             Organizer @relation(fields:[organizerId], references:[id])
+
+}
+enum CRMStatus {
+
+  NEW
+
+  ACTIVE
+
+  VIP
+
+  RISK
+
+  INACTIVE
+
+  LOST
+
+}

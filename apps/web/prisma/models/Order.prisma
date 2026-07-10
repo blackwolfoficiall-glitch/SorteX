@@ -1,0 +1,42 @@
+model Order {
+
+  id                String @id @default(cuid())
+
+  campaignId        String
+
+  buyerId           String
+
+  paymentId         String?
+
+  code              String @unique
+
+  status            OrderStatus @default(PENDING)
+
+  totalAmount       Decimal
+
+  quantity          Int
+
+  createdAt         DateTime @default(now())
+
+  updatedAt         DateTime @updatedAt
+
+  campaign          Campaign @relation(fields:[campaignId], references:[id])
+
+  buyer             Buyer @relation(fields:[buyerId], references:[id])
+
+  payment           Payment? @relation(fields:[paymentId], references:[id])
+
+}
+enum OrderStatus {
+
+  PENDING
+
+  RESERVED
+
+  PAID
+
+  CANCELED
+
+  REFUNDED
+
+}

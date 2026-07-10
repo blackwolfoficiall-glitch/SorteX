@@ -1,0 +1,30 @@
+model Quota {
+
+  id              String @id @default(cuid())
+
+  campaignId      String
+
+  number          Int
+
+  status          QuotaStatus @default(AVAILABLE)
+
+  reservedUntil   DateTime?
+
+  createdAt       DateTime @default(now())
+
+  updatedAt       DateTime @updatedAt
+
+  campaign        Campaign @relation(fields:[campaignId], references:[id])
+
+}
+enum QuotaStatus {
+
+  AVAILABLE
+
+  RESERVED
+
+  PAID
+
+  CANCELED
+
+}
