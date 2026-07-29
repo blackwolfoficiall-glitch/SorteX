@@ -63,7 +63,8 @@ export default function SalesInsights() {
             </h3>
 
             <p className="text-sm text-zinc-500">
-              Ative uma promoção "Compre 10 e Ganhe 2" para aumentar a conversão.
+              Ative uma promoção &quot;Compre 10 e Ganhe 2&quot; para aumentar a
+              conversão.
             </p>
 
           </div>

@@ -110,8 +110,10 @@ export default function Sidebar() {
 
       <div className="px-5">
         <div className="rounded-2xl bg-zinc-900 border border-zinc-800 p-5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="https://i.pravatar.cc/120"
+            alt="Avatar do organizador Carlos Silva"
             className="w-20 h-20 rounded-full border-2 border-violet-500"
           />
 

@@ -1,0 +1,43 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: "**/package-lock.json" }
+      - run: npm ci
+        working-directory: services/api
+      - run: npx prisma validate
+        working-directory: services/api
+      - run: npx prisma generate
+        working-directory: services/api
+      - run: npm run lint
+        working-directory: services/api
+      - run: npm test -- --runInBand
+        working-directory: services/api
+      - run: npm run build
+        working-directory: services/api
+      - run: npm run test:e2e -- --runInBand
+        working-directory: services/api
+      - run: npm ci
+        working-directory: apps/web
+      - run: npm run lint
+        working-directory: apps/web
+      - run: npx tsc --noEmit
+        working-directory: apps/web
+      - run: npm run build
+        working-directory: apps/web
+      - name: Upload test and build metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-metadata
+          path: |
+            services/api/coverage
+            apps/web/.next/build-manifest.json
+          if-no-files-found: ignore

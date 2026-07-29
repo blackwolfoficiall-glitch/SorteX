@@ -1,0 +1,22 @@
+import { authRequest } from '@/lib/auth/client';
+
+export type Program={id:string;campaignId:string|null;name:string;description:string|null;status:string;commissionType:string;commissionPercentage:number|null;commissionFixedAmount:number|null;minimumPayoutAmount:number;releaseDelayDays:number;cookieDurationDays:number;affiliateLimit:number|null;commissionBasis:string;rules:string|null;startsAt:string|null;endsAt:string|null;_count?:{affiliates:number;conversions:number;links:number}};
+export type OrganizerAffiliate={id:string;name:string;email:string;phone:string|null;status:string;referralCode:string;joinedAt:string;inviteExpiresAt:string|null;program:{name:string};_count:{links:number;conversions:number}};
+export type AffiliateSummary={activePrograms:number;activeAffiliates:number;pendingInvites:number;clicks:number;attributedReservations:number;approvedSales:number;generatedRevenue:number;estimatedCommissions:number;availableCommissions:number;paidCommissions:number};
+const root='/api/affiliates';
+export const programs=()=>authRequest<Program[]>(`${root}/affiliate-programs/my`,{cache:'no-store'});
+export const createProgram=(body:Record<string,unknown>)=>authRequest<Program>(`${root}/affiliate-programs`,{method:'POST',body:JSON.stringify(body)});
+export const updateProgram=(id:string,body:Record<string,unknown>)=>authRequest<Program>(`${root}/affiliate-programs/${id}`,{method:'PATCH',body:JSON.stringify(body)});
+export const activateProgram=(id:string)=>authRequest(`${root}/affiliate-programs/${id}/activate`,{method:'POST'});
+export const pauseProgram=(id:string)=>authRequest(`${root}/affiliate-programs/${id}/pause`,{method:'POST'});
+export const affiliates=()=>authRequest<OrganizerAffiliate[]>(`${root}/affiliates/my`,{cache:'no-store'});
+export const inviteAffiliate=(body:Record<string,unknown>)=>authRequest<OrganizerAffiliate&{inviteUrl:string}>(`${root}/affiliates/invite`,{method:'POST',body:JSON.stringify(body)});
+export const approveAffiliate=(id:string)=>authRequest(`${root}/affiliates/${id}/approve`,{method:'POST'});
+export const suspendAffiliate=(id:string)=>authRequest(`${root}/affiliates/${id}/suspend`,{method:'POST'});
+export const cancelInvite=(id:string)=>authRequest(`${root}/affiliates/${id}/cancel`,{method:'POST'});
+export const resendInvite=(id:string)=>authRequest<{inviteUrl:string}>(`${root}/affiliates/${id}/resend`,{method:'POST'});
+export const organizerAffiliateDashboard=()=>authRequest<AffiliateSummary>(`${root}/affiliates/organizer/dashboard`,{cache:'no-store'});
+export const organizerConversions=()=>authRequest<any[]>(`${root}/affiliates/organizer/conversions`,{cache:'no-store'});
+export const organizerCommissions=()=>authRequest<any[]>(`${root}/affiliates/organizer/commissions`,{cache:'no-store'});
+export const commissionAction=(id:string,action:'release'|'pay')=>authRequest(`${root}/affiliates/organizer/commissions/${id}/${action}`,{method:'POST'});
+export const affiliateDashboard=()=>authRequest<any>(`${root}/affiliate/dashboard`,{cache:'no-store'});

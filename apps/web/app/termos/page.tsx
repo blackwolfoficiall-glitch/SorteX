@@ -1,0 +1,3 @@
+import { Suspense } from "react";
+import InstitutionalBackButton from "@/components/public/InstitutionalBackButton";
+export default function TermosPage(){return <main className="mx-auto min-h-screen max-w-3xl px-5 py-16"><Suspense fallback={<span className="font-bold text-violet-700">← Voltar</span>}><InstitutionalBackButton/></Suspense><h1 className="mt-8 text-4xl font-black">Termos de Uso</h1><p className="mt-5 leading-8 text-zinc-600">Os termos definitivos da SorteX serão publicados após revisão jurídica. Durante os testes, utilize apenas dados fictícios e ambientes autorizados.</p></main>}

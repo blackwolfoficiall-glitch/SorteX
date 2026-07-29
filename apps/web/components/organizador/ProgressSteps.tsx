@@ -4,13 +4,15 @@ import { Check } from "lucide-react";
 
 interface ProgressStepsProps {
   etapa: number;
+  etapas?: string[];
 }
 
 export default function ProgressSteps({
   etapa,
+  etapas = ["Dados", "Financeiro", "Confirmação"],
 }: ProgressStepsProps) {
 
-  const progresso = Math.min((etapa / 3) * 100, 100);
+  const progresso = Math.min((etapa / etapas.length) * 100, 100);
 
   return (
     <div className="rounded-3xl border bg-white p-6 shadow-sm">
@@ -24,7 +26,7 @@ export default function ProgressSteps({
           </p>
 
           <h1 className="mt-1 text-3xl font-black">
-            Etapa {etapa} de 3
+            Etapa {etapa} de {etapas.length}
           </h1>
 
         </div>
@@ -50,33 +52,18 @@ export default function ProgressSteps({
 
       </div>
 
-      <div className="mt-8 flex items-center justify-between">
-
-        <Step
-          numero={1}
-          titulo="Dados"
-          ativo={etapa >= 1}
-          concluido={etapa > 1}
-        />
-
-        <div className="mx-2 h-1 flex-1 rounded bg-zinc-200" />
-
-        <Step
-          numero={2}
-          titulo="Financeiro"
-          ativo={etapa >= 2}
-          concluido={etapa > 2}
-        />
-
-        <div className="mx-2 h-1 flex-1 rounded bg-zinc-200" />
-
-        <Step
-          numero={3}
-          titulo="Confirmação"
-          ativo={etapa >= 3}
-          concluido={false}
-        />
-
+      <div className="mt-8 flex items-start justify-between overflow-x-auto pb-2">
+        {etapas.map((titulo, index) => (
+          <div className="contents" key={titulo}>
+            {index > 0 && <div className="mx-2 mt-6 h-1 min-w-4 flex-1 rounded bg-zinc-200" />}
+            <Step
+              numero={index + 1}
+              titulo={titulo}
+              ativo={etapa >= index + 1}
+              concluido={etapa > index + 1}
+            />
+          </div>
+        ))}
       </div>
 
     </div>

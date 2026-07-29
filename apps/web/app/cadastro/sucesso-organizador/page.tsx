@@ -30,25 +30,25 @@ export default function SucessoOrganizador() {
           </h2>
 
           <p className="mt-6 leading-7 text-zinc-500">
-            Agora sua conta está pronta para criar campanhas,
-            vender cotas e acompanhar suas vendas em tempo real.
+            Sua conta de organizador foi criada. Entre com seu e-mail e senha
+            para acessar a área do organizador.
           </p>
 
         </div>
 
         <Link
-          href="/dashboard"
+          href="/login"
           className="mt-10 flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-violet-700 to-purple-600 py-5 text-lg font-bold text-white"
         >
-          Ir para o Dashboard
+          Entrar na minha conta
           <ArrowRight size={20} />
         </Link>
 
         <Link
-          href="/criar"
+          href="/"
           className="mt-4 flex w-full items-center justify-center rounded-2xl border border-violet-300 py-4 font-semibold text-violet-700"
         >
-          Criar primeira campanha
+          Voltar ao início
         </Link>
 
       </div>

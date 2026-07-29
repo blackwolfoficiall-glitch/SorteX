@@ -1,0 +1,3 @@
+import { authenticatedApiFetch } from '@/lib/auth/server';
+async function proxy(request:Request,{params}:{params:Promise<{path:string[]}>}){const {path}=await params;const body=['GET','HEAD'].includes(request.method)?undefined:await request.text();const response=await authenticatedApiFetch(`/admin/${path.join('/')}${new URL(request.url).search}`,{method:request.method,body:body||undefined,headers:body?{'Content-Type':'application/json'}:undefined});return new Response(await response.text(),{status:response.status,headers:{'Content-Type':response.headers.get('content-type')??'application/json'}});}
+export const GET=proxy;export const POST=proxy;export const PATCH=proxy;

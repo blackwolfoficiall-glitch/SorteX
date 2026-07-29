@@ -1,0 +1,1 @@
+import { RoleGate } from "@/components/auth/RoleGate";import LegalUserCenter from "@/components/legal/LegalUserCenter";export default function Page(){return <RoleGate allowed={["BUYER","ORGANIZER","ADMIN"]}><main className="min-h-screen bg-zinc-100 p-5 md:p-10 dark:bg-zinc-950"><LegalUserCenter/></main></RoleGate>}

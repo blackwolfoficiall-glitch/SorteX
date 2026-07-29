@@ -25,6 +25,7 @@ export default function MercadoPagoPage() {
 
         <div className="mt-8 rounded-3xl bg-white p-8 shadow">
 
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/gateways/mercadopago.png"
             alt="Mercado Pago"

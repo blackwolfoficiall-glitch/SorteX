@@ -32,8 +32,9 @@ posteriormente com autenticação, consultas reais e escopo por organizador.
 
 ## Código preservado
 
-Nenhum código legado foi destruído. As cópias completas e seus metadados Git
-estão preservados no diretório local ignorado `backups/`.
+Nenhum código legado foi destruído. As cópias completas, os fragmentos que
+estavam dentro do frontend e seus metadados Git estão preservados fora do
+repositório em `/Users/valbert/Projetos/SorteX-backups/`.
 
 ## Decisão arquitetural
 

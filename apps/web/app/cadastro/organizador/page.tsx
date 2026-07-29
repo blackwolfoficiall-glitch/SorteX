@@ -2,263 +2,132 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import {
-  ArrowLeft,
-  Camera,
-  User,
-  Mail,
-  Phone,
-  CreditCard,
-  Building2,
-  MapPin,
-  Upload,
-} from "lucide-react";
+import { FormEvent, useState } from "react";
+import { Building2 } from "lucide-react";
+import { AuthShell, authInputClass } from "@/components/auth/AuthShell";
+import { authRequest } from "@/lib/auth/client";
+import { brand, saveBrand } from "@/lib/media/client";
+import { uploadOrganizerFile } from "@/lib/organizers/client";
 
 export default function CadastroOrganizador() {
   const router = useRouter();
-
+  const [form, setForm] = useState({
+    name: "",
+    cpf: "",
+    cnpj: "",
+    phone: "",
+    email: "",
+    city: "",
+    state: "",
+    password: "",
+    confirmation: "",
+    slogan: "",
+  });
+  const [logo, setLogo] = useState<File | null>(null);
+  const [accepted, setAccepted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [dataAccepted, setDataAccepted] = useState(false);
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const [form, setForm] = useState({
-    nome: "",
-    email: "",
-    telefone: "",
-    cpf: "",
-    organizacao: "",
-    instagram: "",
-    cidade: "",
-    estado: "",
-    termos: false,
-  });
-
-  function alterar(e: React.ChangeEvent<HTMLInputElement>) {
-    const { name, value, checked, type } = e.target;
-
-    setForm((old) => ({
-      ...old,
-      [name]: type === "checkbox" ? checked : value,
-    }));
+  function change(event: React.ChangeEvent<HTMLInputElement>) {
+    setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
   }
 
-  async function continuar(e: React.FormEvent) {
-    e.preventDefault();
-
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setError("");
+    if (form.password !== form.confirmation) return setError("As senhas não conferem.");
+    if (!accepted || !privacyAccepted || !dataAccepted) return setError("Confirme todos os aceites obrigatórios para continuar.");
     setLoading(true);
-
-    setTimeout(() => {
-      router.push("/cadastro/organizador/financeiro");
-    }, 800);
+    try {
+      const digits = (value: string) => value.replace(/\D/g, "");
+      await authRequest("/api/auth/register", {
+        method: "POST",
+        body: JSON.stringify({
+          name: form.name.trim(),
+          cpf: digits(form.cpf),
+          cnpj: digits(form.cnpj) || undefined,
+          phone: digits(form.phone),
+          email: form.email.trim().toLowerCase(),
+          city: form.city.trim() || undefined,
+          state: form.state.trim().toUpperCase() || undefined,
+          password: form.password,
+          passwordConfirmation: form.confirmation,
+          role: "ORGANIZER",
+          termsAccepted: accepted,
+          privacyAccepted,
+          dataProcessingAccepted: dataAccepted,
+        }),
+      });
+      if (logo || form.slogan.trim()) {
+        await authRequest("/api/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ email: form.email.trim().toLowerCase(), password: form.password }),
+        });
+        if (logo) await uploadOrganizerFile(logo, "LOGO");
+        if (form.slogan.trim()) {
+          const current = await brand();
+          await saveBrand({
+            primaryLogoUrl: current.primaryLogoUrl || undefined,
+            secondaryLogoUrl: current.secondaryLogoUrl || undefined,
+            primaryColor: current.primaryColor,
+            secondaryColor: current.secondaryColor,
+            accentColor: current.accentColor,
+            textColor: current.textColor,
+            publicName: current.publicName,
+            instagramHandle: current.instagramHandle || undefined,
+            whatsappMasked: current.whatsappMasked || undefined,
+            slogan: form.slogan.trim(),
+            useSortexBranding: current.useSortexBranding,
+          });
+        }
+      }
+      router.push("/cadastro/sucesso-organizador");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível criar a conta.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-violet-50 to-white">
-      <div className="mx-auto max-w-md px-6 py-8">
-              <Link href="/escolha">
-          <ArrowLeft className="text-violet-700" />
-        </Link>
-
-        <h1 className="mt-4 text-center text-6xl font-black">
-          Sorte<span className="text-violet-600">X</span>
-        </h1>
-
-        <p className="mt-3 text-center font-semibold text-green-600">
-          Conta Organizador
-        </p>
-
-        <div className="mt-8 flex items-center">
-
-          <div className="flex flex-col items-center">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-violet-600 text-white font-bold">
-              1
-            </div>
-            <span className="mt-2 text-xs font-semibold text-violet-700">
-              Dados
-            </span>
-          </div>
-
-          <div className="mx-2 h-1 flex-1 bg-zinc-200"></div>
-
-          <div className="flex flex-col items-center">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-zinc-200 font-bold">
-              2
-            </div>
-            <span className="mt-2 text-xs text-zinc-500">
-              Financeiro
-            </span>
-          </div>
-
-          <div className="mx-2 h-1 flex-1 bg-zinc-200"></div>
-
-          <div className="flex flex-col items-center">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-zinc-200 font-bold">
-              3
-            </div>
-            <span className="mt-2 text-xs text-zinc-500">
-              Sucesso
-            </span>
-          </div>
-
-        </div>
-
-        <h2 className="mt-10 text-4xl font-bold">
-          Vamos conhecer sua organização!
-        </h2>
-
-        <p className="mt-2 text-zinc-500">
-          Preencha os dados abaixo para começar a vender suas rifas.
-        </p>
-
-        <form
-          onSubmit={continuar}
-          className="mt-8 rounded-[32px] bg-white border border-zinc-100 shadow-lg p-6 space-y-5"
-        >
-
-          <div className="flex justify-center">
-
-            <button
-              type="button"
-              className="flex h-32 w-32 items-center justify-center rounded-full border-2 border-dashed border-violet-300 bg-violet-50"
-            >
-              <Camera size={42} className="text-violet-600" />
-            </button>
-
-          </div>
-
-          <p className="text-center font-semibold">
-            Adicionar logo da organização
-          </p>
-                    <Campo
-            icon={<User size={20} />}
-            name="nome"
-            placeholder="Nome completo"
-            value={form.nome}
-            onChange={alterar}
-          />
-
-          <Campo
-            icon={<Mail size={20} />}
-            name="email"
-            placeholder="Seu melhor e-mail"
-            value={form.email}
-            onChange={alterar}
-          />
-
-          <Campo
-            icon={<Phone size={20} />}
-            name="telefone"
-            placeholder="WhatsApp"
-            value={form.telefone}
-            onChange={alterar}
-          />
-
-          <Campo
-            icon={<CreditCard size={20} />}
-            name="cpf"
-            placeholder="CPF"
-            value={form.cpf}
-            onChange={alterar}
-          />
-
-          <Campo
-            icon={<Building2 size={20} />}
-            name="organizacao"
-            placeholder="Nome da organização"
-            value={form.organizacao}
-            onChange={alterar}
-          />
-
-          <Campo
-            icon={<Building2 size={20} />}
-            name="instagram"
-            placeholder="Instagram (opcional)"
-            value={form.instagram}
-            onChange={alterar}
-          />
-
-          <Campo
-            icon={<MapPin size={20} />}
-            name="cidade"
-            placeholder="Cidade"
-            value={form.cidade}
-            onChange={alterar}
-          />
-
-          <Campo
-            icon={<MapPin size={20} />}
-            name="estado"
-            placeholder="Estado"
-            value={form.estado}
-            onChange={alterar}
-          />
-
-          <div className="rounded-2xl border-2 border-dashed border-violet-300 bg-violet-50 p-6 text-center">
-            <Upload className="mx-auto mb-3 text-violet-600" size={36} />
-            <p className="font-semibold">
-              Enviar documento (RG ou CNH)
-            </p>
-          </div>
-
-          <label className="flex items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              name="termos"
-              checked={form.termos}
-              onChange={alterar}
-            />
-            <span>
-              Li e aceito os{" "}
-              <span className="font-semibold text-violet-600">
-                Termos de Uso
-              </span>{" "}
-              e a{" "}
-              <span className="font-semibold text-violet-600">
-                Política de Privacidade
-              </span>.
-            </span>
-          </label>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-2xl bg-gradient-to-r from-violet-700 to-purple-600 py-5 text-lg font-bold text-white"
-          >
-            {loading ? "Continuando..." : "Continuar →"}
-          </button>
-
-        </form>
-
+    <AuthShell title="Conta de organizador" description="Crie sua conta empresarial. Configurações financeiras ficam para uma etapa posterior.">
+      <div className="mb-5 flex items-center gap-3 rounded-2xl bg-violet-50 p-4 text-sm text-violet-800">
+        <Building2 size={22} />
+        Cadastre os dados do responsável ou da organização.
       </div>
-    </main>
-  );
-}
-
-type CampoProps = {
-  icon: React.ReactNode;
-  name: string;
-  placeholder: string;
-  value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-};
-
-function Campo({
-  icon,
-  name,
-  placeholder,
-  value,
-  onChange,
-}: CampoProps) {
-  return (
-    <div className="flex items-center rounded-2xl border border-zinc-200 bg-zinc-50 px-4 py-4">
-      <div className="text-zinc-400">{icon}</div>
-
-      <input
-        className="ml-4 w-full bg-transparent outline-none"
-        name={name}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-      />
-    </div>
+      <form onSubmit={submit} className="space-y-4">
+        <input className={authInputClass} name="name" value={form.name} onChange={change} placeholder="Nome completo do responsável" autoComplete="name" required />
+        <input className={authInputClass} name="cpf" value={form.cpf} onChange={change} placeholder="CPF do responsável" inputMode="numeric" required />
+        <input className={authInputClass} name="cnpj" value={form.cnpj} onChange={change} placeholder="CNPJ (opcional)" inputMode="numeric" />
+        <input className={authInputClass} name="phone" value={form.phone} onChange={change} placeholder="WhatsApp" inputMode="tel" autoComplete="tel" required />
+        <input className={authInputClass} name="email" value={form.email} onChange={change} placeholder="E-mail profissional" type="email" autoComplete="email" required />
+        <div className="grid grid-cols-3 gap-3">
+          <input className={`${authInputClass} col-span-2`} name="city" value={form.city} onChange={change} placeholder="Cidade" />
+          <input className={authInputClass} name="state" value={form.state} onChange={change} placeholder="UF" maxLength={2} />
+        </div>
+        <input className={authInputClass} name="slogan" value={form.slogan} onChange={change} placeholder="Slogan do organizador (opcional)" maxLength={60} />
+        <label className="block rounded-2xl border border-dashed border-violet-200 bg-violet-50/50 p-4 text-sm text-zinc-700">
+          <span className="block font-bold">Logo do organizador (opcional)</span>
+          <span className="mt-1 block text-xs text-zinc-500">PNG, JPG ou WebP. Prefira uma imagem quadrada com fundo transparente.</span>
+          <input className="mt-3 block w-full text-xs" type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => setLogo(event.target.files?.[0] || null)} />
+        </label>
+        <input className={authInputClass} name="password" value={form.password} onChange={change} placeholder="Senha (mínimo 8 caracteres)" type="password" minLength={8} autoComplete="new-password" required />
+        <input className={authInputClass} name="confirmation" value={form.confirmation} onChange={change} placeholder="Confirmar senha" type="password" minLength={8} autoComplete="new-password" required />
+        <label className="flex items-start gap-3 text-sm text-zinc-600">
+          <input type="checkbox" className="mt-1" checked={accepted} onChange={(event) => setAccepted(event.target.checked)} />
+          <span>Li e concordo com os Termos de Uso.</span>
+        </label>
+        <label className="flex items-start gap-3 text-sm text-zinc-600"><input type="checkbox" className="mt-1" checked={privacyAccepted} onChange={(event) => setPrivacyAccepted(event.target.checked)} /><span>Li e concordo com a Política de Privacidade.</span></label>
+        <label className="flex items-start gap-3 text-sm text-zinc-600"><input type="checkbox" className="mt-1" checked={dataAccepted} onChange={(event) => setDataAccepted(event.target.checked)} /><span>Autorizo o tratamento dos meus dados conforme a LGPD.</span></label>
+        {error && <p role="alert" className="rounded-2xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+        <button type="submit" disabled={loading} className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-700 to-purple-600 font-bold text-white disabled:opacity-60">
+          <Building2 size={20} />
+          {loading ? "Criando conta..." : "Criar conta de organizador"}
+        </button>
+        <p className="text-center text-sm text-zinc-500">Já possui conta? <Link href="/login" className="font-bold text-violet-700">Entrar</Link></p>
+      </form>
+    </AuthShell>
   );
 }

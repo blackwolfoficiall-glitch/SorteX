@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,19 +13,3188 @@ enum UserRole {
   ADMIN
 }
 
+enum VerificationStatus {
+  INCOMPLETE
+  PENDING
+  UNDER_REVIEW
+  CORRECTION_REQUESTED
+  DOCUMENT_REQUESTED
+  VERIFIED
+  REJECTED
+  SUSPENDED
+  BLOCKED
+  CLOSED
+}
+
+enum AdminTeamRole {
+  SUPERADMIN
+  ADMIN
+  REGISTRATION_ANALYST
+  FINANCE
+  SUPPORT
+  AUDIT
+}
+
+enum AdminInvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  CANCELLED
+}
+
+enum OrganizerDocumentStatus {
+  PENDING
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum OrganizerRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  MANUAL_REVIEW
+}
+
+enum OrganizerInternalNoteCategory {
+  REGISTRATION
+  FINANCE
+  SUPPORT
+  RISK
+  COMMERCIAL
+  LEGAL
+  GENERAL
+}
+
+enum AdminGatewayStatus {
+  INACTIVE
+  SANDBOX
+  ACTIVE
+  ERROR
+  MAINTENANCE
+}
+
+enum PlatformFeeRuleType {
+  GLOBAL
+  PLAN
+  ORGANIZER
+  CAMPAIGN
+  ZERO_FEE
+  FIRST_CAMPAIGN_FREE
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  BLOCKED
+}
+
+enum AdminPermission {
+  USERS_READ
+  USERS_WRITE
+  ORGANIZERS_REVIEW
+  CAMPAIGNS_REVIEW
+  FINANCE_READ
+  FINANCE_WRITE
+  PAYOUTS_REVIEW
+  LOTTERY_RESULTS_WRITE
+  DRAWS_REVIEW
+  SETTINGS_WRITE
+  AUDIT_READ
+  SUPPORT_WRITE
+  CONTENT_WRITE
+}
+
+enum ReportEntityType {
+  USER
+  ORGANIZER
+  CAMPAIGN
+  PAYMENT
+  DRAW
+  WINNER
+  CONTENT
+}
+
+enum ReportStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+enum SupportCategory {
+  ACCOUNT
+  CAMPAIGN
+  PAYMENT
+  PRIZE
+  FINANCE
+  TECHNICAL
+  OTHER
+}
+
+enum SupportStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_USER
+  RESOLVED
+  CLOSED
+}
+
+enum SupportPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ContentPageType {
+  INSTITUTIONAL
+  FAQ
+  TERMS
+  PRIVACY
+  MAINTENANCE
+  OTHER
+}
+
+enum OrganizerDocumentType {
+  IDENTITY
+  ADDRESS_PROOF
+  CNPJ_DOCUMENT
+}
+
+enum OrganizerPlan {
+  BASIC
+  PROFESSIONAL
+  PREMIUM
+  ENTERPRISE
+}
+
+enum OrganizerOnboardingStatus {
+  PLAN_SELECTION
+  IDENTITY_SETUP
+  COMPLETE
+}
+
+enum PlanBillingCycle {
+  MONTHLY
+  ANNUAL
+  ONE_TIME
+  TRIAL
+}
+
+enum OrganizerThemeMode {
+  LIGHT
+  DARK
+  AUTOMATIC
+  CUSTOM
+}
+
+enum CampaignLayoutStyle {
+  CLASSIC
+  MODERN
+  IMAGE_FOCUS
+  WIDE
+  COMPACT
+  PREMIUM
+}
+
+enum OrganizerSocialNetwork {
+  INSTAGRAM
+  FACEBOOK
+  TIKTOK
+  YOUTUBE
+  X_TWITTER
+  WEBSITE
+  WHATSAPP
+  TELEGRAM
+  DISCORD
+}
+
+enum OrganizerCommunityType {
+  WHATSAPP_GROUP
+  WHATSAPP_COMMUNITY
+  INSTAGRAM_CHANNEL
+  TELEGRAM_CHANNEL
+  TELEGRAM_GROUP
+  DISCORD
+}
+
+enum OrganizerDomainType {
+  ROOT
+  SUBDOMAIN
+  CAMPAIGN
+}
+
+enum OrganizerDomainStatus {
+  NOT_CONFIGURED
+  AWAITING_DNS
+  VERIFYING
+  ACTIVE
+  ERROR
+  SUSPENDED
+}
+
+enum OrganizerIntegrationType {
+  WHATSAPP
+  INSTAGRAM
+  FACEBOOK
+  GOOGLE
+  TIKTOK
+  YOUTUBE
+  TELEGRAM
+  META_ADS
+  GOOGLE_ADS
+  WEBHOOK
+  ZAPIER
+  MAKE
+  GATEWAY
+}
+
+enum OrganizerIntegrationStatus {
+  NOT_CONNECTED
+  CONFIGURING
+  SANDBOX_CONNECTED
+  CONNECTED
+  ERROR
+  DISCONNECTED
+}
+
+enum MiniCampaignStatus {
+  DRAFT
+  PUBLISHED
+  PAUSED
+  FINISHED
+  CANCELLED
+}
+
+enum MiniCampaignPrizeType {
+  MAIN_CAMPAIGN_TICKETS
+  PIX
+  PRODUCT
+  BONUS
+  OTHER
+}
+
+enum MiniCampaignOrderStatus {
+  RESERVED
+  AWAITING_PAYMENT
+  PAID
+  EXPIRED
+  CANCELLED
+  REFUNDED
+  FAILED
+}
+
+enum PromotionType {
+  PACKAGE
+  COUPON
+  INSTANT_PRIZE
+  FLASH
+  BONUS
+  QUANTITY_DISCOUNT
+  CASHBACK
+}
+
+enum PromotionStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  ENDED
+  EXPIRED
+}
+
+enum PromotionUsageStatus {
+  RESERVED
+  APPROVED
+  CANCELLED
+  REVERSED
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum SortexAdStatus {
+  DRAFT
+  SCHEDULED
+  SANDBOX_ACTIVE
+  LIVE_ACTIVE
+  PAUSED
+  ENDED
+  CANCELLED
+}
+
+enum SortexAdObjective {
+  VISITS
+  PARTICIPANTS
+  SALES
+  ABANDONED_RESERVATIONS
+  PROMOTION
+  NEW_CAMPAIGN
+  DRAW_APPROACHING
+}
+
+enum SortexAdBudgetType {
+  DAILY
+  TOTAL
+}
+
+enum SortexAdChannel {
+  INSTAGRAM
+  FACEBOOK
+  WHATSAPP
+  GOOGLE
+  YOUTUBE
+  TIKTOK
+}
+
+enum AiRecommendationPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum AiRecommendationStatus {
+  NEW
+  VIEWED
+  ACCEPTED
+  EXECUTED
+  IGNORED
+  NOT_USEFUL
+}
+
+enum CampaignStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  PAUSED
+  SOLD_OUT
+  DRAWN
+  FINISHED
+  CANCELLED
+}
+
+enum CampaignCategory {
+  AUTOMOBILE
+  MOTORCYCLE
+  ELECTRONICS
+  CASH
+  TRAVEL
+  OTHER
+}
+
+enum NumberSelectionMode {
+  RANDOM
+  MANUAL
+}
+
+enum DrawBasis {
+  LOTERIA_FEDERAL
+  CUSTOM
+  MANUAL_RESULT
+}
+
+enum CampaignPrizeType {
+  PIX
+  PRODUCT
+  GIFT_CARD
+  OTHER
+}
+
+enum InstantPrizeStatus {
+  AVAILABLE
+  FOUND
+  DELIVERED
+  CANCELLED
+}
+
+enum PurchaseStatus {
+  PENDING
+  RESERVED
+  AWAITING_PAYMENT
+  PAID
+  EXPIRED
+  CANCELLED
+  REFUNDED
+}
+
+enum TicketStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  CANCELLED
+}
+
+enum PaymentStatus {
+  CREATED
+  PENDING
+  PROCESSING
+  APPROVED
+  REJECTED
+  CANCELLED
+  EXPIRED
+  REFUNDED
+  CHARGEBACK
+}
+
+enum PaymentMethod {
+  PIX
+  CREDIT_CARD
+  DEBIT_CARD
+}
+
+enum GatewayProvider {
+  MERCADO_PAGO
+  PAGARME
+  PAGBANK
+  STONE
+  ASAAS
+}
+
+enum LotteryDrawStatus {
+  DRAFT
+  PENDING_REVIEW
+  VERIFIED
+  REJECTED
+  LOCKED
+}
+
+enum LotterySourceType {
+  MANUAL
+  IMPORTED
+  OFFICIAL_API
+  OFFICIAL_DOCUMENT
+}
+
+enum CampaignDrawStatus {
+  DRAFT
+  SIMULATED
+  PENDING_CONFIRMATION
+  CONFIRMED
+  CANCELLED
+  INVALIDATED
+}
+
+enum CampaignMilestoneStatus {
+  WAITING
+  RELEASED
+  DRAWN
+  COMPLETED
+}
+
+enum WinnerStatus {
+  IDENTIFIED
+  PENDING_CONTACT
+  CONTACTED
+  CLAIMED
+  PAYMENT_PENDING
+  DELIVERED
+  CONFIRMED_BY_WINNER
+  NOT_CLAIMED
+  CANCELLED
+  DISPUTED
+}
+
+enum PrizeType {
+  MAIN_PRIZE
+  INSTANT_PRIZE
+  SALES_BONUS
+  OTHER
+}
+
+enum InstantPrizeResultStatus {
+  IDENTIFIED
+  DELIVERED
+  CANCELLED
+  DISPUTED
+}
+
+enum UnsoldNumberPolicy {
+  NEXT_SOLD_NUMBER
+  PREVIOUS_SOLD_NUMBER
+  CLOSEST_SOLD_NUMBER
+  REDRAW_WITH_NEXT_RULE_STEP
+  NO_WINNER
+  MANUAL_REVIEW
+}
+
+enum FinancialOwnerType {
+  ORGANIZER
+  PLATFORM
+}
+
+enum FinancialAccountStatus {
+  ACTIVE
+  BLOCKED
+  UNDER_REVIEW
+  CLOSED
+}
+
+enum LedgerEntryType {
+  GROSS_SALE
+  PLATFORM_FEE
+  GATEWAY_FEE
+  ORGANIZER_NET_REVENUE
+  REFUND
+  CHARGEBACK
+  PAYOUT_REQUEST
+  PAYOUT_COMPLETED
+  PAYOUT_CANCELLED
+  MANUAL_ADJUSTMENT
+  BONUS
+  MONTHLY_PLAN_FEE
+  CAMPAIGN_FEE_WAIVER
+  PLATFORM_REVENUE
+}
+
+enum LedgerDirection {
+  CREDIT
+  DEBIT
+}
+
+enum LedgerStatus {
+  PENDING
+  AVAILABLE
+  BLOCKED
+  COMPLETED
+  CANCELLED
+  REVERSED
+}
+
+enum PayoutStatus {
+  REQUESTED
+  UNDER_REVIEW
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  CANCELLED
+  FAILED
+}
+
+enum PayoutDestinationType {
+  PIX
+  BANK_ACCOUNT
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  SUSPENDED
+}
+
+enum InvoiceStatus {
+  OPEN
+  PAID
+  OVERDUE
+  CANCELLED
+  WAIVED
+}
+
+enum AffiliateProgramStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+  CANCELLED
+}
+
+enum AffiliateCommissionType {
+  PERCENTAGE
+  FIXED
+  MIXED
+}
+
+enum AffiliateAttributionModel {
+  FIRST_CLICK
+  LAST_CLICK
+  COUPON
+  MANUAL
+}
+
+enum AffiliateStatus {
+  INVITED
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REJECTED
+  INACTIVE
+}
+
+enum AffiliateConversionStatus {
+  PENDING
+  APPROVED
+  AVAILABLE
+  BLOCKED
+  CANCELLED
+  REVERSED
+  PAID
+}
+
+enum AffiliatePayoutStatus {
+  REQUESTED
+  UNDER_REVIEW
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum AffiliateDiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum ReferralTargetType {
+  BUYER
+  ORGANIZER
+}
+
+enum ReferralRewardType {
+  DISCOUNT
+  CREDIT
+  REDUCED_FEE
+  FREE_CAMPAIGN
+  BADGE
+  PROMOTIONAL_BENEFIT
+}
+
+enum ReferralProgramStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+  CANCELLED
+}
+
+enum ReferralStatus {
+  PENDING
+  QUALIFIED
+  REWARDED
+  CANCELLED
+}
+
+enum CrmContactSource {
+  CAMPAIGN
+  PURCHASE
+  AFFILIATE
+  REFERRAL
+  MANUAL
+  IMPORT
+  SUPPORT
+}
+
+enum CrmContactStatus {
+  LEAD
+  CUSTOMER
+  VIP
+  INACTIVE
+  BLOCKED
+}
+
+enum CrmInteractionType {
+  PURCHASE
+  PAYMENT
+  CAMPAIGN_VIEW
+  FAVORITE
+  SUPPORT
+  PRIZE
+  AFFILIATE
+  MANUAL_NOTE
+  AUTOMATION
+  NOTIFICATION
+}
+
+enum CrmChannel {
+  PLATFORM
+  EMAIL
+  WHATSAPP
+  SMS
+  PHONE
+  MANUAL
+}
+
+enum SegmentType {
+  DYNAMIC
+  STATIC
+}
+
+enum NotificationCategory {
+  PURCHASE
+  PAYMENT
+  CAMPAIGN
+  DRAW
+  PRIZE
+  FINANCE
+  AFFILIATE
+  SUPPORT
+  MARKETING
+  SECURITY
+  SYSTEM
+}
+
+enum AutomationStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+  CANCELLED
+}
+
+enum AutomationTriggerType {
+  PURCHASE_APPROVED
+  PURCHASE_PENDING
+  RESERVATION_EXPIRED
+  CAMPAIGN_VIEWED
+  CAMPAIGN_FAVORITED
+  NO_PURCHASE_DAYS
+  CAMPAIGN_PERCENT_SOLD
+  DRAW_APPROACHING
+  PRIZE_WON
+  AFFILIATE_JOINED
+  SUPPORT_OPENED
+  MANUAL
+}
+
+enum AutomationActionType {
+  CREATE_NOTIFICATION
+  ADD_TAG
+  REMOVE_TAG
+  CHANGE_CRM_STATUS
+  CREATE_TASK
+  QUEUE_EXTERNAL_MESSAGE
+}
+
+enum AutomationAudienceType {
+  ALL_CONTACTS
+  SEGMENT
+  CONTACT
+}
+
+enum OutboundMessageStatus {
+  DRAFT
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+  SKIPPED
+}
+
+enum MarketingCampaignStatus {
+  DRAFT
+  SCHEDULED
+  RUNNING
+  COMPLETED
+  PAUSED
+  CANCELLED
+}
+
+enum CrmTaskStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum CrmTaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum MediaTemplateType {
+  STATIC_IMAGE
+  VIDEO_FRAME
+  STORY
+  REEL
+  FEED_POST
+  WHATSAPP_STATUS
+  BANNER
+  WINNER_CARD
+  CAMPAIGN_CARD
+  INSTANT_PRIZE_CARD
+  AFFILIATE_CARD
+}
+
+enum MediaFormat {
+  SQUARE_1_1
+  PORTRAIT_4_5
+  STORY_9_16
+  LANDSCAPE_16_9
+  WHATSAPP
+  CUSTOM
+}
+
+enum MediaTemplateStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum GeneratedMediaStatus {
+  DRAFT
+  PREVIEW_READY
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+  CANCELLED
+}
+
+enum MediaAssetType {
+  ORGANIZER_LOGO
+  SORTEX_LOGO
+  CAMPAIGN_COVER
+  CAMPAIGN_GALLERY
+  WINNER_VIDEO
+  WINNER_IMAGE
+  PRIZE_IMAGE
+  BACKGROUND
+  MUSIC
+  ICON
+  DECORATION
+  QR_CODE
+}
+
+enum ShareChannel {
+  WHATSAPP
+  INSTAGRAM
+  FACEBOOK
+  TIKTOK
+  TELEGRAM
+  COPY_LINK
+  NATIVE_SHARE
+  OTHER
+}
+
+enum MediaRenderJobType {
+  STATIC_IMAGE
+  VIDEO
+  THUMBNAIL
+  QR_CODE
+}
+
+enum MediaRenderJobStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum ConsentType {
+  TERMS
+  PRIVACY
+  MARKETING
+  DATA_PROCESSING
+}
+
+enum DataSubjectRequestType {
+  ACCESS
+  EXPORT
+  CORRECTION
+  DELETION
+  ANONYMIZATION
+  RESTRICTION
+}
+
+enum DataSubjectRequestStatus {
+  OPEN
+  UNDER_REVIEW
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum LegalDocumentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 model User {
-  id        String   @id @default(cuid())
-  name      String
-  email     String   @unique
-  password  String
-  phone     String?
-  cpf       String?  @unique
-  cnpj      String?  @unique
-  role      UserRole @default(BUYER)
-  city      String?
-  state     String?
-  isActive  Boolean  @default(true)
-  verified  Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                         String                    @id @default(cuid())
+  name                       String
+  email                      String                    @unique
+  password                   String
+  phone                      String?
+  cpf                        String?                   @unique
+  cnpj                       String?                   @unique
+  role                       UserRole                  @default(BUYER)
+  city                       String?
+  state                      String?
+  isActive                   Boolean                   @default(true)
+  status                     UserStatus                @default(ACTIVE)
+  adminPermissions           AdminPermission[]
+  adminTeamRole              AdminTeamRole?
+  forcePasswordReset         Boolean                   @default(false)
+  failedLoginAttempts        Int                       @default(0)
+  lockedUntil                DateTime?
+  lastAccessAt               DateTime?
+  deletedAt                  DateTime?
+  verified                   Boolean                   @default(false)
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  sessions                   AuthSession[]
+  passwordResetTokens        PasswordResetToken[]
+  organizerProfile           OrganizerProfile?
+  campaigns                  Campaign[]
+  drawRuleTemplates          DrawRuleTemplate[]
+  purchases                  Purchase[]
+  tickets                    Ticket[]
+  paymentsAsBuyer            Payment[]                 @relation("PaymentBuyer")
+  paymentsAsOrganizer        Payment[]                 @relation("PaymentOrganizer")
+  enteredLotteryDraws        LotteryDraw[]             @relation("LotteryDrawEnteredBy")
+  reviewedLotteryDraws       LotteryDraw[]             @relation("LotteryDrawReviewedBy")
+  executedCampaignDraws      CampaignDraw[]            @relation("CampaignDrawExecutedBy")
+  confirmedCampaignDraws     CampaignDraw[]            @relation("CampaignDrawConfirmedBy")
+  winners                    Winner[]
+  instantPrizeResults        InstantPrizeResult[]
+  auditLogs                  AuditLog[]                @relation("AuditLogActor")
+  payoutRequests             PayoutRequest[]           @relation("PayoutOrganizer")
+  reviewedPayouts            PayoutRequest[]           @relation("PayoutReviewer")
+  createdAdjustments         FinancialAdjustment[]     @relation("AdjustmentCreator")
+  approvedAdjustments        FinancialAdjustment[]     @relation("AdjustmentApprover")
+  subscriptions              Subscription[]
+  notifications              Notification[]
+  favorites                  BuyerFavorite[]
+  affiliateMemberships       Affiliate[]               @relation("AffiliateUser")
+  organizerAffiliatePrograms AffiliateProgram[]
+  affiliateClicks            AffiliateClick[]
+  referralsMade              Referral[]                @relation("ReferralReferrer")
+  referralReceived           Referral?                 @relation("ReferralReferred")
+  crmContacts                CrmContact[]
+  notificationPreferences    NotificationPreference[]
+  organizerBrandProfile      OrganizerBrandProfile?
+  organizerSocialLinks       OrganizerSocialLink[]
+  organizerCommunities       OrganizerCommunityLink[]
+  organizerDomains           OrganizerDomain[]
+  organizerIntegrations      OrganizerIntegration[]
+  campaignTemplates          CampaignTemplate[]        @relation("CampaignTemplateOrganizer")
+  miniCampaigns              MiniCampaign[]            @relation("MiniCampaignOrganizer")
+  miniCampaignOrders         MiniCampaignOrder[]       @relation("MiniCampaignOrderBuyer")
+  miniCampaignResults        MiniCampaignResult[]      @relation("MiniCampaignWinner")
+  sortexAds                  SortexAdCampaign[]        @relation("SortexAdOrganizer")
+  aiRecommendations          AiRecommendation[]        @relation("AiRecommendationOrganizer")
+  promotionCredits           PromotionalCredit[]       @relation("PromotionalCreditBuyer")
+  consentRecords             ConsentRecord[]
+  dataSubjectRequests        DataSubjectRequest[]
+  legalDocumentsCreated      LegalDocument[]           @relation("LegalDocumentCreatedBy")
+  legalDocumentsUpdated      LegalDocument[]           @relation("LegalDocumentUpdatedBy")
+  legalDocumentVersions      LegalDocumentVersion[]
+  legalAcceptances           LegalAcceptance[]
+  executedCampaignMilestones CampaignMilestonePrize[]  @relation("CampaignMilestoneExecutedBy")
+  organizerReviewDecisions   OrganizerReviewDecision[] @relation("OrganizerReviewDecisionAdmin")
+  organizerInternalNotes     OrganizerInternalNote[]   @relation("OrganizerInternalNoteAuthor")
+  organizerFeeChanges        OrganizerFeeHistory[]     @relation("OrganizerFeeHistoryAdmin")
+  adminInvitesSent           AdminTeamInvitation[]     @relation("AdminInvitationInviter")
+  adminInviteAccepted        AdminTeamInvitation[]     @relation("AdminInvitationAcceptedUser")
+}
+
+model AdminTeamInvitation {
+  id             String                @id @default(cuid())
+  name           String
+  email          String
+  tokenHash      String                @unique
+  role           AdminTeamRole
+  permissions    AdminPermission[]
+  message        String?
+  status         AdminInvitationStatus @default(PENDING)
+  expiresAt      DateTime
+  invitedById    String
+  acceptedUserId String?
+  acceptedAt     DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  invitedBy      User                  @relation("AdminInvitationInviter", fields: [invitedById], references: [id], onDelete: Restrict)
+  acceptedUser   User?                 @relation("AdminInvitationAcceptedUser", fields: [acceptedUserId], references: [id], onDelete: SetNull)
+
+  @@index([email, status])
+  @@index([invitedById, createdAt])
+  @@index([expiresAt, status])
+}
+
+model Campaign {
+  id                             String                    @id @default(cuid())
+  organizerId                    String
+  title                          String
+  slug                           String                    @unique
+  shortDescription               String?
+  description                    String?
+  regulation                     String?
+  status                         CampaignStatus            @default(DRAFT)
+  category                       CampaignCategory          @default(OTHER)
+  mainPrizeName                  String?
+  mainPrizeDescription           String?
+  mainPrizeImage                 String?
+  mainPrizeQuantity              Int                       @default(1)
+  cashAlternative                Decimal?                  @db.Decimal(14, 2)
+  estimatedPrizeValue            Decimal?                  @db.Decimal(14, 2)
+  coverImage                     String?
+  promotionalVideo               String?
+  totalNumbers                   Int                       @default(10000)
+  numberPrice                    Decimal                   @default(0.1) @db.Decimal(14, 2)
+  minimumPurchase                Int                       @default(1)
+  maximumPurchasePerBuyer        Int?
+  numberSelectionMode            NumberSelectionMode       @default(RANDOM)
+  drawDate                       DateTime?
+  drawTime                       String?
+  drawBasis                      DrawBasis                 @default(LOTERIA_FEDERAL)
+  drawRuleTemplateId             String?
+  customDrawRule                 Json?
+  salesStartAt                   DateTime?
+  salesEndAt                     DateTime?
+  soldNumbers                    Int                       @default(0)
+  reservedNumbers                Int                       @default(0)
+  grossRevenue                   Decimal                   @default(0) @db.Decimal(16, 2)
+  publishedAt                    DateTime?
+  createdAt                      DateTime                  @default(now())
+  updatedAt                      DateTime                  @updatedAt
+  organizer                      User                      @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  drawRuleTemplate               DrawRuleTemplate?         @relation(fields: [drawRuleTemplateId], references: [id], onDelete: SetNull)
+  galleryImages                  CampaignImage[]
+  instantPrizes                  CampaignInstantPrize[]
+  promotions                     CampaignPromotion[]
+  purchases                      Purchase[]
+  tickets                        Ticket[]
+  payments                       Payment[]
+  platformFeeWaived              Boolean                   @default(false)
+  customPlatformFee              Decimal?                  @db.Decimal(6, 3)
+  publishedRuleSnapshot          Json?
+  unsoldNumberPolicy             UnsoldNumberPolicy        @default(MANUAL_REVIEW)
+  draws                          CampaignDraw[]
+  winners                        Winner[]
+  instantPrizeResults            InstantPrizeResult[]
+  ledgerEntries                  LedgerEntry[]
+  financialSummary               CampaignFinancialSummary?
+  isFeatured                     Boolean                   @default(false)
+  purchasesBlocked               Boolean                   @default(false)
+  publicationBlocked             Boolean                   @default(false)
+  adminReviewStatus              String?
+  adminNotes                     String?
+  favorites                      BuyerFavorite[]
+  affiliatePrograms              AffiliateProgram[]
+  affiliateLinks                 AffiliateLink[]
+  affiliateConversions           AffiliateConversion[]
+  affiliateCoupons               AffiliateCoupon[]
+  affiliateMaterials             AffiliateMaterial[]
+  crmInteractions                CrmInteraction[]
+  generatedMedia                 GeneratedMedia[]
+  mediaAssets                    MediaAsset[]
+  shareLinks                     ShareLink[]
+  customization                  CampaignCustomization?
+  templates                      CampaignTemplate[]
+  miniCampaigns                  MiniCampaign[]
+  sortexAds                      SortexAdCampaign[]
+  aiRecommendations              AiRecommendation[]
+  milestonePrizes                CampaignMilestonePrize[]
+  milestoneWinnersRemainEligible Boolean                   @default(true)
+
+  @@index([organizerId])
+  @@index([status])
+  @@index([category])
+  @@index([publishedAt])
+}
+
+model BuyerFavorite {
+  id         String   @id @default(cuid())
+  buyerId    String
+  campaignId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  buyer      User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([buyerId, campaignId])
+  @@index([buyerId, createdAt])
+  @@index([campaignId])
+}
+
+model ConsentRecord {
+  id            String      @id @default(cuid())
+  userId        String
+  type          ConsentType
+  version       String
+  granted       Boolean
+  ipHash        String?
+  userAgentHash String?
+  grantedAt     DateTime    @default(now())
+  revokedAt     DateTime?
+  createdAt     DateTime    @default(now())
+  user          User        @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, type, grantedAt])
+}
+
+model DataSubjectRequest {
+  id           String                   @id @default(cuid())
+  userId       String
+  type         DataSubjectRequestType
+  status       DataSubjectRequestStatus @default(OPEN)
+  reason       String?
+  requestedAt  DateTime                 @default(now())
+  reviewedAt   DateTime?
+  completedAt  DateTime?
+  reviewedById String?
+  notes        String?
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+  user         User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId, status, requestedAt])
+  @@index([status, requestedAt])
+}
+
+model LegalDocument {
+  id            String                 @id @default(cuid())
+  title         String
+  subtitle      String?
+  slug          String                 @unique
+  category      String
+  content       Json
+  changeSummary String?
+  version       Int                    @default(1)
+  status        LegalDocumentStatus    @default(DRAFT)
+  required      Boolean                @default(false)
+  publishedAt   DateTime?
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+  createdById   String
+  updatedById   String
+  createdBy     User                   @relation("LegalDocumentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy     User                   @relation("LegalDocumentUpdatedBy", fields: [updatedById], references: [id], onDelete: Restrict)
+  versions      LegalDocumentVersion[]
+  acceptances   LegalAcceptance[]
+
+  @@index([status, category])
+  @@index([required, status])
+}
+
+model LegalDocumentVersion {
+  id            String              @id @default(cuid())
+  documentId    String
+  version       Int
+  title         String
+  subtitle      String?
+  content       Json
+  changeSummary String?
+  status        LegalDocumentStatus
+  createdAt     DateTime            @default(now())
+  createdById   String
+  document      LegalDocument       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy     User                @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, version])
+  @@index([documentId, createdAt])
+}
+
+model LegalAcceptance {
+  id              String        @id @default(cuid())
+  userId          String
+  documentId      String
+  version         Int
+  acceptedAt      DateTime      @default(now())
+  ip              String?
+  device          String?
+  browser         String?
+  operatingSystem String?
+  userAgent       String?
+  user            User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  document        LegalDocument @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@unique([userId, documentId, version])
+  @@index([documentId, version, acceptedAt])
+  @@index([userId, acceptedAt])
+}
+
+model TechnicalJob {
+  id             String    @id @default(cuid())
+  type           String
+  idempotencyKey String    @unique
+  status         String    @default("QUEUED")
+  payload        Json
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(3)
+  scheduledAt    DateTime  @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+  failedAt       DateTime?
+  errorMessage   String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status, scheduledAt])
+  @@index([type, status])
+}
+
+model OrganizerBrandProfile {
+  organizerId       String              @id
+  primaryLogoUrl    String?
+  secondaryLogoUrl  String?
+  primaryColor      String              @default("#6D28D9")
+  secondaryColor    String              @default("#111827")
+  accentColor       String              @default("#22C55E")
+  textColor         String              @default("#FFFFFF")
+  publicName        String
+  fantasyName       String?
+  profileImageUrl   String?
+  bannerUrl         String?
+  publicPhone       String?
+  publicEmail       String?
+  instagramHandle   String?
+  whatsappMasked    String?
+  slogan            String?
+  useSortexBranding Boolean             @default(true)
+  buttonColor       String              @default("#2563EB")
+  progressColor     String              @default("#22C55E")
+  backgroundColor   String              @default("#FFFFFF")
+  cardColor         String              @default("#FFFFFF")
+  themeMode         OrganizerThemeMode  @default(LIGHT)
+  layoutStyle       CampaignLayoutStyle @default(MODERN)
+  appearanceConfig  Json?
+  updatedAt         DateTime            @updatedAt
+  organizer         User                @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+}
+
+model OrganizerSocialLink {
+  id          String                 @id @default(cuid())
+  organizerId String
+  type        OrganizerSocialNetwork
+  label       String?
+  url         String
+  isActive    Boolean                @default(true)
+  sortOrder   Int                    @default(0)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  organizer   User                   @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@unique([organizerId, type])
+  @@index([organizerId, isActive, sortOrder])
+}
+
+model OrganizerCommunityLink {
+  id          String                 @id @default(cuid())
+  organizerId String
+  type        OrganizerCommunityType
+  name        String
+  description String?
+  url         String
+  isActive    Boolean                @default(true)
+  sortOrder   Int                    @default(0)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  organizer   User                   @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@unique([organizerId, type, url])
+  @@index([organizerId, isActive, sortOrder])
+}
+
+model OrganizerDomain {
+  id                String                @id @default(cuid())
+  organizerId       String
+  type              OrganizerDomainType
+  domain            String                @unique
+  status            OrganizerDomainStatus @default(AWAITING_DNS)
+  verificationToken String                @unique
+  dnsInstructions   Json
+  isPrimary         Boolean               @default(false)
+  sslActive         Boolean               @default(false)
+  httpsActive       Boolean               @default(false)
+  lastCheckedAt     DateTime?
+  verifiedAt        DateTime?
+  errorMessage      String?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  organizer         User                  @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId, status])
+}
+
+model OrganizerIntegration {
+  id               String                     @id @default(cuid())
+  organizerId      String
+  type             OrganizerIntegrationType
+  status           OrganizerIntegrationStatus @default(NOT_CONNECTED)
+  displayName      String?
+  accountId        String?
+  provider         String?
+  publicConfig     Json?
+  secretHash       String?
+  secretCiphertext String?
+  webhookUrl       String?
+  sandbox          Boolean                    @default(true)
+  permissions      String[]
+  lastTestedAt     DateTime?
+  lastSyncedAt     DateTime?
+  lastError        String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  organizer        User                       @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  logs             OrganizerIntegrationLog[]
+
+  @@unique([organizerId, type])
+  @@index([organizerId, status])
+}
+
+model OrganizerIntegrationLog {
+  id            String               @id @default(cuid())
+  integrationId String
+  action        String
+  status        String
+  message       String?
+  metadata      Json?
+  createdAt     DateTime             @default(now())
+  integration   OrganizerIntegration @relation(fields: [integrationId], references: [id], onDelete: Cascade)
+
+  @@index([integrationId, createdAt])
+}
+
+model CampaignCustomization {
+  id                   String   @id @default(cuid())
+  campaignId           String   @unique
+  organizerId          String
+  useOrganizerDefaults Boolean  @default(true)
+  configuration        Json
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  campaign             Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId, updatedAt])
+}
+
+model CampaignTemplate {
+  id               String    @id @default(cuid())
+  organizerId      String
+  sourceCampaignId String?
+  name             String
+  description      String?
+  configuration    Json
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  organizer        User      @relation("CampaignTemplateOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  sourceCampaign   Campaign? @relation(fields: [sourceCampaignId], references: [id], onDelete: SetNull)
+
+  @@unique([organizerId, name])
+  @@index([organizerId, isActive, updatedAt])
+}
+
+model MediaTemplate {
+  id                 String              @id @default(cuid())
+  organizerId        String?
+  name               String
+  description        String?
+  type               MediaTemplateType
+  format             MediaFormat
+  category           String
+  status             MediaTemplateStatus @default(DRAFT)
+  isSystemTemplate   Boolean             @default(false)
+  width              Int
+  height             Int
+  durationSeconds    Int?
+  templateDefinition Json
+  previewImageUrl    String?
+  sortOrder          Int                 @default(0)
+  isDefault          Boolean             @default(false)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  generatedMedia     GeneratedMedia[]
+
+  @@unique([organizerId, name, format])
+  @@index([organizerId, status, category])
+  @@index([isSystemTemplate, status, sortOrder])
+}
+
+model GeneratedMedia {
+  id                   String               @id @default(cuid())
+  organizerId          String
+  campaignId           String?
+  winnerId             String?
+  instantPrizeResultId String?
+  affiliateId          String?
+  templateId           String
+  type                 MediaTemplateType
+  format               MediaFormat
+  status               GeneratedMediaStatus @default(DRAFT)
+  title                String?
+  inputData            Json
+  editorConfig         Json?
+  outputUrl            String?
+  previewUrl           String?
+  thumbnailUrl         String?
+  verificationCode     String?
+  qrCodeValue          String?
+  errorMessage         String?
+  generatedAt          DateTime?
+  deletedAt            DateTime?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  campaign             Campaign?            @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  winner               Winner?              @relation(fields: [winnerId], references: [id], onDelete: SetNull)
+  instantPrizeResult   InstantPrizeResult?  @relation(fields: [instantPrizeResultId], references: [id], onDelete: SetNull)
+  affiliate            Affiliate?           @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
+  template             MediaTemplate        @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  renderJobs           MediaRenderJob[]
+  shareLinks           ShareLink[]
+
+  @@index([organizerId, status, createdAt])
+  @@index([campaignId, type])
+}
+
+model MediaAsset {
+  id              String         @id @default(cuid())
+  organizerId     String
+  campaignId      String?
+  type            MediaAssetType
+  name            String
+  url             String
+  storageKey      String?
+  mimeType        String
+  width           Int?
+  height          Int?
+  durationSeconds Int?
+  fileSize        Int?
+  isActive        Boolean        @default(true)
+  deletedAt       DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  campaign        Campaign?      @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@index([organizerId, type, isActive])
+  @@index([campaignId])
+}
+
+model ShareLink {
+  id               String           @id @default(cuid())
+  organizerId      String
+  generatedMediaId String?
+  campaignId       String?
+  code             String           @unique
+  destinationUrl   String
+  channel          ShareChannel
+  clicks           Int              @default(0)
+  uniqueClicks     Int              @default(0)
+  expiresAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  generatedMedia   GeneratedMedia?  @relation(fields: [generatedMediaId], references: [id], onDelete: SetNull)
+  campaign         Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  clickEvents      ShareLinkClick[]
+
+  @@index([organizerId, channel, createdAt])
+}
+
+model ShareLinkClick {
+  id          String    @id @default(cuid())
+  shareLinkId String
+  visitorHash String?
+  clickedAt   DateTime  @default(now())
+  shareLink   ShareLink @relation(fields: [shareLinkId], references: [id], onDelete: Cascade)
+
+  @@index([shareLinkId, clickedAt])
+}
+
+model MediaRenderJob {
+  id               String               @id @default(cuid())
+  generatedMediaId String
+  jobType          MediaRenderJobType
+  status           MediaRenderJobStatus @default(QUEUED)
+  attempts         Int                  @default(0)
+  maxAttempts      Int                  @default(3)
+  scheduledAt      DateTime             @default(now())
+  startedAt        DateTime?
+  completedAt      DateTime?
+  failedAt         DateTime?
+  errorMessage     String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  generatedMedia   GeneratedMedia       @relation(fields: [generatedMediaId], references: [id], onDelete: Cascade)
+
+  @@index([status, scheduledAt])
+}
+
+model CrmContact {
+  id                String            @id @default(cuid())
+  organizerId       String
+  userId            String?
+  buyerId           String?
+  name              String
+  email             String?
+  phone             String?
+  city              String?
+  state             String?
+  source            CrmContactSource
+  status            CrmContactStatus  @default(LEAD)
+  totalPurchases    Int               @default(0)
+  totalSpent        Decimal           @default(0) @db.Decimal(18, 2)
+  totalTickets      Int               @default(0)
+  lastPurchaseAt    DateTime?
+  lastInteractionAt DateTime?
+  firstSeenAt       DateTime          @default(now())
+  deletedAt         DateTime?
+  externalOptOut    Boolean           @default(false)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  user              User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tags              CrmContactTag[]
+  notes             CrmNote[]
+  interactions      CrmInteraction[]
+  tasks             CrmTask[]
+  outboundMessages  OutboundMessage[]
+
+  @@unique([organizerId, userId])
+  @@index([organizerId, status, updatedAt])
+  @@index([organizerId, email])
+  @@index([organizerId, phone])
+}
+
+model CrmTag {
+  id          String          @id @default(cuid())
+  organizerId String
+  name        String
+  color       String?
+  description String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  contacts    CrmContactTag[]
+
+  @@unique([organizerId, name])
+  @@index([organizerId])
+}
+
+model CrmContactTag {
+  id        String     @id @default(cuid())
+  contactId String
+  tagId     String
+  createdAt DateTime   @default(now())
+  contact   CrmContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tag       CrmTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, tagId])
+  @@index([tagId])
+}
+
+model CrmNote {
+  id           String     @id @default(cuid())
+  organizerId  String
+  contactId    String
+  authorUserId String
+  content      String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  contact      CrmContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId, contactId, createdAt])
+}
+
+model CrmInteraction {
+  id          String             @id @default(cuid())
+  organizerId String
+  contactId   String
+  type        CrmInteractionType
+  channel     CrmChannel         @default(PLATFORM)
+  title       String
+  description String?
+  campaignId  String?
+  purchaseId  String?
+  paymentId   String?
+  metadata    Json?
+  occurredAt  DateTime           @default(now())
+  createdAt   DateTime           @default(now())
+  contact     CrmContact         @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  campaign    Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+
+  @@unique([organizerId, type, purchaseId, paymentId])
+  @@index([organizerId, contactId, occurredAt])
+  @@index([campaignId, occurredAt])
+}
+
+model Segment {
+  id                 String              @id @default(cuid())
+  organizerId        String
+  name               String
+  description        String?
+  type               SegmentType         @default(DYNAMIC)
+  rules              Json
+  isDynamic          Boolean             @default(true)
+  isActive           Boolean             @default(true)
+  contactCount       Int                 @default(0)
+  lastCalculatedAt   DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  marketingCampaigns MarketingCampaign[]
+
+  @@unique([organizerId, name])
+  @@index([organizerId, isActive])
+}
+
+model NotificationPreference {
+  id              String               @id @default(cuid())
+  userId          String
+  category        NotificationCategory
+  inAppEnabled    Boolean              @default(true)
+  emailEnabled    Boolean              @default(false)
+  whatsappEnabled Boolean              @default(false)
+  smsEnabled      Boolean              @default(false)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  user            User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+}
+
+model Automation {
+  id               String                 @id @default(cuid())
+  organizerId      String
+  name             String
+  description      String?
+  status           AutomationStatus       @default(DRAFT)
+  triggerType      AutomationTriggerType
+  triggerConfig    Json
+  audienceType     AutomationAudienceType @default(ALL_CONTACTS)
+  audienceConfig   Json
+  actionType       AutomationActionType
+  actionConfig     Json
+  delayMinutes     Int                    @default(0)
+  startsAt         DateTime?
+  endsAt           DateTime?
+  lastRunAt        DateTime?
+  nextRunAt        DateTime?
+  totalRuns        Int                    @default(0)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  outboundMessages OutboundMessage[]
+
+  @@index([organizerId, status, triggerType])
+}
+
+model OutboundMessage {
+  id                String                @id @default(cuid())
+  organizerId       String
+  contactId         String
+  automationId      String?
+  channel           CrmChannel
+  destinationMasked String
+  templateId        String?
+  subject           String?
+  content           String
+  status            OutboundMessageStatus @default(QUEUED)
+  scheduledAt       DateTime
+  sentAt            DateTime?
+  failedAt          DateTime?
+  failureReason     String?
+  metadata          Json?
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  contact           CrmContact            @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  automation        Automation?           @relation(fields: [automationId], references: [id], onDelete: SetNull)
+
+  @@index([organizerId, status, scheduledAt])
+}
+
+model MessageTemplate {
+  id               String               @id @default(cuid())
+  organizerId      String?
+  name             String
+  channel          CrmChannel
+  category         NotificationCategory
+  subject          String?
+  content          String
+  variables        Json
+  isSystemTemplate Boolean              @default(false)
+  isActive         Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@unique([organizerId, name])
+  @@index([organizerId, isActive])
+}
+
+model MarketingCampaign {
+  id              String                  @id @default(cuid())
+  organizerId     String
+  name            String
+  channel         CrmChannel
+  segmentId       String?
+  status          MarketingCampaignStatus @default(DRAFT)
+  subject         String?
+  content         String
+  scheduledAt     DateTime?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  totalRecipients Int                     @default(0)
+  totalQueued     Int                     @default(0)
+  totalSent       Int                     @default(0)
+  totalFailed     Int                     @default(0)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  segment         Segment?                @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+
+  @@index([organizerId, status, createdAt])
+}
+
+model CrmTask {
+  id             String          @id @default(cuid())
+  organizerId    String
+  contactId      String?
+  assignedUserId String?
+  automationId   String?
+  title          String
+  description    String?
+  status         CrmTaskStatus   @default(OPEN)
+  priority       CrmTaskPriority @default(MEDIUM)
+  dueAt          DateTime?
+  completedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  contact        CrmContact?     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  @@index([organizerId, status, dueAt])
+}
+
+model AffiliateProgram {
+  id                         String                    @id @default(cuid())
+  organizerId                String
+  campaignId                 String?
+  name                       String
+  description                String?
+  status                     AffiliateProgramStatus    @default(DRAFT)
+  commissionType             AffiliateCommissionType
+  commissionPercentage       Decimal?                  @db.Decimal(6, 3)
+  commissionFixedAmount      Decimal?                  @db.Decimal(14, 2)
+  commissionMixedPercentage  Decimal?                  @db.Decimal(6, 3)
+  commissionMixedFixedAmount Decimal?                  @db.Decimal(14, 2)
+  minimumPayoutAmount        Decimal                   @default(50) @db.Decimal(14, 2)
+  releaseDelayDays           Int                       @default(7)
+  allowSelfSignup            Boolean                   @default(false)
+  allowSelfReferral          Boolean                   @default(false)
+  cookieDurationDays         Int                       @default(30)
+  attributionModel           AffiliateAttributionModel @default(LAST_CLICK)
+  startsAt                   DateTime?
+  endsAt                     DateTime?
+  affiliateLimit             Int?
+  commissionBasis            String                    @default("SALE")
+  rules                      String?
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt
+  organizer                  User                      @relation(fields: [organizerId], references: [id], onDelete: Restrict)
+  campaign                   Campaign?                 @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  affiliates                 Affiliate[]
+  links                      AffiliateLink[]
+  conversions                AffiliateConversion[]
+  coupons                    AffiliateCoupon[]
+  materials                  AffiliateMaterial[]
+
+  @@index([organizerId, status])
+  @@index([campaignId, status])
+}
+
+model Affiliate {
+  id                   String                   @id @default(cuid())
+  userId               String?
+  organizerId          String
+  programId            String
+  name                 String
+  email                String
+  phone                String?
+  document             String?
+  status               AffiliateStatus          @default(INVITED)
+  referralCode         String                   @unique
+  slug                 String                   @unique
+  joinedAt             DateTime                 @default(now())
+  approvedAt           DateTime?
+  rejectedAt           DateTime?
+  suspendedAt          DateTime?
+  inviteExpiresAt      DateTime?
+  invitationLastSentAt DateTime?
+  inviteMessage        String?
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+  user                 User?                    @relation("AffiliateUser", fields: [userId], references: [id], onDelete: SetNull)
+  program              AffiliateProgram         @relation(fields: [programId], references: [id], onDelete: Cascade)
+  links                AffiliateLink[]
+  conversions          AffiliateConversion[]
+  commissions          AffiliateCommission[]
+  payoutRequests       AffiliatePayoutRequest[]
+  coupons              AffiliateCoupon[]
+  generatedMedia       GeneratedMedia[]
+
+  @@unique([programId, email])
+  @@index([organizerId, status])
+  @@index([userId])
+}
+
+model AffiliateLink {
+  id           String           @id @default(cuid())
+  affiliateId  String
+  programId    String
+  campaignId   String?
+  code         String           @unique
+  slug         String           @unique
+  url          String
+  clicks       Int              @default(0)
+  uniqueClicks Int              @default(0)
+  conversions  Int              @default(0)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  affiliate    Affiliate        @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  program      AffiliateProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  campaign     Campaign?        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  clickEvents  AffiliateClick[]
+
+  @@index([affiliateId, createdAt])
+  @@index([campaignId])
+}
+
+model AffiliateClick {
+  id              String        @id @default(cuid())
+  affiliateLinkId String
+  visitorId       String
+  userId          String?
+  ipHash          String?
+  userAgentHash   String?
+  referrer        String?
+  landingPage     String
+  clickedAt       DateTime      @default(now())
+  expiresAt       DateTime
+  convertedAt     DateTime?
+  affiliateLink   AffiliateLink @relation(fields: [affiliateLinkId], references: [id], onDelete: Cascade)
+  user            User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([visitorId, clickedAt])
+  @@index([affiliateLinkId, clickedAt])
+}
+
+model AffiliateConversion {
+  id               String                    @id @default(cuid())
+  affiliateId      String
+  programId        String
+  campaignId       String
+  purchaseId       String                    @unique
+  paymentId        String?                   @unique
+  buyerId          String
+  grossAmount      Decimal                   @db.Decimal(14, 2)
+  eligibleAmount   Decimal                   @db.Decimal(14, 2)
+  commissionAmount Decimal                   @db.Decimal(14, 2)
+  status           AffiliateConversionStatus @default(PENDING)
+  attributedAt     DateTime                  @default(now())
+  availableAt      DateTime?
+  approvedAt       DateTime?
+  cancelledAt      DateTime?
+  createdAt        DateTime                  @default(now())
+  updatedAt        DateTime                  @updatedAt
+  affiliate        Affiliate                 @relation(fields: [affiliateId], references: [id], onDelete: Restrict)
+  program          AffiliateProgram          @relation(fields: [programId], references: [id], onDelete: Restrict)
+  campaign         Campaign                  @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  commission       AffiliateCommission?
+  purchase         Purchase                  @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+
+  @@index([affiliateId, status])
+  @@index([programId, status])
+  @@index([campaignId, status])
+}
+
+model AffiliateCommission {
+  id           String                    @id @default(cuid())
+  affiliateId  String
+  conversionId String                    @unique
+  amount       Decimal                   @db.Decimal(14, 2)
+  status       AffiliateConversionStatus @default(PENDING)
+  availableAt  DateTime
+  paidAt       DateTime?
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  affiliate    Affiliate                 @relation(fields: [affiliateId], references: [id], onDelete: Restrict)
+  conversion   AffiliateConversion       @relation(fields: [conversionId], references: [id], onDelete: Restrict)
+
+  @@index([affiliateId, status, availableAt])
+}
+
+model AffiliatePayoutRequest {
+  id                  String                @id @default(cuid())
+  affiliateId         String
+  amount              Decimal               @db.Decimal(14, 2)
+  status              AffiliatePayoutStatus @default(REQUESTED)
+  requestedAt         DateTime              @default(now())
+  reviewedAt          DateTime?
+  completedAt         DateTime?
+  rejectedAt          DateTime?
+  rejectionReason     String?
+  destinationSnapshot Json?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  affiliate           Affiliate             @relation(fields: [affiliateId], references: [id], onDelete: Restrict)
+
+  @@index([affiliateId, status])
+}
+
+model AffiliateCoupon {
+  id            String                @id @default(cuid())
+  affiliateId   String
+  programId     String
+  campaignId    String?
+  code          String                @unique
+  discountType  AffiliateDiscountType
+  discountValue Decimal               @db.Decimal(14, 2)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  usageLimit    Int?
+  usageCount    Int                   @default(0)
+  isActive      Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  affiliate     Affiliate             @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+  program       AffiliateProgram      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  campaign      Campaign?             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([programId, isActive])
+}
+
+model AffiliateMaterial {
+  id           String           @id @default(cuid())
+  programId    String
+  campaignId   String?
+  title        String
+  description  String?
+  type         String
+  fileUrl      String?
+  textContent  String?
+  instructions String?
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  program      AffiliateProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  campaign     Campaign?        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([programId, isActive])
+  @@index([campaignId])
+}
+
+model ReferralProgram {
+  id          String                @id @default(cuid())
+  name        String
+  targetType  ReferralTargetType
+  rewardType  ReferralRewardType
+  rewardValue Decimal               @db.Decimal(14, 2)
+  status      ReferralProgramStatus @default(DRAFT)
+  startsAt    DateTime?
+  endsAt      DateTime?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  referrals   Referral[]
+}
+
+model Referral {
+  id             String          @id @default(cuid())
+  programId      String
+  referrerUserId String
+  referredUserId String          @unique
+  code           String
+  status         ReferralStatus  @default(PENDING)
+  qualifiedAt    DateTime?
+  rewardedAt     DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  program        ReferralProgram @relation(fields: [programId], references: [id], onDelete: Restrict)
+  referrer       User            @relation("ReferralReferrer", fields: [referrerUserId], references: [id], onDelete: Restrict)
+  referred       User            @relation("ReferralReferred", fields: [referredUserId], references: [id], onDelete: Restrict)
+
+  @@unique([programId, referrerUserId, referredUserId])
+  @@index([referrerUserId, status])
+  @@index([code])
+}
+
+model CampaignImage {
+  id           String   @id @default(cuid())
+  campaignId   String
+  storageKey   String
+  originalName String
+  mimeType     String
+  size         Int
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  campaign     Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, sortOrder])
+}
+
+model CampaignInstantPrize {
+  id              String               @id @default(cuid())
+  campaignId      String
+  exactNumber     String?
+  generationRule  Json?
+  value           Decimal              @db.Decimal(14, 2)
+  description     String
+  imageStorageKey String?
+  type            CampaignPrizeType
+  quantity        Int                  @default(1)
+  status          InstantPrizeStatus   @default(AVAILABLE)
+  foundCount      Int                  @default(0)
+  winnerUserId    String?
+  winnerCity      String?
+  foundAt         DateTime?
+  deliveredAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  campaign        Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  results         InstantPrizeResult[]
+
+  @@index([campaignId])
+  @@index([status])
+}
+
+model CampaignPromotion {
+  id                String              @id @default(cuid())
+  campaignId        String
+  name              String
+  numberQuantity    Int
+  packagePrice      Decimal             @db.Decimal(14, 2)
+  discountRate      Decimal             @default(0) @db.Decimal(6, 2)
+  isPopular         Boolean             @default(false)
+  isActive          Boolean             @default(true)
+  startsAt          DateTime?
+  endsAt            DateTime?
+  sortOrder         Int                 @default(0)
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  campaign          Campaign            @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  purchases         Purchase[]
+  type              PromotionType       @default(PACKAGE)
+  status            PromotionStatus     @default(ACTIVE)
+  description       String?
+  config            Json?
+  stackRules        Json?
+  totalLimit        Int?
+  perBuyerLimit     Int?
+  usageCount        Int                 @default(0)
+  views             Int                 @default(0)
+  attributedRevenue Decimal             @default(0) @db.Decimal(16, 2)
+  grantedDiscount   Decimal             @default(0) @db.Decimal(16, 2)
+  deletedAt         DateTime?
+  usages            PromotionUsage[]
+  coupons           PromotionCoupon[]
+  credits           PromotionalCredit[]
+  ads               SortexAdCampaign[]
+
+  @@index([campaignId, sortOrder])
+}
+
+model PromotionCoupon {
+  id            String            @id @default(cuid())
+  organizerId   String
+  promotionId   String
+  code          String
+  name          String
+  discountType  DiscountType
+  discountValue Decimal           @db.Decimal(14, 2)
+  minimumAmount Decimal           @default(0) @db.Decimal(14, 2)
+  totalLimit    Int?
+  perBuyerLimit Int?
+  usageCount    Int               @default(0)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  isActive      Boolean           @default(true)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  promotion     CampaignPromotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  usages        PromotionUsage[]
+
+  @@unique([organizerId, code])
+  @@index([promotionId, isActive])
+}
+
+model PromotionUsage {
+  id             String               @id @default(cuid())
+  promotionId    String
+  couponId       String?
+  buyerId        String
+  purchaseId     String?
+  status         PromotionUsageStatus @default(RESERVED)
+  grossAmount    Decimal              @db.Decimal(14, 2)
+  discountAmount Decimal              @default(0) @db.Decimal(14, 2)
+  finalAmount    Decimal              @db.Decimal(14, 2)
+  metadata       Json?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  promotion      CampaignPromotion    @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  coupon         PromotionCoupon?     @relation(fields: [couponId], references: [id], onDelete: SetNull)
+
+  @@unique([promotionId, purchaseId])
+  @@index([buyerId, createdAt])
+}
+
+model PromotionalCredit {
+  id          String            @id @default(cuid())
+  promotionId String
+  buyerId     String
+  amount      Decimal           @db.Decimal(14, 2)
+  usedAmount  Decimal           @default(0) @db.Decimal(14, 2)
+  expiresAt   DateTime?
+  expiredAt   DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  promotion   CampaignPromotion @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  buyer       User              @relation("PromotionalCreditBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+
+  @@index([buyerId, expiresAt])
+}
+
+model SortexAdCampaign {
+  id                 String             @id @default(cuid())
+  organizerId        String
+  campaignId         String
+  promotionId        String?
+  name               String
+  code               String             @unique
+  status             SortexAdStatus     @default(DRAFT)
+  objective          SortexAdObjective
+  channels           SortexAdChannel[]
+  audience           Json
+  location           Json
+  budgetType         SortexAdBudgetType
+  budget             Decimal            @db.Decimal(14, 2)
+  creative           Json
+  startsAt           DateTime?
+  endsAt             DateTime?
+  views              Int                @default(0)
+  clicks             Int                @default(0)
+  registrations      Int                @default(0)
+  reservations       Int                @default(0)
+  approvedSales      Int                @default(0)
+  attributedRevenue  Decimal            @default(0) @db.Decimal(16, 2)
+  externalCampaignId String?
+  externalAdSetId    String?
+  externalCreativeId String?
+  externalAdId       String?
+  spent              Decimal            @default(0) @db.Decimal(16, 2)
+  reach              Int                @default(0)
+  impressions        Int                @default(0)
+  ctr                Decimal            @default(0) @db.Decimal(10, 4)
+  cpm                Decimal            @default(0) @db.Decimal(14, 4)
+  cpc                Decimal            @default(0) @db.Decimal(14, 4)
+  lastSyncedAt       DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  organizer          User               @relation("SortexAdOrganizer", fields: [organizerId], references: [id], onDelete: Restrict)
+  campaign           Campaign           @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  promotion          CampaignPromotion? @relation(fields: [promotionId], references: [id], onDelete: SetNull)
+  events             SortexAdEvent[]
+
+  @@index([organizerId, status, updatedAt])
+  @@index([campaignId, status])
+}
+
+model SortexAdEvent {
+  id          String           @id @default(cuid())
+  adId        String
+  visitorHash String?
+  buyerId     String?
+  purchaseId  String?
+  type        String
+  value       Decimal?         @db.Decimal(14, 2)
+  channel     SortexAdChannel?
+  metadata    Json?
+  occurredAt  DateTime         @default(now())
+  ad          SortexAdCampaign @relation(fields: [adId], references: [id], onDelete: Cascade)
+
+  @@index([adId, type, occurredAt])
+  @@index([buyerId, occurredAt])
+}
+
+model AiRecommendation {
+  id          String                   @id @default(cuid())
+  organizerId String
+  campaignId  String?
+  ruleKey     String
+  title       String
+  explanation String
+  evidence    Json
+  impact      String?
+  priority    AiRecommendationPriority
+  status      AiRecommendationStatus   @default(NEW)
+  actionType  String
+  actionUrl   String
+  generatedAt DateTime                 @default(now())
+  viewedAt    DateTime?
+  actedAt     DateTime?
+  feedback    String?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  organizer   User                     @relation("AiRecommendationOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  campaign    Campaign?                @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([organizerId, ruleKey, campaignId])
+  @@index([organizerId, status, priority, generatedAt])
+}
+
+model Purchase {
+  id                  String               @id @default(cuid())
+  buyerId             String
+  campaignId          String
+  promotionId         String?
+  status              PurchaseStatus       @default(PENDING)
+  selectionMode       NumberSelectionMode
+  quantity            Int
+  unitPrice           Decimal              @db.Decimal(14, 2)
+  subtotal            Decimal              @db.Decimal(14, 2)
+  discount            Decimal              @default(0) @db.Decimal(14, 2)
+  total               Decimal              @db.Decimal(14, 2)
+  expiresAt           DateTime
+  confirmedAt         DateTime?
+  cancelledAt         DateTime?
+  idempotencyKey      String?              @unique
+  affiliateCode       String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  buyer               User                 @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  campaign            Campaign             @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  promotion           CampaignPromotion?   @relation(fields: [promotionId], references: [id], onDelete: SetNull)
+  tickets             Ticket[]
+  payments            Payment[]
+  winners             Winner[]
+  instantPrizeResults InstantPrizeResult[]
+  affiliateConversion AffiliateConversion?
+
+  @@index([buyerId, status])
+  @@index([campaignId, status])
+  @@index([expiresAt])
+}
+
+model Ticket {
+  id                   String                            @id @default(cuid())
+  purchaseId           String
+  campaignId           String
+  buyerId              String
+  number               Int
+  status               TicketStatus                      @default(RESERVED)
+  reservedUntil        DateTime?
+  createdAt            DateTime                          @default(now())
+  updatedAt            DateTime                          @updatedAt
+  purchase             Purchase                          @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  campaign             Campaign                          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  buyer                User                              @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  winner               Winner?
+  instantPrizeResults  InstantPrizeResult[]
+  milestoneEligibility CampaignMilestoneEligibleTicket[]
+  milestoneWins        CampaignMilestonePrize[]          @relation("CampaignMilestoneWinnerTicket")
+
+  @@unique([campaignId, number])
+  @@index([purchaseId])
+  @@index([buyerId, status])
+  @@index([campaignId, status, reservedUntil])
+}
+
+model CampaignMilestonePrize {
+  id                  String                            @id @default(cuid())
+  campaignId          String
+  name                String
+  description         String?
+  imageUrl            String?
+  imageCrop           Json?
+  videoUrl            String?
+  estimatedValue      Decimal?                          @db.Decimal(14, 2)
+  percentage          Int
+  scheduledAt         DateTime?
+  notes               String?
+  status              CampaignMilestoneStatus           @default(WAITING)
+  reachedAt           DateTime?
+  snapshotAt          DateTime?
+  eligibleTicketCount Int                               @default(0)
+  lotteryDrawId       String?
+  winnerTicketId      String?
+  winningNumber       String?
+  ruleSnapshot        Json?
+  resultSnapshot      Json?
+  auditHash           String?
+  executedByUserId    String?
+  executedAt          DateTime?
+  createdAt           DateTime                          @default(now())
+  updatedAt           DateTime                          @updatedAt
+  campaign            Campaign                          @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  lotteryDraw         LotteryDraw?                      @relation(fields: [lotteryDrawId], references: [id], onDelete: Restrict)
+  winnerTicket        Ticket?                           @relation("CampaignMilestoneWinnerTicket", fields: [winnerTicketId], references: [id], onDelete: Restrict)
+  executedBy          User?                             @relation("CampaignMilestoneExecutedBy", fields: [executedByUserId], references: [id], onDelete: SetNull)
+  eligibleTickets     CampaignMilestoneEligibleTicket[]
+
+  @@unique([campaignId, percentage])
+  @@index([campaignId, status, percentage])
+  @@index([lotteryDrawId])
+}
+
+model CampaignMilestoneEligibleTicket {
+  id              String                 @id @default(cuid())
+  milestoneId     String
+  ticketId        String
+  buyerId         String
+  purchaseId      String
+  number          Int
+  capturedAt      DateTime               @default(now())
+  excludedAt      DateTime?
+  exclusionReason String?
+  milestone       CampaignMilestonePrize @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+  ticket          Ticket                 @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+
+  @@unique([milestoneId, ticketId])
+  @@index([milestoneId, number])
+  @@index([buyerId, capturedAt])
+}
+
+model Payment {
+  id                String          @id @default(cuid())
+  purchaseId        String
+  buyerId           String
+  campaignId        String
+  organizerId       String
+  provider          GatewayProvider
+  providerPaymentId String?
+  externalReference String          @unique
+  activePurchaseKey String?         @unique
+  method            PaymentMethod
+  status            PaymentStatus   @default(CREATED)
+  amount            Decimal         @db.Decimal(14, 2)
+  platformFee       Decimal         @default(0) @db.Decimal(14, 2)
+  platformFeeRate   Decimal         @default(0) @db.Decimal(6, 3)
+  gatewayFee        Decimal         @default(0) @db.Decimal(14, 2)
+  gatewayFeeRate    Decimal         @default(0) @db.Decimal(6, 3)
+  netAmount         Decimal         @db.Decimal(14, 2)
+  currency          String          @default("BRL")
+  pixQrCode         String?
+  pixQrCodeBase64   String?
+  pixCopyPaste      String?
+  boletoUrl         String?
+  cardLastFour      String?
+  cardBrand         String?
+  installments      Int?
+  expiresAt         DateTime?
+  approvedAt        DateTime?
+  rejectedAt        DateTime?
+  cancelledAt       DateTime?
+  refundedAt        DateTime?
+  failureReason     String?
+  metadata          Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  purchase          Purchase        @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  buyer             User            @relation("PaymentBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+  campaign          Campaign        @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  organizer         User            @relation("PaymentOrganizer", fields: [organizerId], references: [id], onDelete: Restrict)
+  events            PaymentEvent[]
+  ledgerEntries     LedgerEntry[]
+
+  @@unique([provider, providerPaymentId])
+  @@index([purchaseId, status])
+  @@index([buyerId, status])
+  @@index([organizerId, status])
+  @@index([campaignId, status])
+  @@index([createdAt])
+}
+
+model PaymentEvent {
+  id              String          @id @default(cuid())
+  paymentId       String?
+  provider        GatewayProvider
+  providerEventId String
+  eventType       String
+  payload         Json
+  processed       Boolean         @default(false)
+  processedAt     DateTime?
+  errorMessage    String?
+  createdAt       DateTime        @default(now())
+  payment         Payment?        @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, providerEventId])
+  @@index([paymentId])
+  @@index([processed, createdAt])
+}
+
+model DrawRuleTemplate {
+  id               String         @id @default(cuid())
+  organizerId      String?
+  name             String
+  description      String
+  isSystemTemplate Boolean        @default(false)
+  isActive         Boolean        @default(true)
+  ruleVersion      Int            @default(1)
+  ruleDefinition   Json
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  organizer        User?          @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  campaigns        Campaign[]
+  campaignDraws    CampaignDraw[]
+
+  @@unique([organizerId, name])
+  @@index([organizerId])
+  @@index([isSystemTemplate])
+}
+
+model LotteryDraw {
+  id                 String                   @id @default(cuid())
+  provider           String                   @default("LOTERIA_FEDERAL")
+  lotteryName        String                   @default("Loteria Federal")
+  extractionNumber   String?
+  drawDate           DateTime
+  drawTime           String?
+  firstPrize         String
+  secondPrize        String
+  thirdPrize         String
+  fourthPrize        String
+  fifthPrize         String
+  sourceUrl          String?
+  sourceDocumentHash String?
+  sourceType         LotterySourceType        @default(MANUAL)
+  status             LotteryDrawStatus        @default(DRAFT)
+  notes              String?
+  enteredByUserId    String?
+  reviewedByUserId   String?
+  reviewedAt         DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+  enteredBy          User?                    @relation("LotteryDrawEnteredBy", fields: [enteredByUserId], references: [id], onDelete: SetNull)
+  reviewedBy         User?                    @relation("LotteryDrawReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  campaignDraws      CampaignDraw[]
+  campaignMilestones CampaignMilestonePrize[]
+
+  @@unique([lotteryName, extractionNumber])
+  @@index([drawDate, status])
+}
+
+model CampaignDraw {
+  id                      String             @id @default(cuid())
+  campaignId              String             @unique
+  lotteryDrawId           String?
+  ruleTemplateId          String?
+  ruleSnapshot            Json
+  resultSnapshot          Json
+  winningNumber           String
+  normalizedWinningNumber String
+  status                  CampaignDrawStatus @default(PENDING_CONFIRMATION)
+  executedByUserId        String
+  executedAt              DateTime           @default(now())
+  confirmedByUserId       String?
+  confirmedAt             DateTime?
+  auditHash               String             @unique
+  previousAuditHash       String?
+  notes                   String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  campaign                Campaign           @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  lotteryDraw             LotteryDraw?       @relation(fields: [lotteryDrawId], references: [id], onDelete: Restrict)
+  ruleTemplate            DrawRuleTemplate?  @relation(fields: [ruleTemplateId], references: [id], onDelete: SetNull)
+  executedBy              User               @relation("CampaignDrawExecutedBy", fields: [executedByUserId], references: [id], onDelete: Restrict)
+  confirmedBy             User?              @relation("CampaignDrawConfirmedBy", fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+  winners                 Winner[]
+
+  @@index([status, executedAt])
+}
+
+model Winner {
+  id                         String           @id @default(cuid())
+  campaignId                 String
+  campaignDrawId             String
+  ticketId                   String           @unique
+  purchaseId                 String
+  buyerId                    String
+  prizeType                  PrizeType
+  prizeName                  String
+  prizeDescription           String?
+  prizeValue                 Decimal?         @db.Decimal(14, 2)
+  winningNumber              String
+  status                     WinnerStatus     @default(IDENTIFIED)
+  notifiedAt                 DateTime?
+  claimedAt                  DateTime?
+  deliveredAt                DateTime?
+  confirmationToken          String?          @unique
+  confirmationTokenExpiresAt DateTime?
+  publicVerificationCode     String           @unique
+  publicDisplayName          String?
+  publicCity                 String?
+  testimonialText            String?
+  testimonialVideoUrl        String?
+  testimonialImageUrl        String?
+  publicDisclosureAuthorized Boolean          @default(false)
+  winnerConfirmedReceipt     Boolean          @default(false)
+  winnerConfirmedReceiptAt   DateTime?
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
+  campaign                   Campaign         @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  campaignDraw               CampaignDraw     @relation(fields: [campaignDrawId], references: [id], onDelete: Restrict)
+  ticket                     Ticket           @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  purchase                   Purchase         @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  buyer                      User             @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  generatedMedia             GeneratedMedia[]
+
+  @@index([campaignId, status])
+  @@index([buyerId, status])
+}
+
+model InstantPrizeResult {
+  id             String                   @id @default(cuid())
+  campaignId     String
+  instantPrizeId String
+  ticketId       String
+  purchaseId     String
+  buyerId        String
+  winningNumber  String
+  status         InstantPrizeResultStatus @default(IDENTIFIED)
+  identifiedAt   DateTime                 @default(now())
+  deliveredAt    DateTime?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+  campaign       Campaign                 @relation(fields: [campaignId], references: [id], onDelete: Restrict)
+  instantPrize   CampaignInstantPrize     @relation(fields: [instantPrizeId], references: [id], onDelete: Restrict)
+  ticket         Ticket                   @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  purchase       Purchase                 @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  buyer          User                     @relation(fields: [buyerId], references: [id], onDelete: Restrict)
+  generatedMedia GeneratedMedia[]
+
+  @@unique([instantPrizeId, ticketId])
+  @@index([campaignId, status])
+  @@index([buyerId, status])
+}
+
+model AuditLog {
+  id           String    @id @default(cuid())
+  entityType   String
+  entityId     String
+  action       String
+  actorUserId  String?
+  actorRole    UserRole?
+  previousData Json?
+  newData      Json?
+  metadata     Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime  @default(now())
+  actor        User?     @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model FinancialAccount {
+  id                   String                 @id @default(cuid())
+  ownerType            FinancialOwnerType
+  ownerId              String
+  currency             String                 @default("BRL")
+  status               FinancialAccountStatus @default(ACTIVE)
+  availableBalance     Decimal                @default(0) @db.Decimal(18, 2)
+  pendingBalance       Decimal                @default(0) @db.Decimal(18, 2)
+  blockedBalance       Decimal                @default(0) @db.Decimal(18, 2)
+  lifetimeGrossRevenue Decimal                @default(0) @db.Decimal(18, 2)
+  lifetimePlatformFees Decimal                @default(0) @db.Decimal(18, 2)
+  lifetimeGatewayFees  Decimal                @default(0) @db.Decimal(18, 2)
+  lifetimeNetRevenue   Decimal                @default(0) @db.Decimal(18, 2)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  ledgerEntries        LedgerEntry[]
+  payoutRequests       PayoutRequest[]
+  adjustments          FinancialAdjustment[]
+
+  @@unique([ownerType, ownerId, currency])
+  @@index([ownerType, status])
+}
+
+model LedgerEntry {
+  id              String           @id @default(cuid())
+  accountId       String
+  campaignId      String?
+  purchaseId      String?
+  paymentId       String?
+  payoutRequestId String?
+  type            LedgerEntryType
+  direction       LedgerDirection
+  status          LedgerStatus
+  amount          Decimal          @db.Decimal(18, 2)
+  balanceBefore   Decimal          @db.Decimal(18, 2)
+  balanceAfter    Decimal          @db.Decimal(18, 2)
+  currency        String           @default("BRL")
+  reference       String           @unique
+  description     String
+  metadata        Json?
+  availableAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  account         FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  campaign        Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  payment         Payment?         @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+  payoutRequest   PayoutRequest?   @relation(fields: [payoutRequestId], references: [id], onDelete: SetNull)
+
+  @@index([accountId, createdAt])
+  @@index([campaignId, createdAt])
+  @@index([paymentId])
+  @@index([status, availableAt])
+}
+
+model PayoutRequest {
+  id                  String                @id @default(cuid())
+  organizerId         String
+  financialAccountId  String
+  amount              Decimal               @db.Decimal(18, 2)
+  fee                 Decimal?              @db.Decimal(18, 2)
+  netAmount           Decimal               @db.Decimal(18, 2)
+  status              PayoutStatus          @default(REQUESTED)
+  requestedAt         DateTime              @default(now())
+  reviewedAt          DateTime?
+  reviewedByUserId    String?
+  rejectionReason     String?
+  approvedAt          DateTime?
+  completedAt         DateTime?
+  cancelledAt         DateTime?
+  destinationType     PayoutDestinationType
+  destinationSnapshot Json
+  externalReference   String?               @unique
+  notes               String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  organizer           User                  @relation("PayoutOrganizer", fields: [organizerId], references: [id], onDelete: Restrict)
+  reviewedBy          User?                 @relation("PayoutReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  financialAccount    FinancialAccount      @relation(fields: [financialAccountId], references: [id], onDelete: Restrict)
+  ledgerEntries       LedgerEntry[]
+
+  @@index([organizerId, status])
+  @@index([status, requestedAt])
+}
+
+model FinancialAdjustment {
+  id               String           @id @default(cuid())
+  organizerId      String?
+  accountId        String
+  amount           Decimal          @db.Decimal(18, 2)
+  direction        LedgerDirection
+  reason           String
+  notes            String?
+  createdByUserId  String
+  approvedByUserId String?
+  createdAt        DateTime         @default(now())
+  account          FinancialAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  createdBy        User             @relation("AdjustmentCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  approvedBy       User?            @relation("AdjustmentApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([accountId, createdAt])
+  @@index([organizerId, createdAt])
+}
+
+model CampaignFinancialSummary {
+  id               String   @id @default(cuid())
+  campaignId       String   @unique
+  organizerId      String
+  grossRevenue     Decimal  @default(0) @db.Decimal(18, 2)
+  approvedPayments Int      @default(0)
+  pendingPayments  Int      @default(0)
+  rejectedPayments Int      @default(0)
+  refundedAmount   Decimal  @default(0) @db.Decimal(18, 2)
+  chargebackAmount Decimal  @default(0) @db.Decimal(18, 2)
+  platformFees     Decimal  @default(0) @db.Decimal(18, 2)
+  gatewayFees      Decimal  @default(0) @db.Decimal(18, 2)
+  netRevenue       Decimal  @default(0) @db.Decimal(18, 2)
+  availableBalance Decimal  @default(0) @db.Decimal(18, 2)
+  pendingBalance   Decimal  @default(0) @db.Decimal(18, 2)
+  updatedAt        DateTime @updatedAt
+  campaign         Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId, updatedAt])
+}
+
+model Subscription {
+  id                 String                @id @default(cuid())
+  organizerId        String
+  plan               OrganizerPlan
+  planId             String?
+  billingCycle       PlanBillingCycle      @default(MONTHLY)
+  sandboxMode        Boolean               @default(true)
+  autoRenew          Boolean               @default(true)
+  nextRenewalAt      DateTime?
+  status             SubscriptionStatus    @default(TRIAL)
+  monthlyPrice       Decimal               @db.Decimal(14, 2)
+  startedAt          DateTime              @default(now())
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelledAt        DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  organizer          User                  @relation(fields: [organizerId], references: [id], onDelete: Restrict)
+  selectedPlan       Plan?                 @relation(fields: [planId], references: [id], onDelete: SetNull)
+  invoices           SubscriptionInvoice[]
+
+  @@index([organizerId, status])
+  @@index([planId, status])
+}
+
+model SubscriptionInvoice {
+  id             String        @id @default(cuid())
+  subscriptionId String
+  organizerId    String
+  amount         Decimal       @db.Decimal(14, 2)
+  status         InvoiceStatus @default(OPEN)
+  dueDate        DateTime
+  paidAt         DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  subscription   Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([organizerId, status])
+  @@index([dueDate, status])
+}
+
+model OrganizerProfile {
+  id                       String                    @id @default(cuid())
+  userId                   String                    @unique
+  fullName                 String
+  cpf                      String
+  phone                    String
+  birthDate                DateTime?
+  organizationName         String?
+  cnpj                     String?
+  instagram                String?
+  postalCode               String?
+  address                  String?
+  addressNumber            String?
+  addressComplement        String?
+  neighborhood             String?
+  municipalityCode         String?
+  addressReference         String?
+  city                     String?
+  state                    String?
+  logoStorageKey           String?
+  logoOriginalName         String?
+  logoMimeType             String?
+  verificationStatus       VerificationStatus        @default(PENDING)
+  rejectionReason          String?
+  submittedAt              DateTime?
+  reviewedAt               DateTime?
+  reviewedById             String?
+  assignedAdminId          String?
+  publicReviewMessage      String?
+  correctionDeadline       DateTime?
+  riskLevel                OrganizerRiskLevel        @default(MANUAL_REVIEW)
+  riskScore                Int                       @default(0)
+  riskReasons              Json?
+  riskAnalyzedAt           DateTime?
+  reviewChecklist          Json?
+  analysisStartedAt        DateTime?
+  suspensionEndsAt         DateTime?
+  readOnlyAccess           Boolean                   @default(false)
+  currentPlan              OrganizerPlan             @default(BASIC)
+  onboardingStatus         OrganizerOnboardingStatus @default(PLAN_SELECTION)
+  planSelectedAt           DateTime?
+  identitySetupCompletedAt DateTime?
+  platformFee              Decimal                   @default(2.9) @db.Decimal(5, 2)
+  monthlyFee               Decimal                   @default(29.9) @db.Decimal(12, 2)
+  firstCampaignFree        Boolean                   @default(true)
+  platformFeeWaived        Boolean                   @default(false)
+  monthlyFeeWaived         Boolean                   @default(false)
+  customPlatformFee        Decimal?                  @db.Decimal(5, 2)
+  founder                  Boolean                   @default(false)
+  vip                      Boolean                   @default(false)
+  campaignsBlocked         Boolean                   @default(false)
+  paymentsBlocked          Boolean                   @default(false)
+  payoutsBlocked           Boolean                   @default(false)
+  internalNotes            String?
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  user                     User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents                OrganizerDocument[]
+  reviewDecisions          OrganizerReviewDecision[]
+  internalNoteEntries      OrganizerInternalNote[]
+  feeHistory               OrganizerFeeHistory[]
+
+  @@index([verificationStatus])
+  @@index([currentPlan])
+}
+
+model OrganizerDocument {
+  id                 String                  @id @default(cuid())
+  organizerProfileId String
+  type               OrganizerDocumentType
+  originalName       String
+  storageKey         String
+  mimeType           String
+  size               Int
+  status             OrganizerDocumentStatus @default(SUBMITTED)
+  reviewedById       String?
+  reviewedAt         DateTime?
+  rejectionReason    String?
+  reviewNote         String?
+  version            Int                     @default(1)
+  expiresAt          DateTime?
+  createdAt          DateTime                @default(now())
+  organizerProfile   OrganizerProfile        @relation(fields: [organizerProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([organizerProfileId, type, version])
+  @@index([organizerProfileId])
+  @@index([type])
+}
+
+model OrganizerReviewDecision {
+  id                 String             @id @default(cuid())
+  organizerProfileId String
+  adminId            String
+  previousStatus     VerificationStatus
+  nextStatus         VerificationStatus
+  reason             String
+  requestedFields    Json?
+  requestedDocuments Json?
+  deadline           DateTime?
+  canResubmit        Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  organizerProfile   OrganizerProfile   @relation(fields: [organizerProfileId], references: [id], onDelete: Restrict)
+  admin              User               @relation("OrganizerReviewDecisionAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([organizerProfileId, createdAt])
+  @@index([adminId, createdAt])
+}
+
+model OrganizerInternalNote {
+  id                 String                        @id @default(cuid())
+  organizerProfileId String
+  authorId           String
+  category           OrganizerInternalNoteCategory @default(GENERAL)
+  text               String
+  createdAt          DateTime                      @default(now())
+  updatedAt          DateTime                      @updatedAt
+  organizerProfile   OrganizerProfile              @relation(fields: [organizerProfileId], references: [id], onDelete: Restrict)
+  author             User                          @relation("OrganizerInternalNoteAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  @@index([organizerProfileId, createdAt])
+}
+
+model OrganizerFeeHistory {
+  id                 String              @id @default(cuid())
+  organizerProfileId String
+  adminId            String
+  ruleType           PlatformFeeRuleType
+  previousRate       Decimal?            @db.Decimal(6, 3)
+  newRate            Decimal             @db.Decimal(6, 3)
+  startsAt           DateTime            @default(now())
+  endsAt             DateTime?
+  reason             String
+  campaignId         String?
+  createdAt          DateTime            @default(now())
+  organizerProfile   OrganizerProfile    @relation(fields: [organizerProfileId], references: [id], onDelete: Restrict)
+  admin              User                @relation("OrganizerFeeHistoryAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([organizerProfileId, createdAt])
+  @@index([campaignId])
+}
+
+model AuthSession {
+  id               String    @id @default(cuid())
+  userId           String
+  refreshTokenHash String
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  ipAddress        String?
+  userAgent        String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Plan {
+  id              String         @id @default(cuid())
+  code            String         @unique
+  name            String
+  description     String?
+  monthlyPrice    Decimal        @db.Decimal(14, 2)
+  annualPrice     Decimal?       @db.Decimal(14, 2)
+  platformFeeRate Decimal        @db.Decimal(6, 3)
+  campaignLimit   Int?
+  ticketLimit     Int?
+  teamMemberLimit Int?
+  trialDays       Int            @default(0)
+  isActive        Boolean        @default(true)
+  sortOrder       Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  features        PlanFeature[]
+  subscriptions   Subscription[]
+}
+
+model AdminGatewayConfig {
+  id                   String             @id @default(cuid())
+  provider             GatewayProvider    @unique
+  displayName          String
+  status               AdminGatewayStatus @default(INACTIVE)
+  sandboxEnabled       Boolean            @default(true)
+  productionEnabled    Boolean            @default(false)
+  splitAvailable       Boolean            @default(false)
+  planBillingAvailable Boolean            @default(false)
+  priority             Int                @default(0)
+  estimatedFeeRate     Decimal            @default(0) @db.Decimal(6, 3)
+  collectionModel      String             @default("CONSOLIDATED")
+  lastCheckedAt        DateTime?
+  lastError            String?
+  updatedByUserId      String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  @@index([status, priority])
+}
+
+model MiniCampaign {
+  id                    String                @id @default(cuid())
+  organizerId           String
+  mainCampaignId        String
+  name                  String
+  slug                  String                @unique
+  description           String?
+  imageUrl              String?
+  prizeType             MiniCampaignPrizeType
+  prizeDescription      String
+  maxTickets            Int
+  ticketPrice           Decimal               @db.Decimal(14, 2)
+  purchaseLimitPerBuyer Int?
+  startsAt              DateTime?
+  endsAt                DateTime?
+  drawAt                DateTime?
+  rules                 String
+  status                MiniCampaignStatus    @default(DRAFT)
+  soldTickets           Int                   @default(0)
+  grossRevenue          Decimal               @default(0) @db.Decimal(16, 2)
+  publishedAt           DateTime?
+  finishedAt            DateTime?
+  deletedAt             DateTime?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+  organizer             User                  @relation("MiniCampaignOrganizer", fields: [organizerId], references: [id], onDelete: Restrict)
+  mainCampaign          Campaign              @relation(fields: [mainCampaignId], references: [id], onDelete: Restrict)
+  orders                MiniCampaignOrder[]
+  tickets               MiniCampaignTicket[]
+  result                MiniCampaignResult?
+
+  @@index([organizerId, status, updatedAt])
+  @@index([mainCampaignId, status])
+}
+
+model MiniCampaignOrder {
+  id             String                  @id @default(cuid())
+  miniCampaignId String
+  buyerId        String
+  code           String                  @unique
+  status         MiniCampaignOrderStatus @default(RESERVED)
+  quantity       Int
+  unitPrice      Decimal                 @db.Decimal(14, 2)
+  total          Decimal                 @db.Decimal(14, 2)
+  expiresAt      DateTime?
+  paidAt         DateTime?
+  cancelledAt    DateTime?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  miniCampaign   MiniCampaign            @relation(fields: [miniCampaignId], references: [id], onDelete: Restrict)
+  buyer          User                    @relation("MiniCampaignOrderBuyer", fields: [buyerId], references: [id], onDelete: Restrict)
+  tickets        MiniCampaignTicket[]
+
+  @@index([miniCampaignId, status, createdAt])
+  @@index([buyerId, status, createdAt])
+}
+
+model MiniCampaignTicket {
+  id             String            @id @default(cuid())
+  miniCampaignId String
+  orderId        String
+  number         Int
+  createdAt      DateTime          @default(now())
+  miniCampaign   MiniCampaign      @relation(fields: [miniCampaignId], references: [id], onDelete: Restrict)
+  order          MiniCampaignOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([miniCampaignId, number])
+  @@index([orderId])
+}
+
+model MiniCampaignResult {
+  id             String       @id @default(cuid())
+  miniCampaignId String       @unique
+  winningNumber  Int
+  winnerId       String?
+  notes          String?
+  auditedData    Json?
+  drawnAt        DateTime     @default(now())
+  confirmedAt    DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  miniCampaign   MiniCampaign @relation(fields: [miniCampaignId], references: [id], onDelete: Restrict)
+  winner         User?        @relation("MiniCampaignWinner", fields: [winnerId], references: [id], onDelete: SetNull)
+
+  @@index([winnerId, drawnAt])
+}
+
+model PlanFeature {
+  id     String @id @default(cuid())
+  planId String
+  key    String
+  name   String
+  value  Json
+  plan   Plan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, key])
+}
+
+model OrganizerCommercialOverride {
+  id                 String    @id @default(cuid())
+  organizerId        String    @unique
+  promotionalStartAt DateTime?
+  promotionalEndAt   DateTime?
+  notes              String?
+  campaignLimit      Int?
+  ticketLimit        Int?
+  enabledFeatures    Json?
+  updatedByUserId    String
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model Report {
+  id               String           @id @default(cuid())
+  reporterUserId   String?
+  entityType       ReportEntityType
+  entityId         String
+  reason           String
+  description      String
+  status           ReportStatus     @default(OPEN)
+  reviewedByUserId String?
+  reviewedAt       DateTime?
+  resolution       String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@index([status, createdAt])
+  @@index([entityType, entityId])
+}
+
+model PlatformBanner {
+  id              String    @id @default(cuid())
+  title           String
+  subtitle        String?
+  imageUrl        String?
+  linkUrl         String?
+  isActive        Boolean   @default(true)
+  sortOrder       Int       @default(0)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model FeaturedCampaign {
+  id              String    @id @default(cuid())
+  campaignId      String    @unique
+  sortOrder       Int       @default(0)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  isActive        Boolean   @default(true)
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+}
+
+model PlatformNotice {
+  id              String    @id @default(cuid())
+  title           String
+  message         String
+  level           String    @default("INFO")
+  isActive        Boolean   @default(true)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  createdByUserId String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model ContentPage {
+  id              String          @id @default(cuid())
+  slug            String          @unique
+  title           String
+  type            ContentPageType
+  content         String
+  isPublished     Boolean         @default(false)
+  updatedByUserId String
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
+
+model PlatformSetting {
+  key             String   @id
+  value           Json
+  category        String
+  description     String?
+  isPublic        Boolean  @default(false)
+  updatedByUserId String
+  updatedAt       DateTime @updatedAt
+
+  @@index([category])
+}
+
+model SupportTicket {
+  id              String           @id @default(cuid())
+  requesterUserId String
+  assignedAdminId String?
+  category        SupportCategory
+  subject         String
+  description     String
+  status          SupportStatus    @default(OPEN)
+  priority        SupportPriority  @default(MEDIUM)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  closedAt        DateTime?
+  messages        SupportMessage[]
+
+  @@index([status, priority, createdAt])
+  @@index([requesterUserId])
+}
+
+model SupportMessage {
+  id            String        @id @default(cuid())
+  ticketId      String
+  senderUserId  String
+  message       String
+  attachmentUrl String?
+  createdAt     DateTime      @default(now())
+  ticket        SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
+model Notification {
+  id        String               @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  message   String
+  data      Json?
+  readAt    DateTime?
+  deletedAt DateTime?
+  category  NotificationCategory @default(SYSTEM)
+  createdAt DateTime             @default(now())
+  user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
 }

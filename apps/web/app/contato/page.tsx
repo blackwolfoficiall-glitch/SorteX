@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function ContatoPage(){return <main className="mx-auto min-h-screen max-w-3xl px-5 py-16"><Link href="/" className="font-bold text-violet-700">← Voltar</Link><h1 className="mt-8 text-4xl font-black">Contato</h1><p className="mt-5 leading-8 text-zinc-600">O canal público de contato será informado antes do lançamento piloto. Usuários autenticados poderão utilizar o suporte interno da plataforma.</p></main>}

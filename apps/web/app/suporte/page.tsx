@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function SuportePage(){return <main className="mx-auto min-h-screen max-w-3xl px-5 py-16"><Link href="/" className="font-bold text-violet-700">← Voltar</Link><h1 className="mt-8 text-4xl font-black">Suporte</h1><p className="mt-5 leading-8 text-zinc-600">Entre na sua conta para abrir e acompanhar um chamado com segurança.</p><Link href="/login" className="mt-7 inline-block rounded-2xl bg-violet-700 px-6 py-3 font-bold text-white">Entrar</Link></main>}

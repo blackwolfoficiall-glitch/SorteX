@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CheckCircle2, ArrowRight, Gift } from "lucide-react";
+import { CheckCircle2, Gift } from "lucide-react";
 
 export default function SucessoComprador() {
   return (
@@ -45,18 +45,18 @@ export default function SucessoComprador() {
         </div>
 
         <Link
-          href="/"
+          href="/login"
           className="mt-10 flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-violet-700 to-purple-600 py-5 text-lg font-bold text-white"
         >
           <Gift size={20} />
-          Ver Sorteios
+          Entrar na minha conta
         </Link>
 
         <Link
-          href="/perfil"
+          href="/"
           className="mt-4 flex w-full items-center justify-center rounded-2xl border border-violet-300 py-4 font-semibold text-violet-700"
         >
-          Meu Perfil
+          Voltar ao início
         </Link>
 
       </div>

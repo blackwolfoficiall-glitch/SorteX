@@ -1,25 +1,2 @@
-"use client";
-
-export default function FavoritosPage() {
-  return (
-    <main className="mx-auto max-w-md p-5">
-      <h1 className="text-3xl font-black">
-        ❤️ Favoritos
-      </h1>
-
-      <p className="mt-3 text-zinc-500">
-        Aqui ficam as campanhas salvas.
-      </p>
-
-      <div className="mt-6 rounded-3xl border bg-white p-5 shadow">
-        <h2 className="font-bold">
-          Nenhum favorito.
-        </h2>
-
-        <p className="mt-2 text-sm text-zinc-500">
-          Adicione campanhas aos favoritos para encontrá-las rapidamente.
-        </p>
-      </div>
-    </main>
-  );
-}
+"use client";import{useEffect,useState}from'react';import CampaignCard from '@/components/comprador/CampaignCard';import{getFavorites,removeFavorite}from'@/lib/buyer/client';import type{BuyerCampaign}from'@/lib/buyer/types';
+export default function Favoritos(){const[items,setItems]=useState<Array<{id:string;campaign:BuyerCampaign}>>([]);const load=()=>getFavorites().then(setItems);useEffect(()=>{load().catch(()=>setItems([]))},[]);return <main className="mx-auto max-w-6xl p-5 md:py-10"><h1 className="text-3xl font-black">Favoritos</h1>{items.length?<div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{items.map(x=><div key={x.id}><CampaignCard campaign={x.campaign}/><button onClick={()=>removeFavorite(x.campaign.id).then(load)} className="mt-2 w-full rounded-xl bg-red-50 p-2 text-sm font-bold text-red-700">Remover dos favoritos</button></div>)}</div>:<p className="mt-6 rounded-3xl bg-white p-10 text-center text-zinc-500">Você ainda não favoritou nenhuma campanha.</p>}</main>}

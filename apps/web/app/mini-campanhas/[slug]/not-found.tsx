@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function NotFound(){return <main className="grid min-h-screen place-items-center bg-zinc-50 p-6"><div className="max-w-md rounded-3xl border bg-white p-8 text-center"><h1 className="text-3xl font-black">Mini Campanha indisponível</h1><p className="mt-3 text-zinc-500">Ela pode não existir, estar pausada ou já ter sido encerrada.</p><Link href="/login" className="mt-6 inline-flex rounded-xl bg-violet-600 px-5 py-3 font-bold text-white">Entrar na SorteX</Link></div></main>}

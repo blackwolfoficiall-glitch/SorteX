@@ -98,10 +98,9 @@ export default function FinanceiroPage() {
       />
 
       <FinancialSummary
+        metodo="Gateway conectado"
         gateway={gatewaySelecionado}
-        status="Conectado (Modo Teste)"
-        plano="Gratuito"
-        taxa="2%"
+        conectado={conectado}
       />
 
       <ContinueButton

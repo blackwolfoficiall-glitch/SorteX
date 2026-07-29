@@ -1,0 +1,5 @@
+import type { LucideIcon } from "lucide-react";
+
+export default function DashboardModulePage({eyebrow,title,description,items,icon:Icon}:{eyebrow:string;title:string;description:string;items:string[];icon:LucideIcon}){
+  return <section className="mx-auto max-w-7xl"><div className="rounded-3xl border bg-white p-6 shadow-sm sm:p-8"><div className="flex items-start gap-4"><span className="rounded-2xl bg-violet-100 p-3 text-violet-700"><Icon size={28}/></span><div><p className="text-xs font-black uppercase tracking-wider text-violet-700">{eyebrow}</p><h1 className="mt-2 text-3xl font-black">{title}</h1><p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-600 sm:text-base">{description}</p></div></div></div><div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{items.map(item=><article key={item} className="rounded-2xl border bg-white p-5"><h2 className="font-black">{item}</h2><p className="mt-2 text-sm text-zinc-500">Área exclusiva do módulo, preparada para utilizar os dados e integrações da SorteX.</p></article>)}</div></section>;
+}

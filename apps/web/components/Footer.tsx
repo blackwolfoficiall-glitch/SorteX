@@ -1,25 +1,12 @@
-import { ShieldCheck, Trophy, Sparkles } from "lucide-react";
+import Link from "next/link";
 
 export default function Footer() {
+  const instagram = process.env.NEXT_PUBLIC_INSTAGRAM_URL;
   return (
-    <footer className="border-t border-gray-200 bg-white">
-      <div className="mx-auto flex max-w-7xl flex-col items-center justify-center gap-6 px-6 py-10 md:flex-row md:justify-between">
-
-        <div className="flex items-center gap-3 text-gray-700">
-          <ShieldCheck className="text-[#16A34A]" size={22} />
-          <span className="font-semibold">Compra Segura</span>
-        </div>
-
-        <div className="flex items-center gap-3 text-gray-700">
-          <Trophy className="text-[#2563EB]" size={22} />
-          <span className="font-semibold">Pela Loteria Federal</span>
-        </div>
-
-        <div className="flex items-center gap-3 text-gray-700">
-          <Sparkles className="text-[#6C3BFF]" size={22} />
-          <span className="font-semibold">IA Integrada</span>
-        </div>
-
+    <footer className="border-t bg-white pb-[env(safe-area-inset-bottom)]">
+      <div className="mx-auto grid max-w-7xl gap-8 px-5 py-12 md:grid-cols-[1fr_auto] md:items-end">
+        <div><p className="text-3xl font-black">Sorte<span className="text-violet-700">X</span></p><p className="mt-2 text-zinc-500">Encontre sua próxima sorte.</p><p className="mt-6 text-sm text-zinc-500">© {new Date().getFullYear()} SorteX. Todos os direitos reservados.</p></div>
+        <nav className="flex flex-wrap gap-x-6 gap-y-3 text-sm font-bold text-zinc-700" aria-label="Links institucionais"><Link href="/termos">Termos de Uso</Link><Link href="/privacidade">Política de Privacidade</Link><Link href="/contato">Contato</Link><Link href="/suporte">Suporte</Link>{instagram && <a href={instagram} rel="noreferrer" target="_blank">Instagram</a>}</nav>
       </div>
     </footer>
   );
