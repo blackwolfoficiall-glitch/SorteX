@@ -63,6 +63,12 @@ services:
         value: /var/data/sortex/organizers
       - key: PAYMENT_ENV
         value: sandbox
+      - key: MERCADO_PAGO_ACCESS_TOKEN
+        sync: false
+      - key: MERCADO_PAGO_PUBLIC_KEY
+        sync: false
+      - key: MERCADO_PAGO_APPLICATION_ID
+        sync: false
       - key: INTEGRATION_ENCRYPTION_KEY
         generateValue: true
       - key: SMTP_HOST

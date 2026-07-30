@@ -1,12 +1,28 @@
 "use client";
 
-import { Check, Copy, ExternalLink } from "lucide-react";
+import {
+  Check,
+  Copy,
+  ExternalLink,
+  LoaderCircle,
+  RefreshCw,
+} from "lucide-react";
 import { useState } from "react";
 import Button from "@/components/ui/Button";
 import ReservationCountdown from "@/components/purchases/ReservationCountdown";
 import type { Payment } from "@/lib/payments/types";
 
-export default function PixPaymentView({ payment }: { payment: Payment }) {
+export default function PixPaymentView({
+  payment,
+  refreshing = false,
+  refreshError = "",
+  onRefresh,
+}: {
+  payment: Payment;
+  refreshing?: boolean;
+  refreshError?: string;
+  onRefresh?: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   async function copy() {
     if (!payment.pixCopyPaste) return;
@@ -57,9 +73,25 @@ export default function PixPaymentView({ payment }: { payment: Payment }) {
           Abrir instruções do Mercado Pago <ExternalLink size={15} />
         </a>
       )}
-      <p className="mt-5 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
-        Aguardando pagamento. A confirmação definitiva será recebida pelo webhook do Mercado Pago.
-      </p>
+      <div className="mt-5 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+        <p>Aguardando pagamento. A SorteX consultará o status com segurança.</p>
+        {refreshError && <p className="mt-2 font-semibold">{refreshError}</p>}
+        {onRefresh && (
+          <Button
+            className="mt-3 w-full"
+            variant="outline"
+            disabled={refreshing}
+            onClick={onRefresh}
+          >
+            {refreshing ? (
+              <LoaderCircle className="animate-spin" size={17} />
+            ) : (
+              <RefreshCw size={17} />
+            )}
+            Consultar novamente
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

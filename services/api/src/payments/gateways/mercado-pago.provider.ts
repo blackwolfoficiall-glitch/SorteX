@@ -189,7 +189,7 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
     return {
       providerPaymentId: response.id,
       externalReference: response.external_reference || '',
-      status: this.mapStatus(
+      status: this.normalizeStatus(
         payment?.status || response.status,
         payment?.status_detail || response.status_detail,
       ),
@@ -208,7 +208,7 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
           : undefined,
       installments: payment?.payment_method?.installments,
       failureReason:
-        this.mapStatus(payment?.status || response.status) ===
+        this.normalizeStatus(payment?.status || response.status) ===
         PaymentStatus.REJECTED
           ? payment?.status_detail || response.status_detail
           : undefined,
@@ -222,7 +222,7 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
     return PaymentMethod.PIX;
   }
 
-  private mapStatus(status?: string, detail?: string) {
+  normalizeStatus(status?: string, detail?: string) {
     const value = `${status || ''}:${detail || ''}`.toLowerCase();
     if (
       value.includes('accredited') ||

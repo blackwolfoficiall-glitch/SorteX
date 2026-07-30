@@ -41,6 +41,9 @@ export function createCardPayment(input: {
 export function getPayment(id: string) {
   return request<Payment>(`/api/payments/${id}`);
 }
+export function refreshPaymentStatus(id: string) {
+  return request<Payment>(`/api/payments/${id}/refresh`, { method: "POST" });
+}
 export function getPaymentByPurchase(purchaseId: string) {
   return request<Payment>(`/api/payments/purchase/${purchaseId}`);
 }

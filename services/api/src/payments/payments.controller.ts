@@ -55,6 +55,11 @@ export class PaymentsController {
     return this.payments.cancel(id, user);
   }
 
+  @Post(':id/refresh')
+  refresh(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.payments.refreshStatus(id, user);
+  }
+
   @Post(':id/refund-request')
   refundRequest(
     @Param('id') id: string,

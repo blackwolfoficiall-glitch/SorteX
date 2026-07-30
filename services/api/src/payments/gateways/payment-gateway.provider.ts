@@ -57,6 +57,7 @@ export type GatewayWebhookEvent = {
 
 export interface PaymentGatewayProvider {
   readonly provider: GatewayProvider;
+  normalizeStatus(status?: string, detail?: string): PaymentStatus;
   createPixPayment(
     input: CreateGatewayPaymentInput,
   ): Promise<GatewayPaymentResult>;

@@ -19,8 +19,8 @@ import ReservationCountdown from "@/components/purchases/ReservationCountdown";
 import {
   cancelPayment,
   createPixPayment,
-  getPayment,
   getPaymentByPurchase,
+  refreshPaymentStatus,
 } from "@/lib/payments/client";
 import type { Payment } from "@/lib/payments/types";
 import { cancelPurchase, getPurchase } from "@/lib/purchases/client";
@@ -35,6 +35,8 @@ export default function CheckoutPage() {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState("");
 
   useEffect(() => {
     getPurchase(id)
@@ -52,14 +54,19 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (!payment?.id || payment.status === "APPROVED") return;
     const timer = window.setInterval(() => {
-      getPayment(payment.id)
+      refreshPaymentStatus(payment.id)
         .then((latest) => {
+          setRefreshError("");
           setPayment(latest);
           if (latest.status === "APPROVED") {
             router.replace(`/comprador/pagamento/sucesso/${latest.id}`);
           }
         })
-        .catch(() => undefined);
+        .catch(() =>
+          setRefreshError(
+            "Não foi possível consultar agora. Tente novamente em instantes.",
+          ),
+        );
     }, 5000);
     return () => window.clearInterval(timer);
   }, [payment?.id, payment?.status, router]);
@@ -73,6 +80,25 @@ export default function CheckoutPage() {
     },
     [router],
   );
+
+  async function refreshStatus() {
+    if (!payment || refreshing) return;
+    setRefreshing(true);
+    setRefreshError("");
+    try {
+      const latest = await refreshPaymentStatus(payment.id);
+      setPayment(latest);
+      if (latest.status === "APPROVED") {
+        router.replace(`/comprador/pagamento/sucesso/${latest.id}`);
+      }
+    } catch {
+      setRefreshError(
+        "Não foi possível consultar agora. Tente novamente em instantes.",
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
   async function payPix() {
     if (!acceptedTerms) return;
@@ -179,7 +205,12 @@ export default function CheckoutPage() {
           </div>
           <Card className="h-fit p-6">
             {purchase.status === "EXPIRED" ? <div className="text-center"><AlertCircle className="mx-auto text-amber-600" size={38}/><h2 className="mt-3 text-lg font-black">O tempo da sua reserva terminou.</h2><p className="mt-2 text-sm text-zinc-600">Escolha novamente a quantidade para continuar.</p><Link href={`/campanha/${purchase.campaign.slug}`}><Button className="mt-5 w-full">Iniciar nova reserva</Button></Link></div> : payment?.method === "PIX" && payment.status !== "REJECTED" ? (
-              <PixPaymentView payment={payment} />
+              <PixPaymentView
+                payment={payment}
+                refreshing={refreshing}
+                refreshError={refreshError}
+                onRefresh={refreshStatus}
+              />
             ) : (
               <>
                 <div className="grid grid-cols-2 gap-2">

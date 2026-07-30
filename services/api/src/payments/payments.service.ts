@@ -14,7 +14,7 @@ import {
   TicketStatus,
   UserRole,
 } from '@prisma/client';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateCardPaymentDto } from './dto/create-card-payment.dto';
@@ -92,6 +92,82 @@ export class PaymentsService {
     });
     if (!payment) throw new NotFoundException('Pagamento não encontrado.');
     return this.sanitize(payment);
+  }
+
+  async refreshStatus(id: string, user: AuthenticatedUser) {
+    this.ensureBuyer(user);
+    const payment = await this.findOwned(id, user.id);
+    const terminalStatuses: PaymentStatus[] = [
+      PaymentStatus.APPROVED,
+      PaymentStatus.REJECTED,
+      PaymentStatus.CANCELLED,
+      PaymentStatus.EXPIRED,
+      PaymentStatus.REFUNDED,
+      PaymentStatus.CHARGEBACK,
+    ];
+    if (terminalStatuses.includes(payment.status))
+      return this.sanitize(payment);
+    if (!payment.providerPaymentId) {
+      throw new ConflictException(
+        'O PIX ainda não foi gerado. Tente gerar o pagamento novamente.',
+      );
+    }
+
+    const gatewayPayment = await this.gateways
+      .get(payment.provider)
+      .getPaymentStatus(payment.providerPaymentId);
+    const fingerprint = createHash('sha256')
+      .update(
+        `${payment.id}:${gatewayPayment.status}:${gatewayPayment.rawStatus || ''}`,
+      )
+      .digest('hex')
+      .slice(0, 24);
+    const providerEventId = `poll:${payment.id}:${fingerprint}`;
+    const existingEvent = await this.prisma.paymentEvent.findUnique({
+      where: {
+        provider_providerEventId: {
+          provider: payment.provider,
+          providerEventId,
+        },
+      },
+    });
+    if (existingEvent?.processed) {
+      return this.sanitize(await this.findOwned(id, user.id));
+    }
+    const event =
+      existingEvent ||
+      (await this.prisma.paymentEvent.create({
+        data: {
+          paymentId: payment.id,
+          provider: payment.provider,
+          providerEventId,
+          eventType: 'PAYMENT_STATUS_POLLED',
+          payload: {
+            source: 'POLLING',
+            status: gatewayPayment.status,
+          },
+        },
+      }));
+    try {
+      const updated = await this.processGatewayUpdate(event.id, gatewayPayment);
+      if (updated.status === PaymentStatus.APPROVED) {
+        await this.instantPrizes.detectForPurchase(updated.purchaseId);
+      }
+      await this.auditPayment(
+        payment.id,
+        user,
+        'PAYMENT_STATUS_REFRESHED',
+        payment.status,
+        updated.status,
+      );
+      return this.sanitize(await this.findOwned(id, user.id));
+    } catch (error) {
+      await this.prisma.paymentEvent.update({
+        where: { id: event.id },
+        data: { errorMessage: this.safeError(error) },
+      });
+      throw error;
+    }
   }
 
   async listMine(user: AuthenticatedUser, status?: PaymentStatus) {
@@ -318,7 +394,9 @@ export class PaymentsService {
       method,
       card?.installments,
     );
-    if (prepared.existing) return this.sanitize(prepared.payment);
+    if (prepared.existing && prepared.payment.providerPaymentId) {
+      return this.sanitize(prepared.payment);
+    }
     const provider = this.gateways.get(prepared.payment.provider);
     const names = user.name.trim().split(/\s+/);
     const input = {
@@ -374,17 +452,28 @@ export class PaymentsService {
         },
         include: paymentInclude,
       });
+      await this.auditPayment(
+        updated.id,
+        user,
+        'PAYMENT_PIX_CREATED',
+        prepared.payment.status,
+        updated.status,
+      );
       return this.sanitize(updated);
     } catch (error) {
       await this.prisma.payment.update({
         where: { id: prepared.payment.id },
         data: {
-          status: PaymentStatus.REJECTED,
-          rejectedAt: new Date(),
           failureReason: this.safeError(error),
-          activePurchaseKey: null,
         },
       });
+      await this.auditPayment(
+        prepared.payment.id,
+        user,
+        'PAYMENT_PROVIDER_ERROR',
+        prepared.payment.status,
+        prepared.payment.status,
+      );
       throw error;
     }
   }
@@ -807,5 +896,26 @@ export class PaymentsService {
   private safeError(error: unknown) {
     if (error instanceof Error) return error.message.slice(0, 500);
     return 'Erro não identificado no provider.';
+  }
+
+  private auditPayment(
+    paymentId: string,
+    user: AuthenticatedUser,
+    action: string,
+    previousStatus: PaymentStatus,
+    newStatus: PaymentStatus,
+  ) {
+    return this.prisma.auditLog.create({
+      data: {
+        entityType: 'PAYMENT',
+        entityId: paymentId,
+        action,
+        actorUserId: user.id,
+        actorRole: user.role,
+        previousData: { status: previousStatus },
+        newData: { status: newStatus },
+        metadata: { source: 'BUYER_API' },
+      },
+    });
   }
 }

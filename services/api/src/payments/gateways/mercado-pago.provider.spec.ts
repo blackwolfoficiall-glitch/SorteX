@@ -61,4 +61,16 @@ describe('MercadoPagoGatewayProvider', () => {
       payload: { action: 'order.updated', data: { id: 'order-1' } },
     });
   });
+
+  it.each([
+    ['processed', 'accredited', 'APPROVED'],
+    ['action_required', 'waiting_transfer', 'PENDING'],
+    ['processing', 'in_process', 'PROCESSING'],
+    ['expired', 'expired', 'EXPIRED'],
+    ['failed', 'failed', 'REJECTED'],
+    ['canceled', 'canceled', 'CANCELLED'],
+    ['refunded', 'refunded', 'REFUNDED'],
+  ])('normaliza %s/%s como %s', (status, detail, expected) => {
+    expect(provider.normalizeStatus(status, detail)).toBe(expected);
+  });
 });

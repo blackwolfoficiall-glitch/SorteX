@@ -138,6 +138,7 @@ describe('PaymentsService', () => {
         create: jest.fn(),
         update: jest.fn(),
       },
+      auditLog: { create: jest.fn() },
       purchase: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
@@ -155,6 +156,7 @@ describe('PaymentsService', () => {
       refundPayment: jest.fn(),
       validateWebhook: jest.fn(),
       parseWebhookEvent: jest.fn(),
+      normalizeStatus: jest.fn(),
     };
     service = new PaymentsService(
       prisma,
@@ -252,6 +254,44 @@ describe('PaymentsService', () => {
     expect(result.id).toBe('payment-1');
   });
 
+  it('repete a mesma tentativa idempotente quando houve timeout antes da resposta', async () => {
+    (service as any).preparePayment = jest.fn().mockResolvedValue({
+      payment: payment({ providerPaymentId: null }),
+      existing: true,
+    });
+    provider.createPixPayment.mockResolvedValue(gatewayResult());
+    prisma.payment.update.mockResolvedValue(payment());
+
+    await service.createPix(buyer, {
+      purchaseId: 'purchase-1',
+      acceptedTerms: true,
+    });
+
+    expect(provider.createPixPayment).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: 'payment-1' }),
+    );
+  });
+
+  it('mantém a trava e a mesma tentativa quando o provider fica indisponível', async () => {
+    (service as any).preparePayment = jest.fn().mockResolvedValue({
+      payment: payment({ providerPaymentId: null }),
+      existing: false,
+    });
+    provider.createPixPayment.mockRejectedValue(new Error('timeout'));
+
+    await expect(
+      service.createPix(buyer, {
+        purchaseId: 'purchase-1',
+        acceptedTerms: true,
+      }),
+    ).rejects.toThrow('timeout');
+
+    expect(prisma.payment.update).toHaveBeenCalledWith({
+      where: { id: 'payment-1' },
+      data: { failureReason: 'timeout' },
+    });
+  });
+
   it('registra cartão rejeitado e libera a trava para nova tentativa', async () => {
     (service as any).preparePayment = jest
       .fn()
@@ -285,6 +325,33 @@ describe('PaymentsService', () => {
     const result = await service.handleMercadoPagoWebhook({ body: {} });
     expect(result).toEqual({ received: true, duplicate: true });
     expect(provider.getPaymentStatus).not.toHaveBeenCalled();
+  });
+
+  it('consulta o provider pelo ID interno e atualiza o status pendente', async () => {
+    prisma.payment.findFirst
+      .mockResolvedValueOnce(payment())
+      .mockResolvedValueOnce({
+        ...payment(),
+        campaign: { id: 'campaign-1', reservedNumbers: 2 },
+      })
+      .mockResolvedValueOnce(payment());
+    prisma.paymentEvent.findUnique.mockResolvedValue(null);
+    prisma.paymentEvent.create.mockResolvedValue({ id: 'poll-event-1' });
+    prisma.payment.findUniqueOrThrow.mockResolvedValue(payment());
+    provider.getPaymentStatus.mockResolvedValue(gatewayResult());
+
+    const result = await service.refreshStatus('payment-1', buyer);
+
+    expect(provider.getPaymentStatus).toHaveBeenCalledWith('order-1');
+    expect(result.status).toBe(PaymentStatus.PENDING);
+    expect(prisma.paymentEvent.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          paymentId: 'payment-1',
+          eventType: 'PAYMENT_STATUS_POLLED',
+        }),
+      }),
+    );
   });
 
   it('confirma pagamento, compra e títulos em uma transação', async () => {
