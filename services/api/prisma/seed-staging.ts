@@ -36,8 +36,10 @@ function assertSafeTarget() {
     throw new Error('Defina ALLOW_TEST_SEED=true.');
   const url = new URL(process.env.DATABASE_URL ?? '');
   const database = url.pathname.toLowerCase();
-  if (!/(staging|test|dev)/.test(database)) {
-    throw new Error('O banco deve conter staging, test ou dev no nome.');
+  if (!/(staging|homolog(?:acao|ação)|test|dev)/.test(database)) {
+    throw new Error(
+      'O banco deve conter staging, homologacao, test ou dev no nome.',
+    );
   }
   const password = process.env.TEST_SEED_PASSWORD ?? '';
   if (password.length < 12)
