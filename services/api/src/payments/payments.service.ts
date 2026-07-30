@@ -570,7 +570,7 @@ export class PaymentsService {
             campaignId: purchase.campaignId,
             organizerId: purchase.campaign.organizerId,
             provider: GatewayProvider.MERCADO_PAGO,
-            externalReference: `sortex-${purchase.id}-${id}`,
+            externalReference: `sortex-${id}`,
             activePurchaseKey: purchase.id,
             method,
             status: PaymentStatus.CREATED,
