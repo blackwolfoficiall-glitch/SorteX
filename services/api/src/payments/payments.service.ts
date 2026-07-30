@@ -570,7 +570,7 @@ export class PaymentsService {
             campaignId: purchase.campaignId,
             organizerId: purchase.campaign.organizerId,
             provider: GatewayProvider.MERCADO_PAGO,
-            externalReference: `sortex:${purchase.id}:${id}`,
+            externalReference: `sortex-${purchase.id}-${id}`,
             activePurchaseKey: purchase.id,
             method,
             status: PaymentStatus.CREATED,
@@ -895,6 +895,24 @@ export class PaymentsService {
 
   private safeError(error: unknown) {
     if (error instanceof Error) return error.message.slice(0, 500);
+    if (
+      error &&
+      typeof error === 'object' &&
+      'errors' in error &&
+      Array.isArray(error.errors)
+    ) {
+      const providerErrors = error.errors as unknown[];
+      const codes = providerErrors
+        .map((item) => {
+          if (!item || typeof item !== 'object' || !('code' in item)) return '';
+          const code = (item as { code?: unknown }).code;
+          return typeof code === 'string' ? code : '';
+        })
+        .filter(Boolean)
+        .slice(0, 5);
+      if (codes.length)
+        return `Mercado Pago: ${codes.join(', ')}`.slice(0, 500);
+    }
     return 'Erro não identificado no provider.';
   }
 

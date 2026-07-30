@@ -37,7 +37,7 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
           payments: [
             {
               amount: input.amount,
-              date_of_expiration: input.expiresAt.toISOString(),
+              expiration_time: this.expirationDuration(input.expiresAt),
               payment_method: { id: 'pix', type: 'bank_transfer' },
             },
           ],
@@ -162,12 +162,15 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
   }
 
   private payer(input: CreateGatewayPaymentInput) {
+    const sandbox = (process.env.PAYMENT_ENV || 'sandbox') === 'sandbox';
     return {
-      email: input.payer.email,
-      first_name: input.payer.firstName,
-      last_name: input.payer.lastName,
+      email: sandbox ? 'test_user_br@testuser.com' : input.payer.email,
+      first_name: sandbox ? 'APRO' : input.payer.firstName,
+      last_name: sandbox ? undefined : input.payer.lastName,
       identification:
-        input.payer.identificationType && input.payer.identificationNumber
+        !sandbox &&
+        input.payer.identificationType &&
+        input.payer.identificationNumber
           ? {
               type: input.payer.identificationType,
               number: input.payer.identificationNumber,
@@ -244,5 +247,16 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
     return typeof value === 'string' || typeof value === 'number'
       ? String(value)
       : fallback;
+  }
+
+  private expirationDuration(expiresAt: Date) {
+    const seconds = Math.max(
+      1800,
+      Math.min(
+        30 * 24 * 60 * 60,
+        Math.ceil((expiresAt.getTime() - Date.now()) / 1000),
+      ),
+    );
+    return `PT${seconds}S`;
   }
 }
