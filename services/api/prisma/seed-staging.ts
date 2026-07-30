@@ -1,4 +1,5 @@
 import {
+  AdminTeamRole,
   CampaignCategory,
   CampaignDrawStatus,
   CampaignStatus,
@@ -80,6 +81,10 @@ async function main() {
   }
 
   const admin = created.get('admin@sortex.example.invalid')!;
+  await prisma.user.update({
+    where: { id: admin.id },
+    data: { adminTeamRole: AdminTeamRole.SUPERADMIN },
+  });
   const organizer = created.get('organizer1@sortex.example.invalid')!;
   const organizer2 = created.get('organizer2@sortex.example.invalid')!;
   const buyer = created.get('buyer1@sortex.example.invalid')!;
