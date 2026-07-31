@@ -14,6 +14,22 @@ describe('MercadoPagoGatewayProvider', () => {
   });
 
   it('valida assinatura oficial HMAC do webhook', () => {
+    const ts = String(Math.floor(Date.now() / 1000));
+    const dataId = 'order-123';
+    const requestId = 'request-123';
+    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
+    const hash = createHmac('sha256', secret).update(manifest).digest('hex');
+    expect(() =>
+      provider.validateWebhook({
+        xSignature: `ts=${ts},v1=${hash}`,
+        xRequestId: requestId,
+        dataId,
+        body: {},
+      }),
+    ).not.toThrow();
+  });
+
+  it('mantém compatibilidade com timestamp em milissegundos', () => {
     const ts = String(Date.now());
     const dataId = 'order-123';
     const requestId = 'request-123';
@@ -27,6 +43,22 @@ describe('MercadoPagoGatewayProvider', () => {
         body: {},
       }),
     ).not.toThrow();
+  });
+
+  it('rejeita assinatura válida fora da janela contra replay', () => {
+    const ts = String(Math.floor(Date.now() / 1000) - 301);
+    const dataId = 'order-123';
+    const requestId = 'request-123';
+    const manifest = `id:${dataId};request-id:${requestId};ts:${ts};`;
+    const hash = createHmac('sha256', secret).update(manifest).digest('hex');
+    expect(() =>
+      provider.validateWebhook({
+        xSignature: `ts=${ts},v1=${hash}`,
+        xRequestId: requestId,
+        dataId,
+        body: {},
+      }),
+    ).toThrow(UnauthorizedException);
   });
 
   it('rejeita assinatura adulterada', () => {

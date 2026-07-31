@@ -112,8 +112,8 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
         xRequestId: context.xRequestId,
         dataId: context.dataId,
         secret,
-        toleranceSeconds: 300,
       });
+      this.validateWebhookTimestamp(context.xSignature);
     } catch {
       throw new UnauthorizedException('Assinatura de webhook inválida.');
     }
@@ -177,6 +177,27 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
             }
           : undefined,
     };
+  }
+
+  private validateWebhookTimestamp(xSignature?: string) {
+    const timestamp = xSignature
+      ?.split(',')
+      .map((part) => part.trim().split('=', 2))
+      .find(([key]) => key.toLowerCase() === 'ts')?.[1];
+    if (!timestamp || !/^\d+$/.test(timestamp)) {
+      throw new UnauthorizedException('Assinatura de webhook inválida.');
+    }
+    const numericTimestamp = Number(timestamp);
+    const timestampMs =
+      numericTimestamp < 1_000_000_000_000
+        ? numericTimestamp * 1000
+        : numericTimestamp;
+    if (
+      !Number.isFinite(timestampMs) ||
+      Math.abs(Date.now() - timestampMs) > 300_000
+    ) {
+      throw new UnauthorizedException('Assinatura de webhook inválida.');
+    }
   }
 
   private normalize(
