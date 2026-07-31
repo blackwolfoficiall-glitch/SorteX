@@ -282,6 +282,41 @@ export class PaymentsService {
       });
     }
 
+    const trackedPayment = await this.prisma.payment.findFirst({
+      where: {
+        provider: GatewayProvider.MERCADO_PAGO,
+        providerPaymentId: event.resourceId,
+      },
+      select: { id: true },
+    });
+    if (!trackedPayment) {
+      await this.prisma.$transaction(async (transaction) => {
+        await transaction.paymentEvent.update({
+          where: { id: storedEvent.id },
+          data: {
+            processed: true,
+            processedAt: new Date(),
+            errorMessage: 'RESOURCE_NOT_TRACKED',
+          },
+        });
+        await transaction.auditLog.create({
+          data: {
+            entityType: 'PAYMENT_WEBHOOK',
+            entityId: storedEvent.id,
+            action: 'PAYMENT_WEBHOOK_IGNORED',
+            previousData: Prisma.JsonNull,
+            newData: { processed: true },
+            metadata: {
+              provider: GatewayProvider.MERCADO_PAGO,
+              reason: 'RESOURCE_NOT_TRACKED',
+              eventType: event.eventType,
+            },
+          },
+        });
+      });
+      return { received: true, duplicate: false, ignored: true };
+    }
+
     try {
       const gatewayPayment = await provider.getPaymentStatus(event.resourceId);
       const result = await this.processGatewayUpdate(

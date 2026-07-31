@@ -327,6 +327,45 @@ describe('PaymentsService', () => {
     expect(provider.getPaymentStatus).not.toHaveBeenCalled();
   });
 
+  it('confirma recebimento assinado de recurso não rastreado sem consultar provider', async () => {
+    provider.parseWebhookEvent.mockReturnValue({
+      providerEventId: 'event-simulator-1',
+      eventType: 'order.updated',
+      resourceId: '123456',
+      payload: { data: { id: '123456' } },
+    });
+    prisma.paymentEvent.findUnique.mockResolvedValue(null);
+    prisma.paymentEvent.create.mockResolvedValue({
+      id: 'event-simulator-1',
+      processed: false,
+    });
+    prisma.payment.findFirst.mockResolvedValue(null);
+
+    const result = await service.handleMercadoPagoWebhook({ body: {} });
+
+    expect(result).toEqual({
+      received: true,
+      duplicate: false,
+      ignored: true,
+    });
+    expect(provider.getPaymentStatus).not.toHaveBeenCalled();
+    expect(prisma.paymentEvent.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          processed: true,
+          errorMessage: 'RESOURCE_NOT_TRACKED',
+        }),
+      }),
+    );
+    expect(prisma.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: 'PAYMENT_WEBHOOK_IGNORED',
+        }),
+      }),
+    );
+  });
+
   it('consulta o provider pelo ID interno e atualiza o status pendente', async () => {
     prisma.payment.findFirst
       .mockResolvedValueOnce(payment())
