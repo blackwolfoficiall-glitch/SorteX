@@ -277,7 +277,13 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
       !context.dataId ||
       !context.xRequestId
     ) {
-      return { comparable: false };
+      return {
+        comparable: false,
+        signatureKeys: Object.keys(signatureParts).filter(Boolean).sort(),
+        timestampDigits: Boolean(timestamp && /^\d+$/.test(timestamp)),
+        signatureLength: received?.length || 0,
+        signatureHex: Boolean(received && /^[a-fA-F0-9]+$/.test(received)),
+      };
     }
     const candidates = {
       lowerId: `id:${context.dataId.toLowerCase()};request-id:${context.xRequestId};ts:${timestamp};`,
