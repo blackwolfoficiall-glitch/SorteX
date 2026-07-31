@@ -110,7 +110,7 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
       WebhookSignatureValidator.validate({
         xSignature: context.xSignature,
         xRequestId: context.xRequestId,
-        dataId: context.dataId,
+        dataId: context.dataId?.toLowerCase(),
         secret,
       });
       this.validateWebhookTimestamp(context.xSignature);
