@@ -648,6 +648,16 @@ export class PaymentsService {
           payment.status === PaymentStatus.APPROVED &&
           payment.purchase.status === PurchaseStatus.PAID
         ) {
+          await transaction.auditLog.create({
+            data: {
+              entityType: 'PAYMENT',
+              entityId: payment.id,
+              action: 'PAYMENT_UPDATE_IDEMPOTENT',
+              previousData: { status: payment.status },
+              newData: { status: payment.status },
+              metadata: { source: 'GATEWAY_EVENT', eventId },
+            },
+          });
           await transaction.paymentEvent.update({
             where: { id: eventId },
             data: {
@@ -728,6 +738,18 @@ export class PaymentsService {
               gateway.status,
             );
           }
+        }
+        if (payment.status !== gateway.status) {
+          await transaction.auditLog.create({
+            data: {
+              entityType: 'PAYMENT',
+              entityId: payment.id,
+              action: 'PAYMENT_STATUS_UPDATED',
+              previousData: { status: payment.status },
+              newData: { status: gateway.status },
+              metadata: { source: 'GATEWAY_EVENT', eventId },
+            },
+          });
         }
         await transaction.paymentEvent.update({
           where: { id: eventId },
