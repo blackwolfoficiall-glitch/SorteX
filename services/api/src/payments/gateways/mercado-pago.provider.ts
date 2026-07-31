@@ -102,20 +102,35 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
   }
 
   validateWebhook(context: GatewayWebhookContext) {
-    const secret = process.env.MERCADO_PAGO_WEBHOOK_SECRET;
-    if (!secret) {
+    const secrets = [
+      process.env.MERCADO_PAGO_WEBHOOK_SECRET_TEST,
+      process.env.MERCADO_PAGO_WEBHOOK_SECRET_PRODUCTION,
+      process.env.MERCADO_PAGO_WEBHOOK_SECRET,
+    ].filter(
+      (secret, index, values): secret is string =>
+        Boolean(secret) && values.indexOf(secret) === index,
+    );
+    if (!secrets.length) {
       throw new ServiceUnavailableException(
-        'MERCADO_PAGO_WEBHOOK_SECRET não configurado.',
+        'Assinatura do webhook do Mercado Pago não configurada.',
       );
     }
     let validationStage = 'signature';
     try {
-      WebhookSignatureValidator.validate({
-        xSignature: context.xSignature,
-        xRequestId: context.xRequestId,
-        dataId: context.dataId?.toLowerCase(),
-        secret,
+      const signatureValid = secrets.some((secret) => {
+        try {
+          WebhookSignatureValidator.validate({
+            xSignature: context.xSignature,
+            xRequestId: context.xRequestId,
+            dataId: context.dataId?.toLowerCase(),
+            secret,
+          });
+          return true;
+        } catch {
+          return false;
+        }
       });
+      if (!signatureValid) throw new Error('WEBHOOK_SIGNATURE_MISMATCH');
       validationStage = 'timestamp';
       this.validateWebhookTimestamp(context.xSignature);
     } catch (error) {

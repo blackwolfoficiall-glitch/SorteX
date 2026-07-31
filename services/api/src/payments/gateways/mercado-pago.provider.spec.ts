@@ -11,6 +11,8 @@ describe('MercadoPagoGatewayProvider', () => {
 
   beforeEach(() => {
     process.env.MERCADO_PAGO_WEBHOOK_SECRET = secret;
+    delete process.env.MERCADO_PAGO_WEBHOOK_SECRET_TEST;
+    delete process.env.MERCADO_PAGO_WEBHOOK_SECRET_PRODUCTION;
   });
 
   it('valida assinatura oficial HMAC do webhook', () => {
@@ -41,6 +43,28 @@ describe('MercadoPagoGatewayProvider', () => {
         xRequestId: requestId,
         dataId,
         body: {},
+      }),
+    ).not.toThrow();
+  });
+
+  it('aceita assinatura válida com segredo separado de produção', () => {
+    delete process.env.MERCADO_PAGO_WEBHOOK_SECRET;
+    process.env.MERCADO_PAGO_WEBHOOK_SECRET_TEST = 'test-secret';
+    process.env.MERCADO_PAGO_WEBHOOK_SECRET_PRODUCTION = 'production-secret';
+    const ts = String(Math.floor(Date.now() / 1000));
+    const dataId = 'ORDERTST-456';
+    const requestId = 'request-production-1';
+    const manifest = `id:${dataId.toLowerCase()};request-id:${requestId};ts:${ts};`;
+    const hash = createHmac('sha256', 'production-secret')
+      .update(manifest)
+      .digest('hex');
+
+    expect(() =>
+      provider.validateWebhook({
+        xSignature: `ts=${ts},v1=${hash}`,
+        xRequestId: requestId,
+        dataId,
+        body: { live_mode: false },
       }),
     ).not.toThrow();
   });
