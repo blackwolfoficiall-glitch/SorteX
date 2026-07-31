@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { GatewayProvider, PaymentMethod, PaymentStatus } from '@prisma/client';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   MercadoPagoConfig,
   Order,
@@ -146,6 +147,10 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
         hasRequestId: Boolean(context.xRequestId),
         hasDataId: Boolean(context.dataId),
         paymentEnvironment: process.env.PAYMENT_ENV || 'sandbox',
+        signatureDiagnostics:
+          reason === 'SIGNATURE_OR_SECRET_MISMATCH'
+            ? this.signatureDiagnostics(context, secrets)
+            : undefined,
       });
       throw new UnauthorizedException('Assinatura de webhook inválida.');
     }
@@ -251,6 +256,50 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
     return stage === 'signature'
       ? 'SIGNATURE_OR_SECRET_MISMATCH'
       : 'SIGNATURE_INVALID';
+  }
+
+  private signatureDiagnostics(
+    context: GatewayWebhookContext,
+    secrets: string[],
+  ) {
+    const signatureParts = Object.fromEntries(
+      (context.xSignature || '').split(',').map((part) => {
+        const [key, value] = part.trim().split('=', 2);
+        return [key?.toLowerCase(), value];
+      }),
+    );
+    const timestamp = signatureParts.ts;
+    const received = signatureParts.v1;
+    if (
+      !timestamp ||
+      !received ||
+      !/^[a-fA-F0-9]{64}$/.test(received) ||
+      !context.dataId ||
+      !context.xRequestId
+    ) {
+      return { comparable: false };
+    }
+    const candidates = {
+      lowerId: `id:${context.dataId.toLowerCase()};request-id:${context.xRequestId};ts:${timestamp};`,
+      originalId: `id:${context.dataId};request-id:${context.xRequestId};ts:${timestamp};`,
+      lowerIdAndRequest: `id:${context.dataId.toLowerCase()};request-id:${context.xRequestId.toLowerCase()};ts:${timestamp};`,
+    };
+    const matches = Object.fromEntries(
+      Object.entries(candidates).map(([name, manifest]) => [
+        name,
+        secrets.some((secret) => {
+          const expected = createHmac('sha256', secret)
+            .update(manifest)
+            .digest();
+          const actual = Buffer.from(received, 'hex');
+          return (
+            expected.length === actual.length &&
+            timingSafeEqual(expected, actual)
+          );
+        }),
+      ]),
+    );
+    return { comparable: true, ...matches };
   }
 
   private normalize(
