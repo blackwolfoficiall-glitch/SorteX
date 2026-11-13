@@ -264,3 +264,12 @@ O workflow aceita os repository secrets opcionais `SORTEX_ADMIN_EMAIL` e `SORTEX
 Não configurar o administrador real enquanto a conta administrativa técnica de validação estiver ativa; desativar a conta técnica e revogar suas sessões antes. Depois, o usuário pode adicionar os dois segredos pelo painel GitHub → Settings → Secrets and variables → Actions e a sessão reexecuta o job na branch de migração. Não pedir senha no chat. Sem esses segredos, o passo informa que a configuração administrativa foi pulada.
 
 Os dados antigos e uploads históricos permanecem NÃO restaurados. Há somente schema, registros técnicos de validação e eventual configuração padrão criada pelos serviços consultados. Recuperar/validar backups e arquivos do Mac separadamente antes de restaurar, preservando os dados já criados no novo banco. Render permanece intacta.
+
+
+### Continuidade após o commit dc62bae
+
+O workflow da API publicou o código de uploads sem erro. A Netlify cancelou o build do mesmo commit por não haver mudanças no pacote frontend; alterar variáveis no painel não fez o bundle antigo receber a URL nova. Foi adicionada a rota explícita `apps/web/app/api/health/ready/route.ts`, que encaminha a prontidão da API pelo BFF existente, mantendo tratamento de erros e status. A alteração também permite novo build do frontend sem forçar todos os futuros commits de documentação a consumirem créditos de deploy. ESLint da rota e TypeScript do frontend passaram.
+
+O proprietário decidiu deixar a configuração de seu administrador para depois. Não solicitar novamente os segredos SORTEX_ADMIN_EMAIL/PASSWORD nesta etapa; terminar os testes técnicos e desativar essas contas/sessões.
+
+As variáveis de Neon Functions são privadas: a consulta retorna apenas nomes, e a API faz merge das chaves informadas. Usar atualização parcial somente de STORAGE_DRIVER/STORAGE_BUCKET/UPLOADS_DISABLED/APP_VERSION, sem ler, substituir ou regenerar JWT/criptografia. Fonte: https://neon.com/docs/compute/functions/environment-variables.
