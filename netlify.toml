@@ -5,6 +5,7 @@
 
 [build.environment]
   NODE_VERSION = "22"
+  NPM_FLAGS = "--include=dev"
   NEXT_TELEMETRY_DISABLED = "1"
 
 # Next.js SSR and route handlers use Netlify's automatic OpenNext adapter.

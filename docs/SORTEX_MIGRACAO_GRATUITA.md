@@ -130,3 +130,15 @@ As autorizações da etapa documental eram mais restritas e estão preservadas c
 - Auditoria de dependências de execução após atualizações: seis alertas (um baixo, um moderado, quatro altos), nenhum crítico. Persistem alertas envolvendo Prisma/config/deepmerge e Nodemailer; não foi aplicada troca de major do Prisma. E-mail e chamadas externas permanecem desativados na homologação.
 
 As credenciais de teste são aleatórias, ficam fora do Git e não foram exibidas. Resultados de teste local não comprovam disponibilidade dos provedores nem recuperação de dados. Docker final, publicação e testes remotos precisam ser conferidos no estado de entrega final.
+
+## Resultado adicional da imagem e preservação no GitHub
+
+A implementação foi publicada na branch de migração no commit `781c07cfec0892ae74e352b7f1e06542feeef8db`, sem force push nem merge. O envio usou a integração GitHub porque o CLI não tinha autenticação funcional. A `main` permaneceu em `2b8e8503eb33e73136cd076dbd322c78945c2ffe`.
+
+O build Docker final com lock atualizado passou. A imagem Node 22 iniciou como usuário `node`, levou o Prisma Client gerado, respondeu `/health/ready` com HTTP 200 e acessou o PostgreSQL fictício. Login e leitura da campanha criada pelo BFF passaram; a campanha também permaneceu disponível após restart do PostgreSQL de teste.
+
+A execução foi configurada com 256 MB/0,25 CPU, mas os cgroups observados eram os do ambiente superior (16 GB/4 CPU). Não houve comprovação de imposição desses limites. RSS inicial do processo Node medido em 137980 kB, pico 165988 kB; isso não equivale a teste de carga nem certifica capacidade do Back4app Free.
+
+Os arquivos de migration SQL e `render.yaml` foram comparados e permaneceram inalterados. Nenhum dado antigo foi acessado ou recuperado. As instâncias Docker locais são recursos de teste desta sessão e não são endpoints públicos de hospedagem.
+
+CI da implementação aprovada: https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/43453742385 . API e frontend passaram no GitHub. Revalidar o estado da revisão que será publicada; não confundir a CI antiga com a desta branch.

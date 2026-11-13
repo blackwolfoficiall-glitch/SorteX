@@ -2,6 +2,44 @@
 
 > Registro da auditoria anterior, preservado. Este arquivo foi incorporado ao checkout da branch `infra/netlify-northflank-neon`; as afirmações abaixo sobre ausência de checkout e autorização somente documental descrevem aquela etapa. Para a migração autorizada depois, consulte `SORTEX_MIGRACAO_GRATUITA.md`. Nenhum estado do Mac foi conferido nesta sessão.
 
+## Prompt atual para continuar a migração
+
+```text
+Continue a migração da SorteX no repositório original
+https://github.com/blackwolfoficiall-glitch/SorteX,
+branch infra/netlify-northflank-neon. Confirme HEAD e estado do ambiente
+antes de executar comandos. A main deve ser preservada, sem merge/force push.
+
+Leia primeiro docs/SORTEX_MIGRACAO_GRATUITA.md e depois os quatro documentos
+de continuidade. Os textos abaixo deste prompt preservam a auditoria anterior;
+a autorização atual também permite código, commits/push na branch de migração
+e deploy exclusivamente gratuito, sem cartão, cobranças ou recursos Render.
+
+Preserve Next.js, NestJS, Node, Prisma, PostgreSQL e migrations. A branch
+infra/free-homologacao e alterações/dados exclusivos do Mac ainda não foram
+recuperados. Não recrie essa branch nem apresente dados fictícios como antigos.
+
+A preparação e testes locais foram realizados; publicação remota aguarda
+acessos. Netlify Free tem o projeto sortex-homologacao criado, sem deploy
+confirmado. Configurar variáveis pela integração retornou 403. Autenticação
+segura do CLI ou importação/configuração pelo painel ainda são necessárias.
+Neon precisa de conexão de conta. Northflank exige confirmar no painel
+Sandbox sem cartão: seus preços e documentos de billing divergem. Se exigir
+pagamento, a alternativa pesquisada é Back4app Containers Free, com Docker,
+256 MB e sem cartão, sujeito a validação real de capacidade e armazenamento.
+
+Confirme planos e ausência de cobranças antes de criar recursos. Configure
+segredos diretamente nos serviços, nunca no chat/Git. Pagamentos e integrações
+ficam em sandbox; e-mail externo desabilitado na homologação. Novos uploads
+ficam bloqueados até armazenamento persistente verificado. Não resetar banco,
+sobrescrever dados ou remover recursos Render. Migrations só após verificar
+o destino; restauração só com backup acessível, validado e autorizado.
+
+Prossiga com tarefas independentes enquanto pede somente os acessos que faltam.
+Ao terminar, informe URLs efetivamente publicadas, branch/SHA, testes locais
+e remotos separadamente, situação dos dados antigos/uploads e bloqueios reais.
+```
+
 Preparado em 13/11/2026, com base na auditoria remota. Leia também `SORTEX_ESTADO_ATUAL.md`, `SORTEX_HISTORICO_DECISOES.md` e `SORTEX_PENDENCIAS.md`.
 
 ## Onde estão o projeto e esta documentação
