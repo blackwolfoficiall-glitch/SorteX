@@ -8,6 +8,10 @@
   NPM_FLAGS = "--include=dev"
   NEXT_TELEMETRY_DISABLED = "1"
 
-# Next.js SSR and route handlers use Netlify's automatic OpenNext adapter.
+# Explicitly load the official runtime: framework detection alone uploaded .next
+# as static files without SSR/functions on the first migration deploy.
 # Set API_INTERNAL_URL and API_URL in the site's Builds + Functions environment.
 # No SPA catch-all: it would override Next.js API/auth routes.
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

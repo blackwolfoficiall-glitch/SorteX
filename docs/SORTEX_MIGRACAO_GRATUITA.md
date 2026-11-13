@@ -229,3 +229,12 @@ Com a chave protegida disponível, o workflow gera o pacote e chama o multipart 
 Ação segura para quando chegar a etapa da API (sem valores no chat): no Neon, organização → Settings → API keys → criar chave limitada ao projeto `sortex-homologacao`, se a interface oferecer esse escopo. Guardar a chave em GitHub → repositório original → Settings → Secrets and variables → Actions → New repository secret → nome `NEON_API_KEY`. Depois executar o workflow na branch de migração ou fazer novo push autorizado. Não adicionar a chave ao código, arquivo público ou variável NEXT_PUBLIC. Fonte dos caminhos: https://neon.com/docs/manage/api-keys.
 
 Ainda não há URL funcional de API comprovada. Banco novo mantém 16 migrations concluídas e nenhuma incompleta; dados antigos, administrador inicial e uploads continuam pendentes. Concluir primeiro o build Netlify da branch correta; depois configurar a credencial protegida de deploy da API e testar o conjunto publicado. Mac e Render permanecem preservados.
+
+
+### Correção do runtime Next.js na Netlify
+
+O push de `dfae001eadab807a87307bd20e3791c8bdca924b` disparou o primeiro build Netlify da branch de migração em produção, deploy `6af76c6a14d27e658c133317`. A branch e o commit foram confirmados. O deploy ficou ready e detectou framework next, porém informou zero Functions, zero regras de redirect e plugin_state none; publicou arquivos internos de `.next/server/app` como conteúdo estático. Home, login e admin/login responderam 404 em HTTP e em Chromium desktop/mobile. Portanto ready não foi tratado como site funcional.
+
+Foi adicionada a declaração explícita `[[plugins]] package = "@netlify/plugin-nextjs"` ao `netlify.toml`, mantendo base/build/publish e permitindo a versão atual do adaptador oficial, sem fixar versão legada nem exportar o frontend como estático. Verificar no próximo deploy se foram geradas as funções SSR/route handlers e testar as rotas reais antes de declarar publicação concluída. Isso não publica a API NestJS: o workflow da API ainda depende do repository secret NEON_API_KEY.
+
+Validação local da correção: CLI Netlify com build offline e proxy do executor, Runtime oficial 5.16.6, build Next.js e TypeScript aprovados, função `___netlify-server-handler` e Edge middleware empacotados; `Netlify Build Complete`, exit 0. A primeira tentativa local falhou apenas no download do bundler Edge sem o proxy; a repetição com `NODE_USE_ENV_PROXY=1` passou. Não foi desativada a verificação TLS. A versão do adaptador continua gerenciada pela Netlify.
