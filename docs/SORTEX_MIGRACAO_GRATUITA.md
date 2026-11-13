@@ -16,8 +16,8 @@ Checkout desta sessão: `/workspace/SorteX`. Base: `main` em `2b8e8503eb33e73136
 - Painel do projeto: https://app.netlify.com/projects/sortex-homologacao
 - Endereço reservado: https://sortex-homologacao.netlify.app — não declarar funcional sem deploy verificado.
 - Neon: conexão de conta solicitada; banco remoto ainda não criado nem acessado nesta etapa de preparação.
-- Northflank: acesso e confirmação do Sandbox sem cartão solicitados; API remota ainda não publicada.
-- A integração Netlify disponível gerencia projetos/variáveis, mas não oferece uma operação de envio do código. Publicação por CLI depende de autenticação segura, solicitada ao proprietário, ou importação do repositório pelo painel. A tentativa de definir a variável pública NEXT_PUBLIC_APP_URL pela integração retornou HTTP 403; não foi confirmada a gravação de nenhuma variável no serviço.
+- Northflank: condições oficiais contraditórias sobre cartão. Para não depender dessa incerteza, a alternativa selecionada é Back4app Containers Free; API remota ainda não publicada e conta Back4app ainda não conectada.
+- A integração Netlify disponível gerencia projetos/variáveis, mas não oferece uma operação de envio do código. Publicação por CLI dependeria de autenticação adicional, mas a rota preferida é vincular o repositório existente pelo painel, sem compartilhar token. O 403 de escrita de variável foi corrigido pela própria integração: a operação de upsert de NEXT_PUBLIC_APP_URL confirmou sucesso usando newVarScopes=[all] e newVarContext=all. A leitura ampla das variáveis ainda retornou erro; não houve leitura nem exposição de segredos. Não pedir token para corrigir esse 403 de escrita.
 
 Nenhum token deve ser enviado no chat. Credenciais solicitadas, quando necessárias, devem ser vinculadas ao ambiente por configuração segura. Não imprimir valores em logs nem versionar arquivos locais de autenticação.
 
@@ -62,7 +62,7 @@ O código não depende de domínio Render fixo encontrado na busca; a dependênc
 
 Importar exclusivamente o repositório original e selecionar a branch de migração. O `netlify.toml` define base `apps/web` e publish `.next`. Não apontar a publicação para `out/`: há SSR, API routes e autenticação que precisam de funções.
 
-Configurar no painel com escopos Builds e Functions:
+No plano Free, configurar no projeto usando o padrão de todos os escopos, que inclui Builds e Functions. Não selecionar escopos específicos: essa limitação é recurso Pro/Enterprise e causou o 403 observado. Isso não autoriza colocar segredos em variáveis NEXT_PUBLIC_.
 
 | Variável | Uso |
 | --- | --- |
@@ -142,3 +142,31 @@ A execução foi configurada com 256 MB/0,25 CPU, mas os cgroups observados eram
 Os arquivos de migration SQL e `render.yaml` foram comparados e permaneceram inalterados. Nenhum dado antigo foi acessado ou recuperado. As instâncias Docker locais são recursos de teste desta sessão e não são endpoints públicos de hospedagem.
 
 CI da implementação aprovada: https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/43453742385 . API e frontend passaram no GitHub. Revalidar o estado da revisão que será publicada; não confundir a CI antiga com a desta branch.
+
+## Desbloqueio de acessos — continuação
+
+Nenhum upgrade, cartão, cobrança ou alteração Render foi realizado. A correção de escopos foi feita no projeto Netlify existente; não foi criado outro projeto.
+
+### Etapa atual: conectar Neon
+
+No ChatGPT: Configurações → Plugins (ou Apps, conforme a interface) → buscar Neon → Instalar → Conectar → entrar na conta Neon Free e autorizar na página oficial. Não fornecer senha, token ou connection string no chat. A integração Neon foi localizada, mas ainda não está instalada/conectada nesta sessão. Aguardar confirmação e verificar ferramentas disponíveis antes de afirmar conexão.
+
+Depois da conexão, verificar conta/plano, criar projeto/banco novo de homologação, confirmar destino vazio e aplicar as migrations preservadas. Não restaurar dados antigos sem backup acessível e validado. O banco local já testado não é o Neon e não contém dados recuperados.
+
+### Etapa seguinte: Back4app Containers Free
+
+A seleção decorre da contradição da Northflank: https://northflank.com/pricing anuncia sem cartão, enquanto https://northflank.com/docs/v1/application/billing/pricing-on-northflank exige meio de pagamento. Não foi possível confirmar uma conta Sandbox sem cartão.
+
+O Back4app declara Docker/GitHub gratuito sem cartão: https://www.back4app.com/pricing/container-as-a-service . Limites anunciados: 0,25 CPU, 256 MB RAM, 100 GB de transferência e região EUA. Não confundir Containers/Web Deployment com um backend Parse ou produto de agentes. Não contratar Shared/Dedicated.
+
+Configuração preparada para o painel, depois de concluir Neon: repositório blackwolfoficiall-glitch/SorteX; branch infra/netlify-northflank-neon; Root services/api; Dockerfile presente nesse diretório; auto deployment inicialmente desligado; variáveis conforme services/api/.env.free-homologacao.example, inseridas privadamente no serviço. Não criar aplicação com segredos faltantes apenas para gerar uma URL. Autenticação/conta Back4app ainda dependem do proprietário; isso será conduzido depois da ação atual.
+
+Manter UPLOADS_DISABLED=true até volume/object storage durável verificado. Disco de container não é backup. A medição local de memória não certifica capacidade sob carga no plano Free.
+
+### Etapa posterior: vincular GitHub à Netlify sem token no chat
+
+Abrir o projeto existente em https://app.netlify.com/projects/sortex-homologacao → Project configuration → Developer settings → Continuous deployment → Repository → Link repository/Link to repository. Selecionar GitHub, autorizar somente SorteX se necessário e usar infra/netlify-northflank-neon como branch de publicação. O netlify.toml do repositório já define base apps/web, build npm run build e publish .next. Não criar novo repositório nem selecionar main.
+
+A conexão Git pode depender de ação interativa do proprietário; a integração atual não expõe operação de vincular repositório ou publicar código. Evitar pedir PAT quando a vinculação Git pelo painel resolver. A API deve ter URL real antes de configurar API_INTERNAL_URL e API_URL e avaliar o site como funcional.
+
+Fontes oficiais adicionais: https://docs.netlify.com/build/environment-variables/overview/ ; https://docs.netlify.com/build/git-workflows/repo-permissions-linking/ ; https://www.back4app.com/docs-containers/prepare-your-deployment ; https://help.openai.com/en/articles/20001494-connecting-and-managing-app-accounts-in-chatgpt .

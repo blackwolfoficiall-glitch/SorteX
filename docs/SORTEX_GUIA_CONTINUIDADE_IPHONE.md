@@ -21,12 +21,13 @@ recuperados. Não recrie essa branch nem apresente dados fictícios como antigos
 
 A preparação e testes locais foram realizados; publicação remota aguarda
 acessos. Netlify Free tem o projeto sortex-homologacao criado, sem deploy
-confirmado. Configurar variáveis pela integração retornou 403. Autenticação
-segura do CLI ou importação/configuração pelo painel ainda são necessárias.
-Neon precisa de conexão de conta. Northflank exige confirmar no painel
-Sandbox sem cartão: seus preços e documentos de billing divergem. Se exigir
-pagamento, a alternativa pesquisada é Back4app Containers Free, com Docker,
-256 MB e sem cartão, sujeito a validação real de capacidade e armazenamento.
+confirmado. O 403 de escrita foi corrigido ao usar todos os escopos no plano
+Free; não pedir token para isso. Falta vincular o GitHub no painel Netlify,
+operação não exposta pela integração. Neon precisa de conexão de conta:
+esta é a única ação solicitada agora. Preços e documentos de billing da
+Northflank divergem; a alternativa selecionada é Back4app Containers Free,
+com Docker, 256 MB e sem cartão, sujeito a validação real de capacidade e
+armazenamento. Conduzir os acessos um por vez, sem pedir segredos no chat.
 
 Confirme planos e ausência de cobranças antes de criar recursos. Configure
 segredos diretamente nos serviços, nunca no chat/Git. Pagamentos e integrações
