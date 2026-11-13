@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -28,6 +32,11 @@ export class OrganizerStorageService {
     file?: UploadedOrganizerFile,
     options: StorageOptions = {},
   ) {
+    if (process.env.UPLOADS_DISABLED === 'true') {
+      throw new ServiceUnavailableException(
+        'Uploads indisponíveis até configurar armazenamento persistente.',
+      );
+    }
     if (!file?.buffer?.length) {
       throw new BadRequestException('Selecione um arquivo para upload.');
     }

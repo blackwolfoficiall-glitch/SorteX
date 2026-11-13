@@ -27,3 +27,6 @@ backups/
 
 # Local compatibility alias; the canonical API lives in services/api.
 /apps/api
+
+# Netlify local linkage (never commit account/site state)
+.netlify/

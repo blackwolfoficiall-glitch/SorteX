@@ -7,6 +7,12 @@ export class PasswordResetMailService {
   private readonly transporter?: Transporter;
 
   constructor() {
+    if (process.env.EMAIL_DELIVERY_MODE === 'disabled') {
+      if (process.env.APP_ENV !== 'staging') {
+        throw new Error('E-mail desabilitado só é permitido em homologação.');
+      }
+      return;
+    }
     const host = process.env.SMTP_HOST;
     const user = process.env.SMTP_USER;
     const pass = process.env.SMTP_PASS;
@@ -29,7 +35,7 @@ export class PasswordResetMailService {
 
     if (!this.transporter) {
       this.logger.warn(
-        `SMTP não configurado. Link de desenvolvimento para ${email}: ${resetUrl}`,
+        'Recuperação registrada sem envio de e-mail neste ambiente.',
       );
       return;
     }

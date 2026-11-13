@@ -31,6 +31,7 @@ export class MetaAdsService {
       },
     });
     if (
+      process.env.INTEGRATIONS_MODE === 'sandbox' ||
       !integration ||
       integration.sandbox ||
       integration.status !== OrganizerIntegrationStatus.CONNECTED
@@ -318,6 +319,7 @@ export class MetaAdsService {
     token: string,
     data: Record<string, unknown>,
   ) {
+    this.requireExternalIntegrations();
     const params = new URLSearchParams();
     for (const [k, v] of Object.entries(data))
       if (v !== undefined && v !== null) params.set(k, String(v));
@@ -341,6 +343,7 @@ export class MetaAdsService {
     return body;
   }
   private async get(version: string, path: string, token: string) {
+    this.requireExternalIntegrations();
     const r = await fetch(`https://graph.facebook.com/${version}/${path}`, {
       headers: { Authorization: `Bearer ${token}` },
     });
@@ -356,6 +359,14 @@ export class MetaAdsService {
     }
     return body;
   }
+  private requireExternalIntegrations() {
+    if (process.env.INTEGRATIONS_MODE === 'sandbox') {
+      throw new BadRequestException(
+        'Integrações externas desativadas na homologação.',
+      );
+    }
+  }
+
   private decrypt(value?: string | null) {
     if (!value) return null;
     const keySecret = process.env.INTEGRATION_ENCRYPTION_KEY;

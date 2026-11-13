@@ -215,7 +215,10 @@ export class AiAdvisorService {
   async chat(user: AuthenticatedUser, question: string) {
     const context = await this.snapshot(user);
     const fallback = this.deterministicAnswer(question, context);
-    if (!process.env.OPENAI_API_KEY)
+    if (
+      process.env.INTEGRATIONS_MODE === 'sandbox' ||
+      !process.env.OPENAI_API_KEY
+    )
       return { ...fallback, mode: 'DETERMINISTIC' as const };
     try {
       const tools = [

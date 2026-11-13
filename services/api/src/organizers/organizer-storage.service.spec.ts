@@ -1,4 +1,7 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,6 +9,7 @@ import { OrganizerStorageService } from './organizer-storage.service';
 
 describe('OrganizerStorageService', () => {
   const previousUploadDirectory = process.env.ORGANIZER_UPLOAD_DIR;
+  const previousUploadsDisabled = process.env.UPLOADS_DISABLED;
   let directory: string;
 
   beforeEach(async () => {
@@ -14,6 +18,9 @@ describe('OrganizerStorageService', () => {
   });
 
   afterEach(async () => {
+    if (previousUploadsDisabled === undefined)
+      delete process.env.UPLOADS_DISABLED;
+    else process.env.UPLOADS_DISABLED = previousUploadsDisabled;
     if (previousUploadDirectory === undefined)
       delete process.env.ORGANIZER_UPLOAD_DIR;
     else process.env.ORGANIZER_UPLOAD_DIR = previousUploadDirectory;
@@ -37,6 +44,13 @@ describe('OrganizerStorageService', () => {
         size: buffer.length,
       }),
     ).resolves.toMatchObject({ mimeType: mimetype });
+  });
+
+  it('recusa upload quando armazenamento durável não está configurado', async () => {
+    process.env.UPLOADS_DISABLED = 'true';
+    await expect(
+      new OrganizerStorageService().save('organizer-test'),
+    ).rejects.toBeInstanceOf(ServiceUnavailableException);
   });
 
   it('rejeita PNG corrompido antes de persistir', async () => {

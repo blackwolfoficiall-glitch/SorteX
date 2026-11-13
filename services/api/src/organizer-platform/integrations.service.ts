@@ -213,6 +213,7 @@ export class IntegrationsService {
 
   async metaOAuthUrl(user: AuthenticatedUser, kind: string) {
     this.organizer(user);
+    this.requireExternalIntegrations();
     const type =
       kind === 'WHATSAPP'
         ? OrganizerIntegrationType.WHATSAPP
@@ -261,6 +262,7 @@ export class IntegrationsService {
   }
 
   async metaOAuthCallback(code: string, state: string) {
+    this.requireExternalIntegrations();
     if (!code || !state)
       throw new BadRequestException(
         'Não foi possível concluir a conexão. Tente novamente.',
@@ -407,6 +409,7 @@ export class IntegrationsService {
     if (integration.type !== OrganizerIntegrationType.WHATSAPP)
       throw new BadRequestException('Selecione uma integração WhatsApp.');
     if (
+      process.env.INTEGRATIONS_MODE === 'sandbox' ||
       integration.sandbox ||
       integration.status !== OrganizerIntegrationStatus.CONNECTED
     ) {
@@ -465,6 +468,14 @@ export class IntegrationsService {
     return { sent: true, sandbox: false };
   }
 
+  private requireExternalIntegrations() {
+    if (process.env.INTEGRATIONS_MODE === 'sandbox') {
+      throw new BadRequestException(
+        'Integrações externas desativadas na homologação.',
+      );
+    }
+  }
+
   private async discoverMeta(
     token: string,
     type: OrganizerIntegrationType,
@@ -504,6 +515,7 @@ export class IntegrationsService {
     };
   }
   private async graph(path: string, token: string) {
+    this.requireExternalIntegrations();
     const r = await fetch(`https://graph.facebook.com${path}`, {
       headers: { Authorization: `Bearer ${token}` },
     });

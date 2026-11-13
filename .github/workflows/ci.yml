@@ -2,10 +2,13 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, infra/netlify-northflank-neon]
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      # Schema validation/generation do not connect to this non-secret dummy URL.
+      DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

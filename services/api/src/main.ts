@@ -53,7 +53,11 @@ async function bootstrap() {
     maxAge: 600,
   });
 
-  const port = process.env.PORT ?? 3333;
+  const port = Number(process.env.PORT ?? 3333);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('PORT deve ser uma porta TCP válida.');
+  }
+  app.enableShutdownHooks();
   await app.listen(port, '0.0.0.0');
 
   console.log(`SorteX API iniciada na porta ${port} (${environment.nodeEnv}).`);

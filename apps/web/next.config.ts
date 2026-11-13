@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const apiInternalUrl = (
   process.env.API_INTERNAL_URL ||
+  process.env.API_URL ||
   process.env.PLAYWRIGHT_API_URL ||
   "http://localhost:3333"
 ).replace(/\/$/, "");
