@@ -170,3 +170,12 @@ com o original e acessos necessários. Não confunda isso com Remote ao Mac
 nem presuma transferência automática de sessão local. Apresente a situação
 verificada e solicite autorização antes de qualquer ação além de leitura.
 ```
+
+
+## Continuidade verificada em 13/11/2026 — banco Neon preparado
+
+Esta nota atualiza o estado operacional sem apagar a auditoria histórica acima. Consulte `docs/SORTEX_MIGRACAO_GRATUITA.md`, seção “Atualização verificada — Neon existente e pacote da API”. Branch Git: `infra/netlify-northflank-neon`, repositório original `blackwolfoficiall-glitch/SorteX`.
+
+O projeto Neon existente `sortex-homologacao` (`crimson-bread-73821703`), branch `homologacao` (`br-lingering-voice-bc92seow`), banco novo `sortex`, Free confirmado, recebeu as 16 migrations originais. Checksums conferem e não há diferença de schema. Nenhum dado antigo, usuário ou campanha foi restaurado/criado. Mac, backups e uploads continuam pendentes de conferência; Render foi preservada.
+
+API NestJS/Prisma/PostgreSQL preservada e empacotada para testar Neon Functions Free. Testes locais contra o Neon passaram; deploy público não concluído porque o conector rejeita o envio do ZIP antes de chegar ao serviço. Há script de upload pela API oficial, que depende de chave privada no executor seguro. Netlify ainda depende da vinculação ao GitHub no projeto existente; endereço reservado não comprova site funcional. Próxima ação solicitada: vincular o repositório à branch de migração no Netlify. Sem token no chat, cartão, cobrança ou merge em main.

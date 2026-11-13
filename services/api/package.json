@@ -22,7 +22,9 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "seed:staging": "ts-node prisma/seed-staging.ts",
     "admin:create": "ts-node prisma/create-superadmin.ts",
-    "admin:create-superadmin": "npm run admin:create"
+    "admin:create-superadmin": "npm run admin:create",
+    "build:neon": "npm run build && node scripts/build-neon.cjs",
+    "deploy:neon": "node scripts/deploy-neon.cjs"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",
@@ -30,6 +32,7 @@
     "@nestjs/jwt": "^11.0.2",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.1.28",
+    "@prisma/adapter-pg": "^6.19.3",
     "@prisma/client": "^6.19.3",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.1",
@@ -58,9 +61,11 @@
     "@types/pdfkit": "^0.17.6",
     "@types/sanitize-html": "^2.11.0",
     "@types/supertest": "^7.0.0",
+    "@vercel/nft": "^1.11.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
+    "fflate": "^0.8.3",
     "globals": "^17.0.0",
     "jest": "^30.0.0",
     "prettier": "^3.4.2",

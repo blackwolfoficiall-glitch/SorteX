@@ -15,8 +15,8 @@ Checkout desta sessão: `/workspace/SorteX`. Base: `main` em `2b8e8503eb33e73136
 - Netlify: equipe conectada `blackwolfoficiall-glitch`, plano Free confirmado. Projeto novo `sortex-homologacao`, ID `a3040361-02c8-4222-8110-36f043eeb5e1`.
 - Painel do projeto: https://app.netlify.com/projects/sortex-homologacao
 - Endereço reservado: https://sortex-homologacao.netlify.app — não declarar funcional sem deploy verificado.
-- Neon: conexão de conta solicitada; banco remoto ainda não criado nem acessado nesta etapa de preparação.
-- Northflank: condições oficiais contraditórias sobre cartão. Para não depender dessa incerteza, a alternativa selecionada é Back4app Containers Free; API remota ainda não publicada e conta Back4app ainda não conectada.
+- Neon: conta conectada. Projeto existente `sortex-homologacao` (`crimson-bread-73821703`), branch `homologacao` (`br-lingering-voice-bc92seow`), banco novo `sortex`, PostgreSQL 18, plano `free_v3` confirmado. As 16 migrations existentes foram aplicadas e seus checksums conferidos; dados antigos não restaurados.
+- API: Neon Functions Free está disponível na região do projeto existente e passou a ser a alternativa em validação, evitando outra conta. Northflank continua sem confirmação inequívoca sobre cartão; Back4app permanece alternativa Docker documentada. Nenhuma API remota foi publicada.
 - A integração Netlify disponível gerencia projetos/variáveis, mas não oferece uma operação de envio do código. Publicação por CLI dependeria de autenticação adicional, mas a rota preferida é vincular o repositório existente pelo painel, sem compartilhar token. O 403 de escrita de variável foi corrigido pela própria integração: a operação de upsert de NEXT_PUBLIC_APP_URL confirmou sucesso usando newVarScopes=[all] e newVarContext=all. A leitura ampla das variáveis ainda retornou erro; não houve leitura nem exposição de segredos. Não pedir token para corrigir esse 403 de escrita.
 
 Nenhum token deve ser enviado no chat. Credenciais solicitadas, quando necessárias, devem ser vinculadas ao ambiente por configuração segura. Não imprimir valores em logs nem versionar arquivos locais de autenticação.
@@ -170,3 +170,45 @@ Abrir o projeto existente em https://app.netlify.com/projects/sortex-homologacao
 A conexão Git pode depender de ação interativa do proprietário; a integração atual não expõe operação de vincular repositório ou publicar código. Evitar pedir PAT quando a vinculação Git pelo painel resolver. A API deve ter URL real antes de configurar API_INTERNAL_URL e API_URL e avaliar o site como funcional.
 
 Fontes oficiais adicionais: https://docs.netlify.com/build/environment-variables/overview/ ; https://docs.netlify.com/build/git-workflows/repo-permissions-linking/ ; https://www.back4app.com/docs-containers/prepare-your-deployment ; https://help.openai.com/en/articles/20001494-connecting-and-managing-app-accounts-in-chatgpt .
+
+
+## Atualização verificada — Neon existente e pacote da API (13/11/2026, UTC)
+
+### Banco e preservação
+
+- Destino solicitado pelo proprietário: projeto `crimson-bread-73821703`, branch `br-lingering-voice-bc92seow` (`homologacao`), banco `sortex`, proprietário `sortex_owner`, região `aws-us-east-1`, PostgreSQL 18. Nenhum projeto, branch ou banco adicional foi criado.
+- Antes das migrations, o schema público estava vazio. O script protegido `services/api/scripts/migrate-staging.cjs` confirmou a identidade do destino; foram executadas exatamente as 16 migrations históricas. Não houve reset, seed, restauração ou alteração dos arquivos SQL.
+- Verificação posterior: 16 migrations concluídas, nenhuma incompleta, 16 checksums SHA-256 iguais aos arquivos locais. `prisma migrate diff` entre banco e datamodel retornou `No difference detected` (exit 0).
+- Contagens posteriores: zero usuários e zero campanhas. Não existe administrador inicial nesse banco. Isso não representa recuperação dos dados antigos.
+- A conexão foi obtida pela integração e mantida em arquivo privado temporário fora do Git. O executor não tem TCP direto ao PostgreSQL; usou transporte loopback → WebSocket remoto com TLS verificado. O SSL desativado apenas no loopback temporário não deve ser reproduzido nas variáveis de hospedagem; a conexão remota usa TLS.
+- Mac, backups antigos, uploads, eventual branch local `infra/free-homologacao`, banco Render e chaves antigas de criptografia continuam inacessíveis/não recuperados. Recursos Render foram preservados.
+
+### API existente no Neon Functions
+
+A documentação oficial atual inclui Functions no Free, na região AWS us-east-1 do projeto: 10 active Capacity-Hours, 400 waiting Capacity-Hours e 1 milhão de invocações por projeto/mês; egress de 5 GB é compartilhado com outros produtos do projeto. Runtime Node 24, linux-arm64 glibc, memória fixa de 2048 MiB, ZIP até 10 MiB, conteúdo até 64 MiB/4096 arquivos. Há suspensão/evicção e limites de franquia; não equivale a disponibilidade contínua ou capacidade ilimitada. Não foi habilitado upgrade, cartão, AI Gateway ou cobrança.
+
+Fontes: https://neon.com/docs/introduction/plans e https://neon.com/docs/compute/functions/reference/runtime-limits e https://neon.com/docs/compute/functions/deploy (consultadas em 13/11/2026).
+
+- `src/application.ts` apenas extrai a inicialização compartilhada do Nest; `main.ts` continua sendo a entrada Docker/Node tradicional.
+- `src/neon-handler.ts` adapta Request/Response para o mesmo Nest em loopback. Controllers, validação, CORS, guards, JWT e serviços foram preservados.
+- `scripts/build-neon.cjs` gera uma cópia temporária do Prisma Client com `engineType=client`, sem alterar o schema canônico; usa `@prisma/adapter-pg` 6.19.3 somente quando `PRISMA_USE_PG_ADAPTER=true`. PostgreSQL e Prisma 6 permanecem. Pool máximo de 5 conexões; bcrypt ARM64 glibc incluído. Docker mantém sua geração/engine tradicional.
+- Comando: em `services/api`, `npm ci`, `npx prisma generate`, `npm run build:neon`. O ZIP ignorado pelo Git fica em `dist/neon/sortex-api.zip` (~3,94 MB, 1907 arquivos, ~12,54 MB descompactado). A CI também gera esse pacote, sem deploy nem acesso ao banco real.
+- O pacote não contém `.env`, senhas, tokens, backups ou uploads. Variáveis privadas foram geradas fora do Git; sua persistência não deve ser presumida após o fim deste executor.
+- Tentativa de publicação pela integração **falhou antes de criar a função**: o conector apresentou `Transport closed` no ZIP maior e `Pattern match timed out` na validação base64 do ZIP reduzido. Isso é um bloqueio do envio pelo conector; não comprova falha do runtime Neon. Slug planejado: `sortexapi`, ainda sem URL pública verificada.
+- `scripts/deploy-neon.cjs` prepara o mesmo upload pelo multipart oficial, sem migrations nem criação de projeto. Exige `NEON_API_KEY` no ambiente seguro e o caminho de um JSON privado com as variáveis; verifica projeto Free, branch e banco antes do envio. Falha fechada se não conseguir comprovar o Free. Não fornece nem registra chaves. Exemplo sem valores privados: `npm run deploy:neon -- /caminho/privado/ambiente.json`. Em executor com proxy, Node 24 pode precisar de `NODE_USE_ENV_PROXY=1`. A integração conectada não fornece uma API key de gestão reutilizável pelo shell; este ambiente não tem esse segredo configurado.
+- Variáveis de homologação: `APP_ENV=staging`, `NODE_ENV=production`, `PAYMENT_ENV=sandbox`, `INTEGRATIONS_MODE=sandbox`, `EMAIL_DELIVERY_MODE=disabled`, `UPLOADS_DISABLED=true`, `PRISMA_USE_PG_ADAPTER=true`, URLs Web/APP/CORS do Netlify e segredos JWT/criptografia fortes. Não sobrescrever `DATABASE_URL` gerenciada pelo Neon. Ajustar `API_URL` à URL efetivamente retornada pelo serviço após publicar.
+
+### Verificações e limites
+
+- API: build passou; 40 suítes/223 testes unitários passaram; E2E existente passou (1 teste); lint sem erros (708 avisos anteriores).
+- Cópia do ZIP testada em Node 24 local com bcrypt x64 apenas na cópia de teste, contra o banco Neon real via transporte TLS: `SELECT 1` passou; `/health/ready` 200, `/public/campaigns` 200 e `[]`, `/auth/me` sem sessão 401, login inválido 400, preflight CORS 204. Nenhum dado foi inserido.
+- Isso não valida execução ARM64 no runtime hospedado nem login administrativo completo: ambos dependem do deploy e da configuração segura do primeiro usuário no banco novo. Não apresentar o site/API como online.
+- Uploads permanecem desabilitados e nenhum arquivo antigo foi recuperado. `/tmp` de Functions é efêmero; não usá-lo como armazenamento durável. Persistência de uploads exige integração de armazenamento e migração separadas. Cache e rate limit em memória não são coordenados entre isolates; jobs não devem depender de processo permanentemente ligado.
+
+### Próxima etapa, uma ação por vez
+
+1. Vincular o GitHub ao projeto Netlify existente: https://app.netlify.com/projects/sortex-homologacao → Project configuration → Developer settings → Continuous deployment → Repository → Link repository/Link to repository → GitHub → `blackwolfoficiall-glitch/SorteX` → `infra/netlify-northflank-neon`. Autorizar apenas o repositório necessário e manter Free. `netlify.toml` já define o build.
+2. Resolver o upload da API pela API oficial caso o conector permaneça com erro. A chave deve ser adicionada a um campo de segredo do executor, nunca colada na conversa, no código ou em variável pública do frontend. Se não existir campo de segredo disponível, orientar uma alternativa segura específica antes de prosseguir.
+3. Após deploy `completed`, verificar URL retornada e `/health/ready`, configurar `API_INTERNAL_URL` e `API_URL` no Netlify com escopos `all`/contexto `all` (evita o 403 por escopos restritos no Free). Nenhuma URL provisória deve ser inventada.
+4. Configurar primeiro administrador com o comando existente `admin:create` em homologação e senha privada, sem promover/substituir conta existente automaticamente; testar login, painel, campanhas e persistência no site publicado.
+5. Recuperar backups/uploads do Mac com validação de origem e destino antes de restaurar; preservar dados eventualmente criados no novo banco. Não apagar recursos Render.
