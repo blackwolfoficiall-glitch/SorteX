@@ -1,0 +1,50 @@
+name: Deploy Neon homologacao
+on:
+  push:
+    branches: [infra/netlify-northflank-neon]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sortex-neon-homologacao
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/infra/netlify-northflank-neon'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      # Generation only: no database connection or migrations in this workflow.
+      DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_build
+    steps:
+      - name: Check protected credential
+        id: credential
+        run: |
+          if [ -n "$NEON_API_KEY" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Deploy não executado: configure o repository secret NEON_API_KEY."
+          fi
+      - uses: actions/checkout@v4
+        if: steps.credential.outputs.available == 'true'
+      - uses: actions/setup-node@v4
+        if: steps.credential.outputs.available == 'true'
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: services/api/package-lock.json
+      - run: npm ci --include=dev --no-audit --no-fund
+        if: steps.credential.outputs.available == 'true'
+        working-directory: services/api
+      - run: npx prisma generate
+        if: steps.credential.outputs.available == 'true'
+        working-directory: services/api
+      - run: npm run build:neon
+        if: steps.credential.outputs.available == 'true'
+        working-directory: services/api
+      - name: Deploy only existing Free homologacao and check readiness
+        if: steps.credential.outputs.available == 'true'
+        run: npm run deploy:neon -- --bootstrap-or-preserve
+        working-directory: services/api
