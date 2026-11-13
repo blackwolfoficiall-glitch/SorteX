@@ -1,5 +1,10 @@
 # SorteX — continuidade pelo iPhone
 
+> Estado mais recente verificado em 13/11/2026: homologação online em https://sortex-homologacao.netlify.app; API Neon Functions e prontidão de banco/storage aprovadas. Código publicado `8251afd9f5596b860a81049b65565e7ab8301889`, branch `infra/netlify-northflank-neon`.
+>
+> Uploads privados persistentes ativos e testados após republicação. Banco NOVO, sem dados antigos restaurados; 16 migrations, 0 campanhas, 3 contas técnicas INACTIVE, 0 usuários ativos. Nove sessões técnicas revogadas. Administrador definitivo adiado pelo proprietário; não solicitar novamente agora. Mac/backups/uploads antigos pendentes; main e Render preservadas. Consulte o “Resultado final verificado” de `docs/SORTEX_MIGRACAO_GRATUITA.md`; as seções anteriores registram etapas históricas.
+
+
 > Registro da auditoria anterior, preservado. Este arquivo foi incorporado ao checkout da branch `infra/netlify-northflank-neon`; as afirmações abaixo sobre ausência de checkout e autorização somente documental descrevem aquela etapa. Para a migração autorizada depois, consulte `SORTEX_MIGRACAO_GRATUITA.md`. Nenhum estado do Mac foi conferido nesta sessão.
 
 ## Prompt atual para continuar a migração

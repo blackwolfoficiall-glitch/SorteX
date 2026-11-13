@@ -14,7 +14,7 @@ Checkout desta sessão: `/workspace/SorteX`. Base: `main` em `2b8e8503eb33e73136
 
 - Netlify: equipe conectada `blackwolfoficiall-glitch`, plano Free confirmado. Projeto novo `sortex-homologacao`, ID `a3040361-02c8-4222-8110-36f043eeb5e1`.
 - Painel do projeto: https://app.netlify.com/projects/sortex-homologacao
-- Frontend publicado: https://sortex-homologacao.netlify.app — home/login/admin-login testados com HTTP 200 após ativar o runtime oficial Next.js. A integração BFF com a API é validada no próximo deploy com as URLs configuradas.
+- Frontend publicado: https://sortex-homologacao.netlify.app — home/login/admin-login testados com HTTP 200 após ativar o runtime oficial Next.js. Integração BFF com a API, banco e storage validada em produção da homologação.
 - Neon: conta conectada. Projeto existente `sortex-homologacao` (`crimson-bread-73821703`), branch `homologacao` (`br-lingering-voice-bc92seow`), banco novo `sortex`, PostgreSQL 18, plano `free_v3` confirmado. As 16 migrations existentes foram aplicadas e seus checksums conferidos; dados antigos não restaurados.
 - API publicada em Neon Functions Free: https://br-lingering-voice-bc92seow-sortexapi.compute.c-16.us-east-1.aws.neon.tech. Prontidão do banco, login, permissões, painel e consulta de campanhas testados na API. Northflank não foi utilizado; Back4app permanece apenas alternativa histórica.
 - A integração Netlify disponível gerencia projetos/variáveis, mas não oferece uma operação de envio do código. Publicação por CLI dependeria de autenticação adicional, mas a rota preferida é vincular o repositório existente pelo painel, sem compartilhar token. O 403 de escrita de variável foi corrigido pela própria integração: a operação de upsert de NEXT_PUBLIC_APP_URL confirmou sucesso usando newVarScopes=[all] e newVarContext=all. A leitura ampla das variáveis ainda retornou erro; não houve leitura nem exposição de segredos. Não pedir token para corrigir esse 403 de escrita.
@@ -273,3 +273,47 @@ O workflow da API publicou o código de uploads sem erro. A Netlify cancelou o b
 O proprietário decidiu deixar a configuração de seu administrador para depois. Não solicitar novamente os segredos SORTEX_ADMIN_EMAIL/PASSWORD nesta etapa; terminar os testes técnicos e desativar essas contas/sessões.
 
 As variáveis de Neon Functions são privadas: a consulta retorna apenas nomes, e a API faz merge das chaves informadas. Usar atualização parcial somente de STORAGE_DRIVER/STORAGE_BUCKET/UPLOADS_DISABLED/APP_VERSION, sem ler, substituir ou regenerar JWT/criptografia. Fonte: https://neon.com/docs/compute/functions/environment-variables.
+
+
+## Resultado final verificado — 13/11/2026
+
+A homologação está acessível sem o Mac e sem dependência operacional da Render:
+
+- Site: https://sortex-homologacao.netlify.app
+- Prontidão pelo site: https://sortex-homologacao.netlify.app/api/health/ready
+- API: https://br-lingering-voice-bc92seow-sortexapi.compute.c-16.us-east-1.aws.neon.tech
+- Prontidão da API: https://br-lingering-voice-bc92seow-sortexapi.compute.c-16.us-east-1.aws.neon.tech/health/ready
+- Branch: `infra/netlify-northflank-neon`. Código publicado e validado: `8251afd9f5596b860a81049b65565e7ab8301889`.
+- Deploy Netlify: `6af775bfbc4b537efbd7868f`, ready, Next.js SSR + middleware Edge. A CI e o workflow de publicação desse código passaram. A documentação final pode ter commit posterior sem alterar o código publicado.
+- API Neon: função `sortexapi`, runtime Node 24, configuração privada preservada, deployment 6 completed após testar reinicialização. `/health` identifica a versão do código validado.
+- `main` permaneceu em `2b8e8503eb33e73136cd076dbd322c78945c2ffe`; sem merge/force push. Schema Prisma, 16 migrations e render.yaml sem alterações em relação à main.
+
+### Resultados dos testes publicados
+
+- Home, login e admin/login 200; prontidão do site e da API 200 com database=up e storage=up.
+- Login real no navegador como administrador, comprador e organizador; identidade da sessão correta; cookies HttpOnly e Secure; páginas /admin/dashboard, /comprador e /dashboard abriram sem erros de JS ou respostas 5xx. Dimensões móveis 390x844 sem overflow horizontal; não equivale a teste no Safari/iOS físico.
+- Página /admin/campanhas 200 com conteúdo conferido, lista inicialmente vazia; comprador impedido de acessar a API administrativa (403); sessão ausente recusada (401); CORS preflight 204 com origem correta.
+- Upload real pela rota administrativa existente 201; download 200, 68 bytes idênticos. O mesmo arquivo foi obtido pelo BFF autenticado do frontend, sem corrupção. Acesso anônimo ao arquivo retornou 401 e acesso anônimo ao bucket 403.
+- Após republicar a função, o arquivo continuou íntegro no bucket privado e um JWT anterior continuou válido, comprovando persistência e preservação das chaves. A prontidão faz verificação efetiva do bucket; driver remoto ativo, sem depender de /tmp.
+- 40 suítes/229 testes unitários da API, E2E (1), quatro testes de segurança do deploy, quatro do bootstrap administrativo e CI de lint/types/build/pacote aprovados.
+
+Relatórios e capturas desta sessão estão em `/workspace/sortex-validation/`: hosted-functional-results.json, hosted-api-results.json, hosted-upload-results.json, technical-account-cleanup.json, final-hosted-checks.json e hosted-functional-*.png. São evidências do executor, não arquivos do Mac. Não presumir sua disponibilidade em outro executor; esta documentação contém os resultados sem segredos.
+
+### Encerramento das contas técnicas e dados
+
+As três contas técnicas criadas para os testes foram desativadas, status INACTIVE; nove sessões foram revogadas e a operação foi registrada na auditoria. A conferência posterior dos três tokens retornou 401. Nenhum usuário real foi alterado ou removido. Registros técnicos e dois objetos pequenos de diagnóstico foram preservados, sem exclusão de histórico.
+
+Estado conferido do banco: 16 migrations concluídas, 0 usuários ativos, 3 usuários técnicos inativos e 0 campanhas. Configurações padrão eventualmente criadas pelas telas pertencem à instalação nova. **Nenhum dado antigo, conta antiga, campanha ou upload histórico foi recuperado.** Backups, uploads, configurações privadas e eventual trabalho somente no Mac continuam pendentes de acesso e validação. Recursos Render permanecem intactos.
+
+O proprietário pediu deixar seu administrador definitivo para depois. Não pedir esses segredos novamente nem criar/promover conta real sem retomar essa etapa com ele. O workflow protegido está preparado para o primeiro administrador futuro; sua execução real de cadastro de proprietário não foi feita. Contas antigas não podem ser usadas neste banco novo até restauração validada.
+
+### Configuração efetiva e limites gratuitos
+
+Frontend Next.js/React mantido na Netlify Free. API NestJS/Node/Prisma 6 mantida no Neon Functions Free; PostgreSQL 18 no projeto e branch solicitados; bucket `sortex-private-uploads` privado, com STORAGE_DRIVER=neon-s3 e UPLOADS_DISABLED=false. A alteração parcial das variáveis preservou JWT/criptografia e os demais valores privados. Pagamentos e integrações permanecem sandbox; e-mail desabilitado, sem credenciais de produção, cobrança real ou chamada paga habilitada.
+
+- Netlify Free: 300 créditos/mês compartilhados por deploys, compute e tráfego; limite pode pausar os projetos. Não habilitar recarga/upgrade. Builds de produção consomem créditos; commits apenas de documentação podem ser pulados com [skip ci].
+- Neon Free: 1 GB PostgreSQL/projeto, 100 CU-h/projeto/mês e suspensão por inatividade; 5 GB Object Storage/projeto. Egress de 5 GB/projeto é compartilhado entre banco, Functions e arquivos.
+- Neon Functions Free: 10 active Capacity-Hours, 400 waiting Capacity-Hours e 1 milhão de invocações/projeto/mês; escala a zero, pode reiniciar e tem franquia finita. Arquivos ficam no bucket, não no processo. Cache/rate limit em memória não são coordenados entre isolates; jobs longos não devem depender de processo sempre ligado.
+- Nenhum cartão, serviço pago, upgrade ou recurso pago Render foi contratado/reativado nesta operação. Planos da Netlify e do projeto Neon foram reconferidos como Free. Não prometer disponibilidade ou capacidade ilimitada.
+
+Pendências reais: (1) acesso administrativo definitivo, adiado pelo proprietário; (2) recuperação validada dos dados e uploads históricos do Mac/backup, sem sobrescrever os novos registros; (3) homologação de jornadas com dados reais/restaurados e futuras credenciais de teste externas quando forem fornecidas. O site, API, conexão com PostgreSQL e armazenamento novo estão operacionais. Esta etapa não realizou sorteios, cobranças, repasses, aprovações jurídicas nem pagamentos reais.
