@@ -27,6 +27,7 @@
     "deploy:neon": "node scripts/deploy-neon.cjs"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1168.0",
     "@nestjs/common": "^11.1.28",
     "@nestjs/core": "^11.1.28",
     "@nestjs/jwt": "^11.0.2",

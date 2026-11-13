@@ -14,9 +14,9 @@ Checkout desta sessão: `/workspace/SorteX`. Base: `main` em `2b8e8503eb33e73136
 
 - Netlify: equipe conectada `blackwolfoficiall-glitch`, plano Free confirmado. Projeto novo `sortex-homologacao`, ID `a3040361-02c8-4222-8110-36f043eeb5e1`.
 - Painel do projeto: https://app.netlify.com/projects/sortex-homologacao
-- Endereço reservado: https://sortex-homologacao.netlify.app — não declarar funcional sem deploy verificado.
+- Frontend publicado: https://sortex-homologacao.netlify.app — home/login/admin-login testados com HTTP 200 após ativar o runtime oficial Next.js. A integração BFF com a API é validada no próximo deploy com as URLs configuradas.
 - Neon: conta conectada. Projeto existente `sortex-homologacao` (`crimson-bread-73821703`), branch `homologacao` (`br-lingering-voice-bc92seow`), banco novo `sortex`, PostgreSQL 18, plano `free_v3` confirmado. As 16 migrations existentes foram aplicadas e seus checksums conferidos; dados antigos não restaurados.
-- API: Neon Functions Free está disponível na região do projeto existente e passou a ser a alternativa em validação, evitando outra conta. Northflank continua sem confirmação inequívoca sobre cartão; Back4app permanece alternativa Docker documentada. Nenhuma API remota foi publicada.
+- API publicada em Neon Functions Free: https://br-lingering-voice-bc92seow-sortexapi.compute.c-16.us-east-1.aws.neon.tech. Prontidão do banco, login, permissões, painel e consulta de campanhas testados na API. Northflank não foi utilizado; Back4app permanece apenas alternativa histórica.
 - A integração Netlify disponível gerencia projetos/variáveis, mas não oferece uma operação de envio do código. Publicação por CLI dependeria de autenticação adicional, mas a rota preferida é vincular o repositório existente pelo painel, sem compartilhar token. O 403 de escrita de variável foi corrigido pela própria integração: a operação de upsert de NEXT_PUBLIC_APP_URL confirmou sucesso usando newVarScopes=[all] e newVarContext=all. A leitura ampla das variáveis ainda retornou erro; não houve leitura nem exposição de segredos. Não pedir token para corrigir esse 403 de escrita.
 
 Nenhum token deve ser enviado no chat. Credenciais solicitadas, quando necessárias, devem ser vinculadas ao ambiente por configuração segura. Não imprimir valores em logs nem versionar arquivos locais de autenticação.
@@ -238,3 +238,29 @@ O push de `dfae001eadab807a87307bd20e3791c8bdca924b` disparou o primeiro build N
 Foi adicionada a declaração explícita `[[plugins]] package = "@netlify/plugin-nextjs"` ao `netlify.toml`, mantendo base/build/publish e permitindo a versão atual do adaptador oficial, sem fixar versão legada nem exportar o frontend como estático. Verificar no próximo deploy se foram geradas as funções SSR/route handlers e testar as rotas reais antes de declarar publicação concluída. Isso não publica a API NestJS: o workflow da API ainda depende do repository secret NEON_API_KEY.
 
 Validação local da correção: CLI Netlify com build offline e proxy do executor, Runtime oficial 5.16.6, build Next.js e TypeScript aprovados, função `___netlify-server-handler` e Edge middleware empacotados; `Netlify Build Complete`, exit 0. A primeira tentativa local falhou apenas no download do bundler Edge sem o proxy; a repetição com `NODE_USE_ENV_PROXY=1` passou. Não foi desativada a verificação TLS. A versão do adaptador continua gerenciada pela Netlify.
+
+
+## Publicação verificada e uploads privados — 13/11/2026
+
+- Frontend: https://sortex-homologacao.netlify.app. Deploy `6af76e93b3135201569be1b1`, branch `infra/netlify-northflank-neon`, commit `3c0bb141262f64b098db4fc2adb1ccccfc4653c4`, plugin oficial 5.16.6 com uma função SSR e um middleware Edge. Home/login/admin-login 200; Chromium desktop e viewport 390x844 sem erros de JS/overflow horizontal. Isso não é teste no Safari/iPhone físico.
+- API: https://br-lingering-voice-bc92seow-sortexapi.compute.c-16.us-east-1.aws.neon.tech. O workflow reexecutado usou o repository secret NEON_API_KEY, sem ler/imprimir a chave no chat. `/health` e `/health/ready` 200, banco up, campanhas públicas inicialmente `[]`, acesso anônimo protegido 401.
+- `API_INTERNAL_URL` e `API_URL` foram configuradas na Netlify como URLs públicas não confidenciais, no contexto production e escopo all. Nenhuma credencial de banco/JWT foi colocada no frontend. É necessário novo build para o BFF receber esses valores.
+- Com contas técnicas novas e sem dados pessoais reais, a API publicada passou em login administrativo/comprador/organizador, `/auth/me` com identidade persistida, `/admin/dashboard`, `/admin/campaigns`, `/health/metrics`, `/campaigns/my`, além de negar `/admin/dashboard` ao comprador (403). Contas técnicas serão desativadas após o teste do site; não são contas antigas recuperadas nem acesso administrativo entregue ao proprietário.
+
+### Persistência de uploads
+
+O Object Storage já estava disponível na branch Neon existente. Foi criado somente o bucket privado `sortex-private-uploads`, sem projeto/banco/branch extra e sem upgrade. O plano Free foi reconferido: 5 GB de Object Storage e egress de 5 GB/projeto compartilhado com os demais produtos. Não exige conta AWS separada. Acesso anônimo retornou 403; upload condicional retornou 200, tentativa de sobrescrita 412 e leitura assinada devolveu os mesmos 61 bytes. O pequeno objeto de diagnóstico foi preservado no prefixo `homologacao-validation/`.
+
+`STORAGE_DRIVER=neon-s3` permite ao serviço de arquivos existente usar o SDK S3 oficial com credenciais AWS_* privadas gerenciadas pelo Neon. O backend local permanece como padrão para computador/Docker. Foram preservados validação de MIME/assinatura/tamanho, UUIDs, chaves relativas no banco e controles de acesso das rotas de organizador, campanhas, mídia e jurídico. Upload remoto usa If-None-Match para recusar sobrescrita; download passa pelas rotas existentes. O bucket não é público e documentos não recebem URLs públicas permanentes. A prontidão faz HeadBucket quando o driver remoto estiver configurado.
+
+A ativação remota deve ocorrer somente depois do novo código publicado e dos testes reais de upload/download: STORAGE_DRIVER=neon-s3, STORAGE_BUCKET=sortex-private-uploads e UPLOADS_DISABLED=false. Preservar o mapa privado de variáveis e as chaves existentes ao atualizar esses três valores. Não usar /tmp como fonte durável e não ativar o driver em deploy anterior que não o implementa.
+
+Build e pacote da API passaram com o novo SDK: aproximadamente 4,25 MB ZIP, 1997 arquivos, 13,89 MB descompactados, dentro do limite do Neon. São 40 suítes/229 testes unitários, E2E existente (1), quatro testes de proteção de deploy e quatro do bootstrap administrativo. Não houve mudança no schema, migrations ou Render.
+
+### Primeiro administrador do proprietário, com senha fora do chat
+
+O workflow aceita os repository secrets opcionais `SORTEX_ADMIN_EMAIL` e `SORTEX_ADMIN_PASSWORD`. A senha deve conter pelo menos 12 caracteres, maiúscula, minúscula, número e símbolo. O passo `bootstrap-admin-ci.cjs` obtém a conexão pela API oficial com a chave já protegida, exige o host da homologação/banco sortex e TLS verify-full, e chama o comando existente `prisma/create-superadmin.ts` apenas quando não há Superadministrador ativo. Não promove conta existente, não troca senha/permissões de administrador ativo e não imprime email, senha ou conexão. Segredos de gestão/cadastro ficam restritos aos passos que precisam deles, sem disponibilizá-los aos passos npm/build.
+
+Não configurar o administrador real enquanto a conta administrativa técnica de validação estiver ativa; desativar a conta técnica e revogar suas sessões antes. Depois, o usuário pode adicionar os dois segredos pelo painel GitHub → Settings → Secrets and variables → Actions e a sessão reexecuta o job na branch de migração. Não pedir senha no chat. Sem esses segredos, o passo informa que a configuração administrativa foi pulada.
+
+Os dados antigos e uploads históricos permanecem NÃO restaurados. Há somente schema, registros técnicos de validação e eventual configuração padrão criada pelos serviços consultados. Recuperar/validar backups e arquivos do Mac separadamente antes de restaurar, preservando os dados já criados no novo banco. Render permanece intacta.

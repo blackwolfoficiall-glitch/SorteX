@@ -175,12 +175,12 @@ export class LegalAdminController {
     };
   }
   @Get('assets/file/:token')
-  asset(
+  async asset(
     @Param('token') token: string,
     @Res({ passthrough: true }) response: Response,
   ) {
     const key = Buffer.from(token, 'base64url').toString('utf8');
     response.type(this.storage.mimeType(key));
-    return new StreamableFile(this.legal.asset(this.storage.resolve(key)));
+    return new StreamableFile(await this.storage.open(key));
   }
 }

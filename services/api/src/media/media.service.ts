@@ -14,7 +14,6 @@ import {
   UserRole,
 } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
-import { createReadStream, existsSync } from 'node:fs';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { OrganizerStorageService } from '../organizers/organizer-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -416,10 +415,8 @@ export class MediaService {
     const m = await this.get(u, id);
     const key = m.thumbnailUrl;
     if (!key) throw new NotFoundException();
-    const path = this.storage.resolve(key);
-    if (!existsSync(path)) throw new NotFoundException();
     return {
-      stream: createReadStream(path),
+      stream: await this.storage.open(key),
       mimeType: 'image/svg+xml',
       name: `sortex-${id}.svg`,
     };

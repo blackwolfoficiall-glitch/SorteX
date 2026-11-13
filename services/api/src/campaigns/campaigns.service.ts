@@ -5,7 +5,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CampaignStatus, DrawBasis, Prisma, UserRole } from '@prisma/client';
-import { createReadStream, existsSync } from 'node:fs';
 import { randomInt } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { OrganizerStorageService } from '../organizers/organizer-storage.service';
@@ -965,11 +964,8 @@ export class CampaignsService {
       storageKey = `campaigns/${campaignId}/${mediaId}`;
     }
     if (!storageKey) throw new NotFoundException('Mídia não encontrada.');
-    const path = this.storage.resolve(storageKey);
-    if (!existsSync(path))
-      throw new NotFoundException('Arquivo não encontrado.');
     return {
-      stream: createReadStream(path),
+      stream: await this.storage.open(storageKey),
       mimeType: mimeType ?? this.storage.mimeType(storageKey),
     };
   }

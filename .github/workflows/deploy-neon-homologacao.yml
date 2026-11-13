@@ -14,12 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
       # Generation only: no database connection or migrations in this workflow.
       DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_build
     steps:
       - name: Check protected credential
         id: credential
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           if [ -n "$NEON_API_KEY" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
@@ -46,5 +47,15 @@ jobs:
         working-directory: services/api
       - name: Deploy only existing Free homologacao and check readiness
         if: steps.credential.outputs.available == 'true'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: npm run deploy:neon -- --bootstrap-or-preserve
+        working-directory: services/api
+      - name: Configure first administrator only when protected secrets are provided
+        if: steps.credential.outputs.available == 'true'
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          SORTEX_ADMIN_EMAIL: ${{ secrets.SORTEX_ADMIN_EMAIL }}
+          SORTEX_ADMIN_PASSWORD: ${{ secrets.SORTEX_ADMIN_PASSWORD }}
+        run: node scripts/bootstrap-admin-ci.cjs
         working-directory: services/api

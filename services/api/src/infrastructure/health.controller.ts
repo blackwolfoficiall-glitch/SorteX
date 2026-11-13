@@ -3,6 +3,8 @@ import { Public } from '../auth/decorators/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { HeadBucketCommand } from '@aws-sdk/client-s3';
+import { objectStorage, usesObjectStorage } from '../organizers/object-storage';
 @Controller('health')
 export class HealthController {
   constructor(private readonly p: PrismaService) {}
@@ -23,10 +25,18 @@ export class HealthController {
       const storage = resolve(
         process.env.ORGANIZER_UPLOAD_DIR ?? './storage/organizers',
       );
+      if (usesObjectStorage()) {
+        const { client, bucket } = objectStorage();
+        await client.send(new HeadBucketCommand({ Bucket: bucket }));
+      }
       return {
         status: 'ready',
         database: 'up',
-        storage: existsSync(storage) ? 'up' : 'not-initialized',
+        storage: usesObjectStorage()
+          ? 'up'
+          : existsSync(storage)
+            ? 'up'
+            : 'not-initialized',
       };
     } catch {
       throw new ServiceUnavailableException('Serviço ainda não está pronto.');

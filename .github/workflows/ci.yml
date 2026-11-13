@@ -25,6 +25,8 @@ jobs:
         working-directory: services/api
       - run: node scripts/deploy-neon.test.cjs
         working-directory: services/api
+      - run: node scripts/bootstrap-admin-ci.test.cjs
+        working-directory: services/api
       - run: npm run build
         working-directory: services/api
       - run: node scripts/build-neon.cjs

@@ -1,9 +1,14 @@
 import {
   BadRequestException,
   Injectable,
+  NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { createReadStream, existsSync } from 'node:fs';
+import { Readable } from 'node:stream';
+import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { objectStorage, usesObjectStorage } from './object-storage';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { UploadedOrganizerFile } from './types/uploaded-file.type';
@@ -61,13 +66,29 @@ export class OrganizerStorageService {
       );
     }
 
-    const directory = join(this.root, profileId);
-    await mkdir(directory, { recursive: true });
     const filename = `${randomUUID()}.${extension}`;
-    await writeFile(join(directory, filename), file.buffer, { flag: 'wx' });
+    const storageKey = `${profileId}/${filename}`;
+    // Apply the same path checks before either backend sees a key.
+    this.resolve(storageKey);
+    if (usesObjectStorage()) {
+      const { client, bucket } = objectStorage();
+      await client.send(
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: storageKey,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+          IfNoneMatch: '*',
+        }),
+      );
+    } else {
+      const directory = join(this.root, profileId);
+      await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, filename), file.buffer, { flag: 'wx' });
+    }
 
     return {
-      storageKey: `${profileId}/${filename}`,
+      storageKey,
       originalName: file.originalname,
       mimeType: file.mimetype,
       size: file.size,
@@ -75,11 +96,46 @@ export class OrganizerStorageService {
   }
 
   resolve(storageKey: string) {
+    if (
+      !storageKey ||
+      storageKey.includes('\\') ||
+      storageKey.startsWith('/') ||
+      storageKey
+        .split('/')
+        .some((part) => !part || part === '..' || part === '.')
+    ) {
+      throw new BadRequestException('Arquivo inválido.');
+    }
     const path = resolve(this.root, storageKey);
     if (!path.startsWith(`${this.root}/`)) {
       throw new BadRequestException('Arquivo inválido.');
     }
     return path;
+  }
+
+  async open(storageKey: string): Promise<Readable> {
+    const local = this.resolve(storageKey);
+    if (!usesObjectStorage()) {
+      if (!existsSync(local))
+        throw new NotFoundException('Arquivo não encontrado.');
+      return createReadStream(local);
+    }
+    const { client, bucket } = objectStorage();
+    try {
+      const result = await client.send(
+        new GetObjectCommand({ Bucket: bucket, Key: storageKey }),
+      );
+      if (!(result.Body instanceof Readable))
+        throw new Error('Resposta de armazenamento inválida.');
+      return result.Body;
+    } catch (error) {
+      if (
+        (error as { $metadata?: { httpStatusCode?: number } }).$metadata
+          ?.httpStatusCode === 404
+      )
+        throw new NotFoundException('Arquivo não encontrado.');
+      throw error;
+    }
   }
 
   mimeType(storageKey: string) {

@@ -10,7 +10,6 @@ import {
   UserRole,
   VerificationStatus,
 } from '@prisma/client';
-import { createReadStream, existsSync } from 'node:fs';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { OrganizerStorageService } from './organizer-storage.service';
@@ -611,11 +610,12 @@ export class OrganizersService {
       .map(([label]) => String(label));
   }
 
-  private fileResponse(storageKey: string, mimeType: string, name: string) {
-    const path = this.storage.resolve(storageKey);
-    if (!existsSync(path))
-      throw new NotFoundException('Arquivo não encontrado.');
-    return { stream: createReadStream(path), mimeType, name };
+  private async fileResponse(
+    storageKey: string,
+    mimeType: string,
+    name: string,
+  ) {
+    return { stream: await this.storage.open(storageKey), mimeType, name };
   }
 
   private serialize(profile: OrganizerProfilePayload) {
