@@ -14,7 +14,10 @@ type Pending = {
 export default function SocialCompletion() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [role, setRole] = useState<"BUYER" | "ORGANIZER" | null>(null);
-  const [authenticated, setAuthenticated] = useState(false);
+  const [account, setAccount] = useState<{
+    name: string;
+    email: string;
+  } | null>(null);
   const [error, setError] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -24,7 +27,7 @@ export default function SocialCompletion() {
       .then(setPending)
       .catch((error) => setError(error.message));
     getCurrentUser()
-      .then(() => setAuthenticated(true))
+      .then((user) => setAccount({ name: user.name, email: user.email }))
       .catch(() => undefined);
   }, []);
   async function link() {
@@ -74,7 +77,7 @@ export default function SocialCompletion() {
             Para vincular, entre na conta SorteX que deseja manter e confirme a
             ação.
           </p>
-          {!authenticated ? (
+          {!account ? (
             <Link
               className="sx-auth-submit"
               href="/login?next=%2Fcadastro%2Fcompletar"
@@ -83,6 +86,15 @@ export default function SocialCompletion() {
             </Link>
           ) : (
             <>
+              <div className="rounded-xl border border-violet-200 bg-violet-50 p-4 text-xs leading-6 text-violet-950">
+                <p>
+                  Identidade do provedor: <strong>{pending?.email}</strong>
+                </p>
+                <p>
+                  Conta SorteX que será mantida:{" "}
+                  <strong>{account.email}</strong> ({account.name})
+                </p>
+              </div>
               <label className="flex items-start gap-3">
                 <input
                   type="checkbox"

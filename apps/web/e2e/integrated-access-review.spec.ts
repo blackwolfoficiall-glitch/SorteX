@@ -1,4 +1,42 @@
 import { test, expect } from "@playwright/test";
+test("explicit linking displays both identities and requires confirmation (UI fixture only)", async ({
+  page,
+}) => {
+  await page.route("**/api/auth/social/pending", (route) =>
+    route.fulfill({
+      json: {
+        provider: "google",
+        email: "synthetic-provider@example.test",
+        name: null,
+        linkRequired: true,
+      },
+    }),
+  );
+  await page.route("**/api/auth/me", (route) =>
+    route.fulfill({
+      json: {
+        id: "synthetic-existing",
+        name: "Conta Sintética",
+        email: "synthetic-existing@example.test",
+        role: "BUYER",
+      },
+    }),
+  );
+  await page.goto("/cadastro/completar");
+  await expect(
+    page.getByText("synthetic-provider@example.test", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText("synthetic-existing@example.test", { exact: true }),
+  ).toBeVisible();
+  const confirm = page.getByRole("button", {
+    name: "Confirmar vínculo",
+    exact: true,
+  });
+  await expect(confirm).toBeDisabled();
+  await page.getByRole("checkbox").check();
+  await expect(confirm).toBeEnabled();
+});
 test("institutional page presents the real product and working account paths", async ({
   page,
 }) => {
