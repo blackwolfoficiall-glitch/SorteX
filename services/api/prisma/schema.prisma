@@ -924,6 +924,9 @@ enum LegalDocumentStatus {
   ARCHIVED
 }
 
+// Canonical email/CPF/CNPJ expression unique indexes are maintained by
+// migration 20261113231000_canonical_identity_uniqueness (Prisma 6 cannot model them).
+// Preserve those indexes when generating future migrations.
 model User {
   id                         String                    @id @default(cuid())
   name                       String
@@ -949,6 +952,7 @@ model User {
   updatedAt                  DateTime                  @updatedAt
   sessions                   AuthSession[]
   passwordResetTokens        PasswordResetToken[]
+  buyerAddress               BuyerAddress?
   organizerProfile           OrganizerProfile?
   campaigns                  Campaign[]
   drawRuleTemplates          DrawRuleTemplate[]
@@ -2749,7 +2753,28 @@ model SubscriptionInvoice {
   @@index([dueDate, status])
 }
 
+enum OrganizerPersonType {
+  PF
+  PJ
+}
+
+model BuyerAddress {
+  userId            String   @id
+  postalCode        String
+  state             String
+  city              String
+  municipalityCode  String
+  neighborhood      String
+  address           String
+  addressNumber     String
+  addressComplement String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
 model OrganizerProfile {
+  personType               OrganizerPersonType?
   id                       String                    @id @default(cuid())
   userId                   String                    @unique
   fullName                 String

@@ -1,3 +1,4 @@
+import { isValidCnpj } from '../common/brazilian-documents';
 import {
   BadRequestException,
   ForbiddenException,
@@ -1327,7 +1328,7 @@ export class AdminService {
       reasons.push('CPF com formato ou dígitos inválidos.');
       score += 35;
     }
-    if (profile.cnpj && !/^\d{14}$/.test(profile.cnpj.replace(/\D/g, ''))) {
+    if (profile.cnpj && !isValidCnpj(profile.cnpj)) {
       reasons.push('CNPJ com formato inválido.');
       score += 35;
     }

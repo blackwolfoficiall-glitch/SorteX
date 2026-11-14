@@ -35,6 +35,7 @@ export type OrganizerDocument = {
 };
 
 export type OrganizerProfile = {
+  personType?: "PF" | "PJ" | null;
   id: string;
   userId: string;
   fullName: string;

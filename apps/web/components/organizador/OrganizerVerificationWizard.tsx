@@ -134,8 +134,8 @@ export default function OrganizerVerificationWizard() {
             }
           : step === 2
             ? {
-              organizationName: form.organizationName,
-              cnpj: form.cnpj || undefined,
+              organizationName: profile?.personType === "PF" ? undefined : form.organizationName,
+              cnpj: profile?.personType === "PF" ? undefined : form.cnpj || undefined,
               instagram: form.instagram || undefined,
             }
             : {
@@ -217,7 +217,7 @@ export default function OrganizerVerificationWizard() {
             <Field label="Nome completo"><Input className={fieldClass} name="fullName" value={form.fullName} onChange={change} /></Field>
             <Field label="CPF"><Input className={fieldClass} name="cpf" value={form.cpf} onChange={change} inputMode="numeric" /></Field>
             <Field label="Celular / WhatsApp"><Input className={fieldClass} name="phone" value={form.phone} onChange={change} inputMode="tel" /></Field>
-            <Field label="Data de nascimento"><Input className={fieldClass} name="birthDate" value={form.birthDate} onChange={change} type="date" /></Field>
+            <Field label={profile.personType === "PJ" ? "Data de nascimento (opcional)" : "Data de nascimento"}><Input className={fieldClass} name="birthDate" value={form.birthDate} onChange={change} type="date" /></Field>
           </div>
           <Actions saving={saving} onNext={saveAndContinue} />
         </StepCard>
@@ -226,8 +226,8 @@ export default function OrganizerVerificationWizard() {
       {step === 2 && (
         <StepCard icon={<Building2 />} title="Dados da organização" description="Identidade comercial do organizador.">
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Nome da organização ou fantasia"><Input className={fieldClass} name="organizationName" value={form.organizationName} onChange={change} /></Field>
-            <Field label="CNPJ (opcional)"><Input className={fieldClass} name="cnpj" value={form.cnpj} onChange={change} /></Field>
+            {profile.personType !== "PF" && <Field label={profile.personType === "PJ" ? "Razão social" : "Nome da organização ou fantasia"}><Input className={fieldClass} name="organizationName" value={form.organizationName} onChange={change} /></Field>}
+            {profile.personType !== "PF" && <Field label={profile.personType === "PJ" ? "CNPJ" : "CNPJ (opcional)"}><Input className={fieldClass} name="cnpj" value={form.cnpj} onChange={change} /></Field>}
             <Field label="Instagram (opcional)"><Input className={fieldClass} name="instagram" value={form.instagram} onChange={change} placeholder="@suaorganizacao" /></Field>
           </div>
           <Actions saving={saving} onBack={() => setStep(1)} onNext={saveAndContinue} />

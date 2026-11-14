@@ -6,7 +6,13 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
+import {
+  isValidCpf,
+  isValidCnpj,
+  normalizeDocument,
+} from '../common/brazilian-documents';
+import { validateMunicipality } from '../locations/locations';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -58,9 +64,9 @@ export class AuthService {
 
   async register(data: RegisterDto) {
     const role = data.role ?? UserRole.BUYER;
-    const cpf = data.cpf.replace(/\D/g, '');
+    const cpf = normalizeDocument(data.cpf);
     const phone = data.phone.replace(/\D/g, '');
-    const cnpj = data.cnpj?.replace(/\D/g, '');
+    const cnpj = data.cnpj ? normalizeDocument(data.cnpj) : undefined;
 
     if (data.password !== data.passwordConfirmation) {
       throw new BadRequestException('As senhas não conferem.');
@@ -75,7 +81,7 @@ export class AuthService {
       );
     }
 
-    if (!this.isValidCpf(cpf)) {
+    if (!isValidCpf(cpf)) {
       throw new BadRequestException('CPF inválido.');
     }
 
@@ -90,6 +96,66 @@ export class AuthService {
         'CPF é obrigatório para compradores e organizadores.',
       );
     }
+
+    if (
+      role === UserRole.ORGANIZER &&
+      !['PF', 'PJ'].includes(data.personType ?? '')
+    ) {
+      throw new BadRequestException(
+        'Escolha Pessoa Física ou Pessoa Jurídica.',
+      );
+    }
+    const company = role === UserRole.ORGANIZER && data.personType === 'PJ';
+    if (
+      company &&
+      (!cnpj || !isValidCnpj(cnpj) || !data.organizationName?.trim())
+    ) {
+      throw new BadRequestException('Informe um CNPJ válido e a razão social.');
+    }
+    if (
+      !company &&
+      (cnpj ||
+        data.organizationName ||
+        data.fantasyName ||
+        (role === UserRole.BUYER && data.personType))
+    ) {
+      throw new BadRequestException(
+        'Dados empresariais são exclusivos de organizadores PJ.',
+      );
+    }
+    if (
+      data.birthDate &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(data.birthDate) ||
+        !Number.isFinite(Date.parse(data.birthDate)) ||
+        new Date(data.birthDate).toISOString().slice(0, 10) !==
+          data.birthDate ||
+        new Date(data.birthDate) > new Date() ||
+        new Date(data.birthDate).getUTCFullYear() < 1900)
+    ) {
+      throw new BadRequestException('Data de nascimento inválida.');
+    }
+    const location = validateMunicipality(
+      data.state,
+      data.city,
+      data.municipalityCode,
+    );
+    const postalCode = data.postalCode?.replace(/[\s-]/g, '') ?? '';
+    if (
+      !/^\d{8}$/.test(postalCode) ||
+      !data.neighborhood?.trim() ||
+      !data.address?.trim() ||
+      !data.addressNumber?.trim()
+    ) {
+      throw new BadRequestException('Preencha o endereço completo.');
+    }
+    const address = {
+      ...location,
+      postalCode,
+      neighborhood: data.neighborhood.trim(),
+      address: data.address.trim(),
+      addressNumber: data.addressNumber.trim(),
+      addressComplement: data.addressComplement?.trim() || null,
+    };
 
     const existingUser = await this.prisma.user.findFirst({
       where: {
@@ -114,27 +180,68 @@ export class AuthService {
 
     const password = await bcrypt.hash(data.password, 12);
 
-    return this.prisma.user.create({
-      data: {
-        name: data.name,
-        email: data.email.toLowerCase(),
-        password,
-        phone,
-        cpf,
-        cnpj,
-        role,
-        city: data.city,
-        state: data.state,
-        consentRecords: {
-          create: [
-            { type: 'TERMS', version: 'cadastro', granted: true },
-            { type: 'PRIVACY', version: 'cadastro', granted: true },
-            { type: 'DATA_PROCESSING', version: 'cadastro', granted: true },
-          ],
+    try {
+      // A nested Prisma write commits user, address/profile and consents atomically.
+      return await this.prisma.user.create({
+        data: {
+          name: data.name.trim(),
+          email: data.email.toLowerCase(),
+          password,
+          phone,
+          cpf,
+          cnpj,
+          role,
+          city: location.city,
+          state: location.state,
+          ...(role === UserRole.BUYER
+            ? { buyerAddress: { create: address } }
+            : {
+                organizerProfile: {
+                  create: {
+                    ...address,
+                    personType: data.personType,
+                    fullName: data.name.trim(),
+                    cpf,
+                    phone,
+                    cnpj,
+                    organizationName: company
+                      ? data.organizationName!.trim()
+                      : null,
+                    birthDate: data.birthDate ? new Date(data.birthDate) : null,
+                  },
+                },
+                ...(company
+                  ? {
+                      organizerBrandProfile: {
+                        create: {
+                          publicName:
+                            data.fantasyName?.trim() ||
+                            data.organizationName!.trim(),
+                          fantasyName: data.fantasyName?.trim() || null,
+                        },
+                      },
+                    }
+                  : {}),
+              }),
+          consentRecords: {
+            create: [
+              { type: 'TERMS', version: 'cadastro', granted: true },
+              { type: 'PRIVACY', version: 'cadastro', granted: true },
+              { type: 'DATA_PROCESSING', version: 'cadastro', granted: true },
+            ],
+          },
         },
-      },
-      select: publicUserSelect,
-    });
+        select: publicUserSelect,
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('E-mail, CPF ou CNPJ já cadastrado.');
+      }
+      throw error;
+    }
   }
 
   async lookupBuyerByPhone(value: string) {
@@ -262,19 +369,6 @@ export class AuthService {
   private maskEmail(value: string) {
     const [name, domain] = value.split('@');
     return `${name.slice(0, 2)}${'*'.repeat(Math.max(2, name.length - 2))}@${domain}`;
-  }
-
-  private isValidCpf(value: string) {
-    if (!/^\d{11}$/.test(value) || /^(\d)\1{10}$/.test(value)) return false;
-    const digit = (length: number) => {
-      let total = 0;
-      for (let index = 0; index < length; index += 1) {
-        total += Number(value[index]) * (length + 1 - index);
-      }
-      const remainder = (total * 10) % 11;
-      return remainder === 10 ? 0 : remainder;
-    };
-    return digit(9) === Number(value[9]) && digit(10) === Number(value[10]);
   }
 
   async login(
