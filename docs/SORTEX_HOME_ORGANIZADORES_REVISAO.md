@@ -59,4 +59,18 @@ Guia externo: [SORTEX_AUTENTICACAO_SOCIAL_CONFIGURACAO.md](SORTEX_AUTENTICACAO_S
 
 ## Validação e publicação
 
-Registro final será acrescentado após conferir o endereço publicado. Verificações locais já realizadas: 275 testes unitários/44 suítes; 5 proteções do seed; 12 cenários novos de navegador em desktop/iPhone/Pixel Chromium; TypeScript e build da API aprovados. Resultados definitivos de build, lint, regressão pública e capturas serão registrados após o deploy.
+- **Página publicada:** https://sortex-fase1-review.netlify.app — código `8682e54c11e17fa313a54aaaa81a80042eb9e5e2`.
+- **Deploy:** `6af8df31c6d8058220f97370`. Build Next.js 16.2.12 e adaptador oficial aprovados; imagens estáticas e otimizadas efetivamente carregadas. Metadado HTML e `/health` confirmam o mesmo commit; `robots=noindex, nofollow` preservado.
+- **275 testes unitários / 44 suítes** da API aprovados, incluindo três cenários novos de agregação/segurança do dashboard. TypeScript API/frontend e builds NestJS/Neon/Next.js aprovados. Lint dos arquivos alterados: zero erros; três avisos de tipagem dos mocks no teste novo da API. Nenhuma verificação de segurança foi desativada.
+- **5 testes de proteção do seed** aprovados (`node scripts/seed-organizer-demo.test.cjs`), incluindo recusa de outro banco e configuração de pagamento/delivery insegura. Seed executado somente uma vez; complemento de 120 contatos fictícios inserido sem sobrescrever registros.
+- **12 cenários novos locais** e **60 cenários públicos** Playwright aprovados: desktop Chromium + iPhone 13/Pixel 7 emulados. Cobrem links/âncoras, planos sem preços históricos/percentuais, abertura de capturas em tamanho legível, imagens mobile próprias, cadastro comprador/PF/PJ, localidades indisponíveis, perfil/slogan e estados sociais anteriores. Testes de estados sociais usam fixtures identificadas; não representam Google/Apple reais.
+- **CI da branch aprovado no mesmo commit:** https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/43647694792. Workflow de validação isolada, sem deploy ou banco do ambiente existente.
+- **API/banco públicos conferidos:** ready/up; R$48.750, 1.250 participantes, 3 campanhas, 48.750 cotas e ticket R$39; histórico do gráfico soma R$48.750. CRM: 1.370 contatos, 1.125 clientes, 125 VIPs, 100 leads, 20 inativos, gasto total R$48.750. Consultas de contatos/segmentos HTTP200; Advisor com indicadores consistentes, simulação de 100 cotas a R$1 retornou R$100, chat confirmou modo DETERMINISTIC e rascunho exigiu confirmação. Nenhuma mensagem enviada.
+- Dashboard autenticado publicado conferido também no navegador: conta demonstrativa sem aviso de análise, gráfico de R$48.750 consistente e todos os quatro seletores de período funcionais.
+- Sessões sintéticas antigas de comprador/organizador renovadas, IDs/papéis e acesso ao perfil preservados; `personType` antigo continua NULL. Não confundir com restauração das contas reais do Mac.
+- Capturas da página publicada em desktop e emulação de iPhone verificadas: versão correta, imagens carregadas, nenhum erro JavaScript observado e sem transbordamento horizontal. [Capturas e instruções](review-assets/2026-11-14-organizadores/README.md).
+- Site existente conferido ainda no deploy `6af775bfbc4b537efbd7868f`; branches `main` e `infra/netlify-northflank-neon` preservadas. Prévia sem Git CD: deploy manual usa somente seu próprio site e seu próprio runtime; nenhum push para a branch do ambiente existente.
+- Conferência de segredos no diff e assets públicos sem valores privados encontrados. `.env`, tokens de sessão, senha demonstrativa e configuração de build local permanecem fora do Git.
+- Safari real/VoiceOver e Android físico **não executados**. O selo Free da Netlify aparece na prévia e foi mantido nas capturas; conferir sua interação com a rolagem nos aparelhos reais.
+
+Publicações posteriores apenas deste relatório/capturas não alteram a versão de código publicada acima.
