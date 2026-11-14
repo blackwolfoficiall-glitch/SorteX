@@ -1,4 +1,4 @@
-name: Deploy isolated Phase 1 preview
+name: Validate isolated Phase 1 preview
 on:
   push:
     branches: [feat/cadastro-identidades-institucional]
@@ -20,17 +20,6 @@ jobs:
       # Generation only. This dummy connection is never used for migrations.
       DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_build
     steps:
-      - name: Check isolated preview credential
-        id: credential
-        env:
-          PREVIEW_KEY: ${{ secrets.SORTEX_PREVIEW_NEON_API_KEY }}
-        run: |
-          if [ -z "$PREVIEW_KEY" ]; then
-            echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "Neon upload skipped: no dedicated preview credential. Build validation continues; the published environment credential is never used."
-          else
-            echo "available=true" >> "$GITHUB_OUTPUT"
-          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -41,13 +30,13 @@ jobs:
         working-directory: services/api
       - run: npx prisma generate
         working-directory: services/api
+      - run: npm test -- --runInBand
+        working-directory: services/api
+      - run: node infra/netlify-preview/sortex-api.test.mjs
+        working-directory: services/api
       - run: node scripts/deploy-phase1-preview.test.cjs
         working-directory: services/api
       - run: npm run build:neon
         working-directory: services/api
-      - name: Upload exclusively to the verified Free preview project
-        if: steps.credential.outputs.available == 'true'
+      - run: node scripts/build-netlify-phase1-preview.test.cjs
         working-directory: services/api
-        env:
-          NEON_API_KEY: ${{ secrets.SORTEX_PREVIEW_NEON_API_KEY }}
-        run: node scripts/deploy-phase1-preview.cjs

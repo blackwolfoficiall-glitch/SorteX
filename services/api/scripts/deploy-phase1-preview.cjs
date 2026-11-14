@@ -3,8 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
 const target = Object.freeze({ project: 'rough-cherry-09901194', branch: 'br-weathered-grass-bcisqlpm', slug: 'sortexpreview', database: 'sortex_preview' });
-async function deploy({ fetchImpl = fetch, readZip = () => fs.readFileSync(path.resolve(__dirname, '../dist/neon/sortex-api.zip')), key = process.env.NEON_API_KEY } = {}) {
-  if (!key) throw new Error('NEON_API_KEY must be provided by the protected Actions secret.');
+async function deploy({ fetchImpl = fetch, readZip = () => fs.readFileSync(path.resolve(__dirname, '../dist/neon/sortex-api.zip')), key = process.env.SORTEX_PREVIEW_NEON_API_KEY } = {}) {
+  if (!key) throw new Error('Only SORTEX_PREVIEW_NEON_API_KEY may be supplied for this optional preview uploader.');
   async function api(route, options = {}) {
     const r = await fetchImpl(`https://console.neon.tech/api/v2${route}`, { ...options, headers: { Authorization: `Bearer ${key}`, ...options.headers } });
     if (r.status === 404 && route.endsWith(`/functions/${target.slug}`)) return null;
