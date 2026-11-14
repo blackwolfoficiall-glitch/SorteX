@@ -951,6 +951,7 @@ model User {
   createdAt                  DateTime                  @default(now())
   updatedAt                  DateTime                  @updatedAt
   sessions                   AuthSession[]
+  socialIdentities           SocialIdentity[]
   passwordResetTokens        PasswordResetToken[]
   buyerAddress               BuyerAddress?
   organizerProfile           OrganizerProfile?
@@ -1005,6 +1006,39 @@ model User {
   organizerFeeChanges        OrganizerFeeHistory[]     @relation("OrganizerFeeHistoryAdmin")
   adminInvitesSent           AdminTeamInvitation[]     @relation("AdminInvitationInviter")
   adminInviteAccepted        AdminTeamInvitation[]     @relation("AdminInvitationAcceptedUser")
+}
+
+model SocialIdentity {
+  id            String   @id @default(cuid())
+  provider      String
+  subject       String
+  userId        String
+  providerEmail String?
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, subject])
+  @@unique([userId, provider])
+}
+
+// Short-lived server-side OIDC state. No provider access/refresh tokens stored.
+model SocialAuthAttempt {
+  id          String    @id
+  provider    String
+  browserHash String
+  nonce       String
+  verifier    String
+  expiresAt   DateTime
+  claimedAt   DateTime?
+  ticketHash  String?   @unique
+  subject     String?
+  email       String?
+  name        String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([expiresAt])
+  @@index([browserHash, expiresAt])
 }
 
 model AdminTeamInvitation {

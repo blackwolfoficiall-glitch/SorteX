@@ -16,6 +16,17 @@ jobs:
     if: github.ref == 'refs/heads/feat/cadastro-identidades-institucional'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres-review:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: sortex_ci
+          POSTGRES_PASSWORD: synthetic-ci-only
+          POSTGRES_DB: sortex_social_review
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U sortex_ci -d sortex_social_review"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       # Generation only. This dummy connection is never used for migrations.
       DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_build
@@ -32,6 +43,19 @@ jobs:
         working-directory: services/api
       - run: npm test -- --runInBand
         working-directory: services/api
+      - name: Migrate only the new isolated CI database
+        run: npx prisma migrate deploy
+        working-directory: services/api
+        env:
+          DATABASE_URL: postgresql://sortex_ci:synthetic-ci-only@127.0.0.1:5432/sortex_social_review
+      - name: Exercise OIDC with signed synthetic fixtures and local PostgreSQL
+        run: npm run test:e2e -- --runInBand social-auth.e2e-spec.ts
+        working-directory: services/api
+        env:
+          SORTEX_SOCIAL_TEST_DATABASE_URL: postgresql://sortex_ci:synthetic-ci-only@127.0.0.1:5432/sortex_social_review
+          APP_ENV: staging
+          NODE_ENV: test
+          EMAIL_DELIVERY_MODE: disabled
       - run: node infra/netlify-preview/sortex-api.test.mjs
         working-directory: services/api
       - run: node scripts/deploy-phase1-preview.test.cjs

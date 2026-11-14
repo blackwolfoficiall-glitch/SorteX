@@ -62,7 +62,10 @@ export class AuthService {
     return this.prisma.user.findMany({ select: publicUserSelect });
   }
 
-  async register(data: RegisterDto) {
+  async register(
+    data: RegisterDto,
+    store: Prisma.TransactionClient = this.prisma,
+  ) {
     const role = data.role ?? UserRole.BUYER;
     const cpf = normalizeDocument(data.cpf);
     const phone = data.phone.replace(/\D/g, '');
@@ -157,7 +160,7 @@ export class AuthService {
       addressComplement: data.addressComplement?.trim() || null,
     };
 
-    const existingUser = await this.prisma.user.findFirst({
+    const existingUser = await store.user.findFirst({
       where: {
         OR: [
           { email: data.email.toLowerCase() },
@@ -182,7 +185,7 @@ export class AuthService {
 
     try {
       // A nested Prisma write commits user, address/profile and consents atomically.
-      return await this.prisma.user.create({
+      return await store.user.create({
         data: {
           name: data.name.trim(),
           email: data.email.toLowerCase(),
@@ -486,6 +489,60 @@ export class AuthService {
 
   adminLogin(data: LoginDto, metadata: SessionMetadata = {}) {
     return this.login(data, metadata, true);
+  }
+
+  // The provider has already been verified by SocialAuthService. Issue the
+  // existing SorteX tokens/sessions; never accept external JWTs in our guards.
+  async socialSession(
+    userId: string,
+    store: Prisma.TransactionClient = this.prisma,
+  ) {
+    const user = await store.user.findUnique({ where: { id: userId } });
+    if (
+      !user ||
+      !user.isActive ||
+      user.status !== 'ACTIVE' ||
+      user.deletedAt ||
+      user.role === UserRole.ADMIN ||
+      user.forcePasswordReset ||
+      (user.lockedUntil && user.lockedUntil > new Date())
+    ) {
+      throw new ForbiddenException(
+        'Acesso social indisponível para esta conta. Use o acesso por e-mail ou contate o suporte.',
+      );
+    }
+    const session = await store.authSession.create({
+      data: {
+        userId,
+        refreshTokenHash: 'pending',
+        expiresAt: this.refreshTokenExpirationDate(),
+      },
+    });
+    const tokens = await this.issueTokens(user.id, user.role, session.id);
+    await store.authSession.update({
+      where: { id: session.id },
+      data: {
+        refreshTokenHash: await bcrypt.hash(tokens.refreshToken, 12),
+      },
+    });
+    await store.auditLog.create({
+      data: {
+        entityType: 'AuthSession',
+        entityId: session.id,
+        action: 'SOCIAL_LOGIN_SUCCEEDED',
+        actorUserId: user.id,
+        actorRole: user.role,
+      },
+    });
+    return {
+      ...tokens,
+      user: Object.fromEntries(
+        Object.keys(publicUserSelect).map((key) => [
+          key,
+          user[key as keyof typeof user],
+        ]),
+      ),
+    };
   }
 
   async refresh(refreshToken: string) {

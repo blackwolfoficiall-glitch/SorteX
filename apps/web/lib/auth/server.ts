@@ -24,7 +24,7 @@ const cookieBase = {
 
 async function upstreamFetch(path: string, init: RequestInit = {}) {
   const endpoint = `${API_URL}${path}`;
-  const timeoutSignal = AbortSignal.timeout(15_000);
+  const timeoutSignal = AbortSignal.timeout(path.startsWith('/auth/social/') ? 45_000 : 15_000);
   const signal = init.signal
     ? AbortSignal.any([init.signal, timeoutSignal])
     : timeoutSignal;

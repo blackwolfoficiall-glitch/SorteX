@@ -1,7 +1,9 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { Check, LoaderCircle } from "lucide-react";
+import SocialAccess from "./SocialAccess";
 import { AuthShell, authInputClass } from "./AuthShell";
 import AddressFields, {
   emptyAddress,
@@ -34,15 +36,17 @@ const phoneMask = (s: string) => {
 };
 export default function RegistrationForm({
   role,
+  social,
 }: {
   role: "BUYER" | "ORGANIZER";
+  social?: { name: string | null; email: string; provider: string };
 }) {
   const organizer = role === "ORGANIZER";
   const router = useRouter();
   const [personType, setPersonType] = useState<"PF" | "PJ">("PF");
   const company = organizer && personType === "PJ";
   const [form, setForm] = useState({
-    name: "",
+    name: social?.name || "",
     cpf: "",
     cnpj: "",
     organizationName: "",
@@ -59,6 +63,10 @@ export default function RegistrationForm({
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [created, setCreated] = useState(false);
+  const errorRef = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (error) errorRef.current?.focus();
+  }, [error]);
   const set = (key: keyof typeof form, value: string) =>
     setForm((current) => ({ ...current, [key]: value }));
   function next(event: FormEvent) {
@@ -73,7 +81,7 @@ export default function RegistrationForm({
   async function submit(event: FormEvent) {
     event.preventDefault();
     setError("");
-    if (form.password !== form.confirmation) {
+    if (!social && form.password !== form.confirmation) {
       setError("As senhas não conferem.");
       return;
     }
@@ -86,41 +94,49 @@ export default function RegistrationForm({
       const { addressReference: unusedReference, ...registrationAddress } =
         address;
       void unusedReference;
-      await authRequest("/api/auth/register", {
-        method: "POST",
-        body: JSON.stringify({
-          ...registrationAddress,
-          postalCode: address.postalCode.replace(/\D/g, ""),
-          name: form.name.trim(),
-          cpf: form.cpf.replace(/\D/g, ""),
-          phone: form.phone.replace(/\D/g, ""),
-          email: form.email.trim().toLowerCase(),
-          password: form.password,
-          passwordConfirmation: form.confirmation,
-          role,
-          ...(organizer ? { personType } : {}),
-          ...(company
-            ? {
-                cnpj: form.cnpj.replace(/[.\-/\s]/g, ""),
-                organizationName: form.organizationName.trim(),
-                fantasyName: form.fantasyName.trim() || undefined,
-              }
-            : {}),
-          termsAccepted: accepts[0],
-          privacyAccepted: accepts[1],
-          dataProcessingAccepted: accepts[2],
-        }),
-      });
+      await authRequest(
+        social ? "/api/auth/social/complete" : "/api/auth/register",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...registrationAddress,
+            postalCode: address.postalCode.replace(/\D/g, ""),
+            name: form.name.trim(),
+            cpf: form.cpf.replace(/\D/g, ""),
+            phone: form.phone.replace(/\D/g, ""),
+            ...(!social
+              ? {
+                  email: form.email.trim().toLowerCase(),
+                  password: form.password,
+                  passwordConfirmation: form.confirmation,
+                }
+              : {}),
+            role,
+            ...(organizer ? { personType } : {}),
+            ...(company
+              ? {
+                  cnpj: form.cnpj.replace(/[.\-/\s]/g, ""),
+                  organizationName: form.organizationName.trim(),
+                  fantasyName: form.fantasyName.trim() || undefined,
+                }
+              : {}),
+            termsAccepted: accepts[0],
+            privacyAccepted: accepts[1],
+            dataProcessingAccepted: accepts[2],
+          }),
+        },
+      );
       setCreated(true);
       if (organizer && logo) {
         try {
-          await authRequest("/api/auth/login", {
-            method: "POST",
-            body: JSON.stringify({
-              email: form.email.trim().toLowerCase(),
-              password: form.password,
-            }),
-          });
+          if (!social)
+            await authRequest("/api/auth/login", {
+              method: "POST",
+              body: JSON.stringify({
+                email: form.email.trim().toLowerCase(),
+                password: form.password,
+              }),
+            });
           await uploadOrganizerFile(logo, "LOGO");
         } catch {
           setError(
@@ -130,9 +146,13 @@ export default function RegistrationForm({
         }
       }
       router.push(
-        organizer
-          ? "/cadastro/sucesso-organizador"
-          : "/cadastro/sucesso-comprador",
+        social
+          ? organizer
+            ? "/dashboard"
+            : "/comprador"
+          : organizer
+            ? "/cadastro/sucesso-organizador"
+            : "/cadastro/sucesso-comprador",
       );
     } catch (cause) {
       setError(
@@ -181,17 +201,25 @@ export default function RegistrationForm({
           : "Participe de campanhas e acompanhe suas cotas."
       }
     >
-      <nav
-        aria-label="Etapas do cadastro"
-        className="mb-6 flex flex-wrap gap-2 text-sm"
-      >
+      {step === 1 && !social && <SocialAccess />}
+      {social && (
+        <p className="mb-5 rounded-xl border border-violet-100 bg-violet-50 p-3 text-xs leading-6 text-violet-900">
+          Identidade confirmada com{" "}
+          {social.provider === "google" ? "Google" : "Apple"}. Complete apenas
+          seus dados cadastrais. Não é necessário criar uma senha.
+        </p>
+      )}
+      <nav aria-label="Etapas do cadastro" className="sx-progress">
         {["Identificação", "Endereço", "Acesso"].map((title, i) => (
           <span
             key={title}
             aria-current={step === i + 1 ? "step" : undefined}
-            className={`rounded-full px-3 py-2 ${step === i + 1 ? "bg-violet-700 text-white" : "bg-zinc-100 text-zinc-600"}`}
+            className={step > i + 1 ? "sx-step-complete" : undefined}
           >
-            {i + 1}. {title}
+            <span className="sx-step-number">
+              {step > i + 1 ? <Check size={11} /> : i + 1}
+            </span>
+            {title}
           </span>
         ))}
       </nav>
@@ -199,11 +227,12 @@ export default function RegistrationForm({
         onSubmit={step < 3 ? next : submit}
         className="space-y-4"
         aria-busy={loading}
+        aria-describedby={error ? "registration-error" : undefined}
       >
         {step === 1 && (
           <>
             {organizer && (
-              <fieldset className="flex flex-wrap gap-4 rounded-xl border p-4">
+              <fieldset className="sx-person-types">
                 <legend className="px-1 font-semibold">
                   Tipo de organizador
                 </legend>
@@ -216,6 +245,7 @@ export default function RegistrationForm({
                   <label key={value} className="flex items-center gap-2">
                     <input
                       type="radio"
+                      aria-label={label}
                       name="personType"
                       value={value}
                       checked={personType === value}
@@ -277,17 +307,28 @@ export default function RegistrationForm({
         )}
         {step === 3 && (
           <>
-            {field("E-mail", "email", { type: "email", autoComplete: "email" })}
-            {field("Senha (mínimo 8 caracteres)", "password", {
-              type: "password",
-              minLength: 8,
-              autoComplete: "new-password",
-            })}
-            {field("Confirmar senha", "confirmation", {
-              type: "password",
-              minLength: 8,
-              autoComplete: "new-password",
-            })}
+            {social ? (
+              <p className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-sm">
+                E-mail confirmado: <strong>{social.email}</strong>
+              </p>
+            ) : (
+              <>
+                {field("E-mail", "email", {
+                  type: "email",
+                  autoComplete: "email",
+                })}
+                {field("Senha (mínimo 8 caracteres)", "password", {
+                  type: "password",
+                  minLength: 8,
+                  autoComplete: "new-password",
+                })}
+                {field("Confirmar senha", "confirmation", {
+                  type: "password",
+                  minLength: 8,
+                  autoComplete: "new-password",
+                })}
+              </>
+            )}
             {organizer && (
               <label className="block rounded-xl border border-dashed p-4 text-sm">
                 Logo do organizador (opcional)
@@ -332,7 +373,10 @@ export default function RegistrationForm({
         {error && (
           <p
             role="alert"
-            className="rounded-xl bg-red-50 p-3 text-sm text-red-700"
+            id="registration-error"
+            ref={errorRef}
+            tabIndex={-1}
+            className="sx-auth-alert"
           >
             {error}
           </p>
@@ -361,8 +405,15 @@ export default function RegistrationForm({
             <button
               type="submit"
               disabled={loading}
-              className="h-14 flex-1 rounded-2xl bg-violet-700 px-4 font-bold text-white disabled:opacity-60"
+              className="sx-auth-submit flex-1"
             >
+              {loading && (
+                <LoaderCircle
+                  size={16}
+                  className="animate-spin"
+                  aria-hidden="true"
+                />
+              )}
               {loading
                 ? "Criando conta…"
                 : step < 3
