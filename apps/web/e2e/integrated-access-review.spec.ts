@@ -51,7 +51,7 @@ test("institutional page presents the real product and working account paths", a
     /Sua campanha,\s*em outro nível\./,
   );
   await expect(
-    page.getByRole("link", { name: "Quero organizar" }),
+    page.getByRole("link", { name: "Quero organizar" }).first(),
   ).toHaveAttribute("href", "/cadastro/organizador");
   await expect(
     page.getByRole("link", { name: "Quero participar" }),

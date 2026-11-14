@@ -13,6 +13,7 @@ export default defineConfig({
   testMatch: [
     "registration-phase1.spec.ts",
     "integrated-access-review.spec.ts",
+    "organizer-home-review.spec.ts",
   ],
   ...(remote ? { globalSetup: "./e2e/preview-phase1-global-setup.ts" } : {}),
   workers: 1,

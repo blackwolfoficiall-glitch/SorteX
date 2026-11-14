@@ -4,12 +4,16 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowUpRight,
-  BarChart3,
   Check,
   ChevronDown,
   ClipboardList,
   Layers3,
   LayoutDashboard,
+  Sparkles,
+  Bot,
+  Palette,
+  Network,
+  CreditCard,
   Ticket,
   Users,
   Workflow,
@@ -28,26 +32,68 @@ export function SorteXMark({ light = false }: { light?: boolean }) {
 }
 const resources = [
   [
-    Layers3,
-    "Campanhas",
-    "Configure os detalhes, acompanhe o andamento e mantenha cada campanha no seu lugar.",
+    LayoutDashboard,
+    "Dashboard inteligente",
+    "Veja receita confirmada, pedidos, cotas, participantes e campanhas ativas. Compare vendas por período com dados da sua conta.",
+    "Operacional",
   ],
   [
     Users,
-    "Participantes",
-    "Consulte participantes e pedidos, com status e informações disponíveis no painel.",
+    "CRM para cultivar relações",
+    "Organize contatos, tags, segmentos, histórico e tarefas. Encontre públicos para acompanhar com mais contexto.",
+    "Módulo implementado",
   ],
   [
-    BarChart3,
-    "Vendas e relatórios",
-    "Acompanhe os indicadores e registros da campanha sem perder a visão do conjunto.",
+    Sparkles,
+    "IA SorteX com contexto",
+    "Consulte indicadores, priorize reservas e simule cenários. Sugestões e rascunhos sempre passam pela sua revisão.",
+    "Demonstração determinística",
   ],
   [
     Workflow,
-    "Sorteios e resultados",
-    "Defina as regras disponíveis e acompanhe a apuração e os resultados registrados.",
+    "Apuração com regras claras",
+    "Configure regras, simule a apuração e consulte o histórico. Os resultados da Federal são cadastrados e revisados manualmente.",
+    "Operacional · entrada manual",
   ],
 ] as const;
+const plans = [
+  {
+    name: "Inicial",
+    text: "Para estruturar as primeiras campanhas.",
+    benefits: [
+      "Gestão de campanhas e pedidos",
+      "Indicadores e acompanhamento",
+      "Identidade básica do organizador",
+    ],
+  },
+  {
+    name: "Profissional",
+    text: "Para organizar vendas e relacionamento.",
+    benefits: [
+      "CRM, contatos e segmentação",
+      "Módulo de afiliados",
+      "Personalização ampliada",
+    ],
+  },
+  {
+    name: "Avançado",
+    text: "Para explorar análises e automações.",
+    benefits: [
+      "IA SorteX e simulações",
+      "Automações internas",
+      "Estrutura para domínio próprio",
+    ],
+  },
+  {
+    name: "Empresarial",
+    text: "Para avaliar uma operação com necessidades próprias.",
+    benefits: [
+      "Limites a definir com a equipe",
+      "Recursos conforme escopo aprovado",
+      "Condições comerciais específicas",
+    ],
+  },
+];
 const faq = [
   [
     "O que posso fazer na SorteX?",
@@ -67,7 +113,7 @@ const faq = [
   ],
   [
     "Onde encontro planos e condições?",
-    "As condições comerciais devem ser confirmadas antes de contratar ou publicar uma campanha. Esta página não oferece planos nem apresenta preços ainda não validados para lançamento.",
+    "Os cards mostram a estrutura de planos. Mensalidades, limites, benefícios finais e demais condições aguardam confirmação comercial. Não há contratação ou cobrança nesta prévia.",
   ],
 ] as const;
 export default function ProductHome() {
@@ -82,12 +128,15 @@ export default function ProductHome() {
           <nav aria-label="Navegação principal" className="sx-main-nav">
             <a href="#recursos">Recursos</a>
             <a href="#como-funciona">Como funciona</a>
-            <a href="#duvidas">Dúvidas</a>
+            <a href="#planos">Planos</a>
           </nav>
           <nav aria-label="Acesso à conta" className="sx-access-nav">
             <Link href="/login">Entrar</Link>
-            <Link href="/cadastro" className="sx-button sx-button-white">
-              Criar conta <ArrowUpRight size={16} />
+            <Link
+              href="/cadastro/organizador"
+              className="sx-button sx-button-white"
+            >
+              Quero organizar <ArrowUpRight size={16} />
             </Link>
           </nav>
         </header>
@@ -98,7 +147,7 @@ export default function ProductHome() {
             <div className="sx-hero-copy">
               <p className="sx-eyebrow">
                 <span className="sx-live-dot" />
-                UMA NOVA VISÃO PARA SUAS CAMPANHAS
+                GESTÃO PARA QUEM ORGANIZA
               </p>
               <h1>
                 Sua campanha,
@@ -106,8 +155,9 @@ export default function ProductHome() {
                 em outro <em>nível.</em>
               </h1>
               <p className="sx-lead">
-                Da primeira ideia ao acompanhamento dos resultados. Um espaço
-                para organizar, participar e seguir cada etapa.
+                Campanhas, vendas e relacionamento com seus clientes em um só
+                lugar. Acompanhe os resultados e encontre o próximo passo da sua
+                operação com a SorteX.
               </p>
               <div className="sx-hero-actions">
                 <Link
@@ -144,10 +194,10 @@ export default function ProductHome() {
                 </div>
                 <Image
                   src="/product/dashboard-preview.png"
-                  width={1440}
-                  height={470}
+                  width={1160}
+                  height={850}
                   priority
-                  alt="Captura real do painel do organizador SorteX em ambiente de teste"
+                  alt="Painel real da conta Aurora Demo com vendas simuladas, três campanhas ativas e gráfico de receita"
                 />
               </div>
               <div className="sx-stage-caption">
@@ -162,16 +212,16 @@ export default function ProductHome() {
                 </span>
               </div>
               <p className="sx-demo-note">
-                Captura da plataforma. Ambiente de demonstração com dados
-                sintéticos.
+                Demonstração com dados fictícios · não são resultados de
+                clientes.
               </p>
             </div>
           </section>
           <div className="sx-container sx-capabilities">
             <span>
-              Uma plataforma.
+              Sua operação conectada.
               <br />
-              <strong>Dois jeitos de fazer parte.</strong>
+              <strong>Da campanha ao relacionamento.</strong>
             </span>
             <div>
               <Layers3 size={20} />
@@ -179,7 +229,7 @@ export default function ProductHome() {
             </div>
             <div>
               <Ticket size={20} />
-              Área do comprador
+              Base de clientes
             </div>
             <div>
               <ClipboardList size={20} />
@@ -187,94 +237,15 @@ export default function ProductHome() {
             </div>
           </div>
         </div>
-        <section id="por-dentro" className="sx-container sx-section">
-          <div className="sx-section-heading">
-            <div>
-              <p className="sx-eyebrow">MENOS DISPERSÃO. MAIS VISÃO.</p>
-              <h2>
-                O próximo passo da sua campanha
-                <br className="hidden md:block" /> começa com organização.
-              </h2>
-            </div>
-            <p>
-              Informações conectadas, caminhos claros e uma interface pensada
-              para o dia a dia de quem organiza e de quem participa.
-            </p>
-          </div>
-          <div className="sx-bento">
-            <article className="sx-campaign-card">
-              <div className="sx-card-title">
-                <span className="sx-icon-box">
-                  <Layers3 size={21} />
-                </span>
-                <span>01 / ORGANIZAR</span>
-              </div>
-              <h3>
-                Uma visão clara.
-                <br />
-                Cada campanha no seu lugar.
-              </h3>
-              <p>
-                Criação, status e acompanhamento reunidos na área do
-                organizador.
-              </p>
-              <div className="sx-screen sx-screen-secondary">
-                <Image
-                  src="/product/campaigns-preview.png"
-                  width={1440}
-                  height={980}
-                  alt="Tela real da gestão de campanhas da SorteX, com dados de teste"
-                />
-              </div>
-              <p className="sx-image-credit">
-                Interface real da SorteX · dados de teste
-              </p>
-            </article>
-            <div className="sx-bento-side">
-              <article className="sx-participant-card">
-                <div className="sx-card-title">
-                  <span className="sx-icon-box">
-                    <Ticket size={21} />
-                  </span>
-                  <span>02 / PARTICIPAR</span>
-                </div>
-                <h3>
-                  Seus títulos.
-                  <br />
-                  Seu acompanhamento.
-                </h3>
-                <p>
-                  Acesse as campanhas disponíveis e consulte títulos, pedidos e
-                  resultados na sua conta.
-                </p>
-                <Link href="/cadastro/comprador" className="sx-card-link">
-                  Conhecer a área do comprador <ArrowUpRight size={19} />
-                </Link>
-              </article>
-              <article className="sx-profile-card">
-                <div className="sx-profile-symbol" aria-hidden="true">
-                  X
-                </div>
-                <div>
-                  <p className="sx-eyebrow">DO SEU JEITO</p>
-                  <h3>Uma identidade para o seu trabalho.</h3>
-                  <p>
-                    Nome público, slogan e configurações de perfil no espaço do
-                    organizador.
-                  </p>
-                </div>
-              </article>
-            </div>
-          </div>
-        </section>
         <section id="recursos" className="sx-resource-section">
           <div className="sx-container sx-section">
             <p className="sx-eyebrow">FERRAMENTAS QUE TRABALHAM JUNTAS</p>
             <h2>Do detalhe à visão do todo.</h2>
             <div className="sx-resource-grid">
-              {resources.map(([Icon, title, copy]) => (
+              {resources.map(([Icon, title, copy, status]) => (
                 <article key={title}>
                   <Icon size={25} />
+                  <span className="sx-feature-status">{status}</span>
                   <h3>{title}</h3>
                   <p>{copy}</p>
                 </article>
@@ -287,105 +258,256 @@ export default function ProductHome() {
             </div>
           </div>
         </section>
-        <section id="como-funciona" className="sx-container sx-section">
+        <section
+          id="por-dentro"
+          className="sx-container sx-section sx-product-tour"
+        >
           <div className="sx-section-heading">
             <div>
-              <p className="sx-eyebrow">UM CAMINHO CLARO, DESDE O INÍCIO</p>
+              <p className="sx-eyebrow">VEJA O QUE MUDA NO SEU DIA A DIA</p>
               <h2>
-                Escolha como você
+                Gestão que você
                 <br />
-                quer fazer parte.
+                consegue enxergar.
               </h2>
             </div>
-            <Link href="/cadastro" className="sx-button sx-button-outline">
-              Encontrar meu perfil <ArrowRight size={17} />
-            </Link>
-          </div>
-          <div className="sx-journeys">
-            {[
-              {
-                title: "Para quem organiza",
-                icon: LayoutDashboard,
-                href: "/cadastro/organizador",
-                action: "Criar conta de organizador",
-                steps: [
-                  "Cadastre seu perfil PF ou PJ",
-                  "Complete as informações e acompanhe a análise",
-                  "Configure e acompanhe suas campanhas",
-                ],
-              },
-              {
-                title: "Para quem participa",
-                icon: Ticket,
-                href: "/cadastro/comprador",
-                action: "Criar conta de comprador",
-                steps: [
-                  "Crie sua conta de comprador",
-                  "Consulte as campanhas disponíveis",
-                  "Acompanhe seus títulos e resultados",
-                ],
-              },
-            ].map(({ title, icon: Icon, href, action, steps }) => (
-              <article key={title}>
-                <div className="sx-journey-title">
-                  <Icon size={24} />
-                  <h3>{title}</h3>
-                </div>
-                <ol>
-                  {steps.map((step, i) => (
-                    <li key={step}>
-                      <span>0{i + 1}</span>
-                      {step}
-                    </li>
-                  ))}
-                </ol>
-                <Link href={href}>
-                  {action}
-                  <ArrowUpRight size={18} />
-                </Link>
-              </article>
-            ))}
-          </div>
-        </section>
-        <section className="sx-manifesto">
-          <div className="sx-container sx-manifesto-inner">
-            <p className="sx-eyebrow">SOBRE A SORTEX</p>
-            <h2>
-              Tecnologia para organizar.
-              <br />
-              <em>Clareza para acompanhar.</em>
-            </h2>
             <p>
-              A SorteX conecta a gestão de campanhas à experiência de quem
-              participa. Nosso foco é dar a cada perfil um caminho organizado,
-              com informações acessíveis e acompanhamento das etapas.
+              Interface real, conta exclusiva de demonstração e dados fictícios
+              coerentes. Abra as capturas para ver os detalhes, inclusive no
+              celular.
             </p>
-            <div className="sx-manifesto-bottom">
-              <span>
-                Campanhas com identidade.
-                <br />
-                Gestão com contexto.
-              </span>
-              <Link href="/login" className="sx-button sx-button-white">
-                Acessar a plataforma <ArrowUpRight size={18} />
-              </Link>
+          </div>
+          <ProductDemo
+            title="Dashboard inteligente"
+            number="01"
+            icon={LayoutDashboard}
+            copy="Troque planilhas dispersas por uma visão conectada de receita confirmada, pedidos e campanhas. O gráfico usa as vendas registradas no período escolhido."
+            points={[
+              "Receita total, do dia e do mês",
+              "Participantes únicos e ticket médio",
+              "Campanhas ativas e cotas vendidas",
+            ]}
+            src="dashboard-preview.png"
+            width={1160}
+            height={850}
+          />
+          <ProductDemo
+            title="CRM: conheça sua base"
+            number="02"
+            icon={Users}
+            copy="Consulte o histórico de cada contato, organize segmentos e acompanhe tarefas. Diferencie clientes, VIPs e oportunidades de relacionamento."
+            points={[
+              "Tags, segmentos e filtros de contatos",
+              "Compras e histórico de relacionamento",
+              "Tarefas e notificações internas",
+            ]}
+            note="O catálogo configura CRM no Profissional. Envios externos de WhatsApp, SMS e e-mail ainda dependem de provedores e não estão ativos nesta prévia."
+            src="crm-preview.png"
+            width={1160}
+            height={850}
+          />
+          <ProductDemo
+            title="IA SorteX: do dado à próxima ação"
+            number="03"
+            icon={Bot}
+            copy="O Advisor reúne sinais da sua conta para destacar reservas expiradas, pagamentos pendentes e campanhas que merecem atenção. Você decide o que fazer."
+            points={[
+              "Resumo e alertas com evidências da conta",
+              "Simulações com premissas editáveis",
+              "Rascunhos de mensagens para revisão",
+            ]}
+            note="Na prévia, respostas por regras e modelos determinísticos, sem chamadas pagas. Geração por modelo externo exige configuração própria. O catálogo associa IA ao Avançado; projeções não são garantias."
+            src="ai-preview.png"
+            width={1160}
+            height={850}
+          />
+        </section>
+        <section id="como-funciona" className="sx-campaign-flow">
+          <div className="sx-container sx-section">
+            <div className="sx-section-heading">
+              <div>
+                <p className="sx-eyebrow">DA CRIAÇÃO À APURAÇÃO</p>
+                <h2>
+                  Uma campanha.
+                  <br />
+                  Etapas bem definidas.
+                </h2>
+              </div>
+              <p>
+                Prepare sua operação, acompanhe as vendas e mantenha as regras e
+                os registros acessíveis.
+              </p>
+            </div>
+            <ol className="sx-flow-steps">
+              {[
+                [
+                  "01",
+                  "Prepare sua conta",
+                  "Cadastre PF ou PJ, complete o perfil e acompanhe a análise do organizador.",
+                ],
+                [
+                  "02",
+                  "Configure sua campanha",
+                  "Defina cotas, valores, período e regras. Revise os detalhes antes da publicação.",
+                ],
+                [
+                  "03",
+                  "Acompanhe a operação",
+                  "Consulte pedidos e participantes; acompanhe confirmações e indicadores financeiros.",
+                ],
+                [
+                  "04",
+                  "Simule e registre",
+                  "Revise a fonte do resultado, simule a regra escolhida e consulte o histórico de apuração.",
+                ],
+              ].map(([n, title, copy]) => (
+                <li key={n}>
+                  <span>{n}</span>
+                  <h3>{title}</h3>
+                  <p>{copy}</p>
+                </li>
+              ))}
+            </ol>
+            <div className="sx-lottery-panel">
+              <div>
+                <p className="sx-eyebrow">LOTERIA FEDERAL</p>
+                <h3>
+                  O resultado é a referência.
+                  <br />A regra é da campanha.
+                </h3>
+                <p>
+                  Os números da extração devem ser conferidos na fonte oficial.
+                  Na SorteX, o resultado é cadastrado e revisado manualmente; a
+                  regra definida para cada campanha determina como esses números
+                  serão utilizados.
+                </p>
+                <p>
+                  O sistema oferece configuração de regras, simulação e
+                  histórico de apuração. A consulta automática externa está
+                  desativada. Não existe parceria ou autorização da Caixa
+                  implícita no uso desses recursos.
+                </p>
+              </div>
+              <div className="sx-screen">
+                <Image
+                  src="/product/campaigns-preview.png"
+                  width={1160}
+                  height={850}
+                  sizes="(max-width: 760px) 100vw, 50vw"
+                  alt="Campanhas reais da conta demonstrativa Aurora, com dados fictícios"
+                />
+                <a
+                  href="/product/campaigns-preview.png"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="sx-capture-link"
+                >
+                  Ampliar campanhas <ArrowUpRight size={15} />
+                </a>
+                <p className="sx-image-credit">
+                  Demonstração com dados fictícios
+                </p>
+              </div>
             </div>
           </div>
         </section>
-        <section id="planos" className="sx-container sx-plan-section">
-          <div>
-            <p className="sx-eyebrow">PLANOS E CONDIÇÕES</p>
-            <h2>Conheça antes de decidir.</h2>
-          </div>
-          <div>
+        <section className="sx-container sx-section">
+          <div className="sx-section-heading">
+            <div>
+              <p className="sx-eyebrow">MAIS CONTEXTO PARA SUA OPERAÇÃO</p>
+              <h2>As peças trabalham juntas.</h2>
+            </div>
             <p>
-              Os planos e as condições comerciais serão apresentados e
-              confirmados antes de qualquer contratação. Esta página não
-              habilita cobranças.
+              Recursos existentes, com limites e integrações apresentados de
+              forma clara.
             </p>
-            <Link href="/contato" className="sx-card-link">
-              Informações de contato <ArrowUpRight size={17} />
-            </Link>
+          </div>
+          <div className="sx-extras-grid">
+            {[
+              [
+                ClipboardList,
+                "Pedidos e financeiro",
+                "Filtros de pedidos, status de pagamento e demonstrativos para acompanhar os registros. Recebimentos e saques reais não estão habilitados nesta prévia.",
+              ],
+              [
+                Network,
+                "Afiliados",
+                "Módulo com programas, links, conversões e comissões. Previsto no catálogo Profissional; pagamentos reais de comissões dependem de homologação.",
+              ],
+              [
+                Palette,
+                "Sua identidade",
+                "Nome público, slogan e personalização da campanha. Domínio próprio depende de plano e configuração; a prévia usa endereço provisório.",
+              ],
+              [
+                CreditCard,
+                "Integrações de pagamento",
+                "Adaptadores e configuração de gateways existentes. Nesta demonstração, todos os pagamentos são simulados: nenhuma cobrança ou liquidação real.",
+              ],
+            ].map(([Icon, title, copy]) => {
+              const FeatureIcon = Icon as typeof ClipboardList;
+              return (
+                <article key={String(title)}>
+                  <FeatureIcon size={23} />
+                  <h3>{String(title)}</h3>
+                  <p>{String(copy)}</p>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+        <section id="planos" className="sx-plans-background">
+          <div className="sx-container sx-section">
+            <div className="sx-section-heading">
+              <div>
+                <p className="sx-eyebrow">PLANOS PARA CADA ETAPA</p>
+                <h2>
+                  Escolha o próximo passo
+                  <br />
+                  da sua gestão.
+                </h2>
+              </div>
+              <p>
+                Estrutura baseada no catálogo atual. Preços, benefícios e
+                limites finais aguardam confirmação comercial; esta prévia não
+                realiza contratação.
+              </p>
+            </div>
+            <div className="sx-pricing-grid">
+              {plans.map((plan) => (
+                <article key={plan.name}>
+                  <p className="sx-eyebrow">SORTEX {plan.name.toUpperCase()}</p>
+                  <h3>{plan.name}</h3>
+                  <p>{plan.text}</p>
+                  <div className="sx-plan-price">
+                    A confirmar
+                    <span>Mensalidade em R$ · periodicidade mensal</span>
+                  </div>
+                  <ul>
+                    {plan.benefits.map((benefit) => (
+                      <li key={benefit}>
+                        <Check size={15} />
+                        {benefit}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link
+                    className="sx-button sx-button-outline"
+                    href="/cadastro/organizador"
+                  >
+                    Conhecer o plano {plan.name} <ArrowUpRight size={15} />
+                  </Link>
+                  <small>Benefícios sujeitos à confirmação comercial.</small>
+                </article>
+              ))}
+            </div>
+            <p className="sx-plan-disclosure">
+              Falta confirmar a mensalidade vigente de Inicial, Profissional,
+              Avançado e Empresarial, os limites e as condições de cada opção.
+              Eventuais cobranças por uso, processamento e demais condições
+              deverão ser informadas antes de qualquer contratação. Nenhum plano
+              é ativado por estes botões.
+            </p>
           </div>
         </section>
         <section id="duvidas" className="sx-container sx-section sx-faq">
@@ -426,8 +548,11 @@ export default function ProductHome() {
               campanha em outro nível?
             </h2>
           </div>
-          <Link href="/cadastro" className="sx-button sx-button-purple">
-            Começar meu cadastro <ArrowUpRight size={19} />
+          <Link
+            href="/cadastro/organizador"
+            className="sx-button sx-button-purple"
+          >
+            Criar conta de organizador <ArrowUpRight size={19} />
           </Link>
         </section>
       </main>
@@ -453,10 +578,90 @@ export default function ProductHome() {
             name: "SorteX",
             applicationCategory: "BusinessApplication",
             operatingSystem: "Web",
-            description: "Plataforma para gestão e participação em campanhas.",
+            description:
+              "Plataforma de gestão de campanhas, vendas e relacionamento para organizadores.",
           }),
         }}
       />
     </div>
+  );
+}
+
+function ProductDemo({
+  title,
+  number,
+  icon: Icon,
+  copy,
+  points,
+  note,
+  src,
+  width,
+  height,
+}: {
+  title: string;
+  number: string;
+  icon: typeof LayoutDashboard;
+  copy: string;
+  points: string[];
+  note?: string;
+  src: string;
+  width: number;
+  height: number;
+}) {
+  return (
+    <article className="sx-demo-row">
+      <div className="sx-demo-copy">
+        <span className="sx-demo-index">{number} / SORTEX</span>
+        <Icon size={30} />
+        <h3>{title}</h3>
+        <p>{copy}</p>
+        <ul>
+          {points.map((point) => (
+            <li key={point}>
+              <Check size={16} />
+              {point}
+            </li>
+          ))}
+        </ul>
+        {note && <p className="sx-feature-note">{note}</p>}
+      </div>
+      <figure className="sx-demo-figure">
+        <div className="sx-screen">
+          <picture>
+            <source
+              media="(max-width: 760px)"
+              srcSet={`/product/${src.replace("-preview", "-mobile")}`}
+            />
+            <Image
+              className="sx-responsive-capture"
+              src={`/product/${src}`}
+              width={width}
+              height={height}
+              sizes="(max-width: 760px) 100vw, 65vw"
+              alt={`${title} — interface real com dados fictícios da conta Aurora Demo`}
+            />
+          </picture>
+        </div>
+        <figcaption>
+          <span>Demonstração com dados fictícios</span>
+          <a
+            className="sx-desktop-capture-link"
+            href={`/product/${src}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Ampliar captura <ArrowUpRight size={15} />
+          </a>
+          <a
+            className="sx-mobile-capture-link"
+            href={`/product/${src.replace("-preview", "-mobile")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Ampliar captura <ArrowUpRight size={15} />
+          </a>
+        </figcaption>
+      </figure>
+    </article>
   );
 }

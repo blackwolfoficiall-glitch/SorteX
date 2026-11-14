@@ -33,7 +33,7 @@ export function AuthShell({
           </p>
           <div className="sx-auth-mini-screen">
             <Image
-              src="/product/dashboard-preview.png"
+              src="/product/access-preview.png"
               width={1440}
               height={470}
               alt="Interface real do painel SorteX em ambiente de teste"
