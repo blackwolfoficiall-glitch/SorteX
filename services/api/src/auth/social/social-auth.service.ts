@@ -242,6 +242,11 @@ export class SocialAuthService {
     )
       throw new BadRequestException('Envie somente os dados complementares.');
     const password = randomBytes(48).toString('base64url'); // unknown to anyone; no credential is derived from provider data
+    if (fields.role === undefined || fields.role === null) {
+      throw new BadRequestException(
+        'Escolha Comprador ou Organizador para concluir o cadastro.',
+      );
+    }
     const dto = plainToInstance(RegisterDto, {
       ...fields,
       email: attempt.email,

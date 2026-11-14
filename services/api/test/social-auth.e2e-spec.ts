@@ -378,6 +378,16 @@ isolated(
     });
     it('rejects caller-supplied email/password and privilege escalation', async () => {
       const p = await pending();
+      for (const role of [undefined, null]) {
+        await request(app.getHttpServer())
+          .post('/auth/social/complete')
+          .send({
+            registrationToken: p.ticket,
+            browserProof,
+            fields: { ...fields(), role },
+          })
+          .expect(400);
+      }
       await request(app.getHttpServer())
         .post('/auth/social/complete')
         .send({
