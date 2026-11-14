@@ -20,6 +20,14 @@ jobs:
       # Generation only. This dummy connection is never used for migrations.
       DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_build
     steps:
+      - name: Check isolated preview credential
+        env:
+          PREVIEW_KEY: ${{ secrets.SORTEX_PREVIEW_NEON_API_KEY }}
+        run: |
+          if [ -z "$PREVIEW_KEY" ]; then
+            echo "::error::Configure SORTEX_PREVIEW_NEON_API_KEY for the isolated preview project; the published environment credential is never used."
+            exit 1
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -37,5 +45,5 @@ jobs:
       - name: Upload exclusively to the verified Free preview project
         working-directory: services/api
         env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_API_KEY: ${{ secrets.SORTEX_PREVIEW_NEON_API_KEY }}
         run: node scripts/deploy-phase1-preview.cjs

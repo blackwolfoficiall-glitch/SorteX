@@ -8,7 +8,7 @@ async function deploy({ fetchImpl = fetch, readZip = () => fs.readFileSync(path.
   async function api(route, options = {}) {
     const r = await fetchImpl(`https://console.neon.tech/api/v2${route}`, { ...options, headers: { Authorization: `Bearer ${key}`, ...options.headers } });
     if (r.status === 404 && route.endsWith(`/functions/${target.slug}`)) return null;
-    if (!r.ok) throw new Error(`Preview API HTTP ${r.status}; private response omitted.`);
+    if (!r.ok) throw new Error(`Preview API HTTP ${r.status} at ${route}; private response omitted.`);
     return r.json();
   }
   const result = await api(`/projects/${target.project}`);
