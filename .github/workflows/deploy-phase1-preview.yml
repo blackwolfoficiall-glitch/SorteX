@@ -21,12 +21,15 @@ jobs:
       DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_build
     steps:
       - name: Check isolated preview credential
+        id: credential
         env:
           PREVIEW_KEY: ${{ secrets.SORTEX_PREVIEW_NEON_API_KEY }}
         run: |
           if [ -z "$PREVIEW_KEY" ]; then
-            echo "::error::Configure SORTEX_PREVIEW_NEON_API_KEY for the isolated preview project; the published environment credential is never used."
-            exit 1
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Neon upload skipped: no dedicated preview credential. Build validation continues; the published environment credential is never used."
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -43,6 +46,7 @@ jobs:
       - run: npm run build:neon
         working-directory: services/api
       - name: Upload exclusively to the verified Free preview project
+        if: steps.credential.outputs.available == 'true'
         working-directory: services/api
         env:
           NEON_API_KEY: ${{ secrets.SORTEX_PREVIEW_NEON_API_KEY }}
