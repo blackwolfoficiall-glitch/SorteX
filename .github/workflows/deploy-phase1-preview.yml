@@ -1,0 +1,41 @@
+name: Deploy isolated Phase 1 preview
+on:
+  push:
+    branches: [feat/cadastro-identidades-institucional]
+    paths:
+      - services/api/**
+      - .github/workflows/deploy-phase1-preview.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sortex-phase1-preview-only
+  cancel-in-progress: false
+jobs:
+  preview:
+    if: github.ref == 'refs/heads/feat/cadastro-identidades-institucional'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Generation only. This dummy connection is never used for migrations.
+      DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: services/api/package-lock.json
+      - run: npm ci --include=dev --no-audit --no-fund
+        working-directory: services/api
+      - run: npx prisma generate
+        working-directory: services/api
+      - run: node scripts/deploy-phase1-preview.test.cjs
+        working-directory: services/api
+      - run: npm run build:neon
+        working-directory: services/api
+      - name: Upload exclusively to the verified Free preview project
+        working-directory: services/api
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: node scripts/deploy-phase1-preview.cjs
