@@ -57,7 +57,7 @@ Configuração externa posterior (somente sandbox):
 
 ## Verificações e limitações de distribuição
 
-Ver registro final abaixo. Testes de Node e chamadas reais à API são distintos de renderização RN Web/Chromium e de execução nativa. Linux tem Node24/Java21; não tem Android SDK/adb ou Xcode. Prebuild Android passou; `expo run:android --no-install --no-bundler` falhou por SDK ausente/`spawn adb ENOENT`. Não há APK. Conta Expo não está autenticada (estado local contém só UUID); não se iniciou EAS, não foram aceitos contratos ou habilitadas cobranças. Android/iPhone físicos, simulador nativo, SecureStore real, retorno por scheme, VoiceOver/TalkBack e Safari **não validados**.
+Ver registro final abaixo. Testes de Node e chamadas reais à API são distintos de renderização RN Web/Chromium e de execução nativa. Linux tem Node24/Java21; não tem Android SDK/adb ou Xcode. Prebuild Android passou; `expo run:android --no-install --no-bundler` falhou por SDK ausente/`spawn adb ENOENT`. O build local não gerou APK; a compilação remota posterior gerou os pacotes descritos na entrega final. Conta Expo não está autenticada (estado local contém só UUID); não se iniciou EAS, não foram aceitos contratos ou habilitadas cobranças. Android/iPhone físicos, escrita/restauração de sessão autenticada no dispositivo, retorno por scheme, VoiceOver/TalkBack e Safari **não validados**. A abertura nativa no simulador iOS foi validada posteriormente, conforme entrega final.
 
 Execução e comandos: [`../apps/mobile/README.md`](../apps/mobile/README.md). A etapa nativa depende de toolchain já licenciada do proprietário, ou conta Expo gratuita autenticada com cotas verificadas antes de build. Usar Expo Go compatível para núcleo de e-mail; desenvolvimento OAuth exige development build. Apple signing para aparelho real tem requisitos distintos do simulador; não prometer instalação iPhone sem assinatura.
 
@@ -97,3 +97,76 @@ Cadastro PJ completo em RN Web/Chromium passou com consultas de localidades bloq
 Foi inserida em transação uma campanha própria `DEMO · Resultado sintético mobile`, com pedido/título e registro de resultado confirmado **fictícios**, para o comprador/organizador PF criados nesta tarefa. `drawBasis=MANUAL_RESULT`, snapshots identificados como fixture e ganhador sem autorização de divulgação. Nenhum endpoint de execução de sorteio/pagamento, aprovação de conta, envio, prêmio ou integração foi chamado. Consulta positiva no app exibiu 000123 e omitiu o nome do ganhador, como esperado. Campanhas e indicadores da demonstração Aurora não foram modificados.
 
 A revisão de sessão adicionou trava de geração da sessão para impedir retry de uma requisição antiga sob outra conta, atualização tardia de perfil e mensagem tardia de logout. Foram removidas consultas duplicadas desnecessárias do perfil do comprador. TypeScript e 16 testes passaram. O APK anterior compilou no runner padrão; o artefato de entrega deve ser regenerado no commit que contém essas correções e conferido ao final. O manifesto do APK final será inspecionado para confirmar ausência das permissões bloqueadas.
+
+### Capacidades do build inicial e publicação pela integração
+
+O pacote Apple adicionava automaticamente `com.apple.developer.applesignin`, embora a integração estivesse pendente. Isso fez o Expo solicitar assinatura elegível mesmo no simulador. O build inicial de e-mail passou a excluir `expo-apple-authentication` do autolinking iOS e declarar `usesAppleSignIn=false`; o adaptador de preparação continua no código. A habilitação futura requer incluir o módulo, configurar a capacidade legitimamente e concluir o broker seguro, não apenas expor um botão. Nenhuma verificação de assinatura/JWT/CSRF foi desativada. Prebuild iOS novo gerou entitlements vazios; a conferência passou. Resolução real de módulos confirmou SecureStore presente e Apple não configurado ausente; 16 testes/TypeScript passaram.
+
+A credencial temporária do terminal expirou. A integração GitHub já conectada publicou as mesmas árvores, com atualização não forçada e verificação do head esperado. Os commits locais originais foram mantidos nas branches locais `local/mobile-cache-22e12d3` e `local/mobile-apple-gating-d5d6519`; os respectivos commits publicados registram a origem. Nenhuma credencial nova foi solicitada ou acesso ampliado.
+
+## Entrega final verificável
+
+Código dos dois pacotes: `f4386949348aa42cce19f5ed4247804e55ad06b7`, branch `feat/mobile-expo`. Execução [43704153974](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/43704153974): **Android e iOS simulator concluídos com sucesso**. Não houve publicação em loja, merge ou deploy no ambiente principal. O checkout anterior e seus arquivos não commitados continuam preservados; arquivos locais não versionados do Mac não estavam acessíveis neste executor e não foram alterados.
+
+| Plataforma | Artefato | Resultado |
+|---|---|---|
+| Android | [APK em ZIP](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/43704153974/artifacts/14157517257) | Release com assinatura de desenvolvimento verificada por `apksigner`; arm64; Android mínimo API24 (7.0), target API36. JS incluído, sem depender de Metro para abrir. |
+| iOS | [Pacote de simulador e captura](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/43704153974/artifacts/14158646604) | Release instalado e aberto no simulador, com captura nativa inspecionada. App universal x86_64/arm64 para simuladores Intel/Apple Silicon; iOS mínimo 16.4. Não é pacote de instalação em iPhone físico. |
+
+APK: 26.732.743 bytes; SHA256 `6ca183b1fbf7dfe97952b3149a7b28a4106354b369da8d414dac09336b74cb05`. Assinatura de teste, certificado SHA1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`; identificador `br.com.sortex.development`. Esse certificado é de desenvolvimento, não uma chave de publicação em loja.
+
+ZIP interno do app iOS: SHA256 `50d0c15ecc5200163da8df864ba11567c65eda24d762c4ff5fbe57a0b766578d`. Os ZIPs foram baixados, conferidos por CRC e inspecionados. O APK local confere com o SHA256 emitido pelo job. Arquivos locais, fora do Git: `apps/mobile/artifacts/SorteX-test-f438694.apk` e `apps/mobile/artifacts/SorteX-ios-simulator-f438694.app.zip`.
+
+O APK final não declara câmera, microfone, arquivos externos, sobreposição, vibração ou biometria. `android.permission.INTERNET` é a permissão de sistema de acesso ao dispositivo restante; há declarações internas das dependências (`DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` e `BIND_GET_INSTALL_REFERRER_SERVICE`). O aplicativo não usa atribuição de instalação nem biometria. A descrição de Face ID também foi removida do Info.plist e conferida no pacote final. SecureStore e sua criptografia continuam presentes; `requireAuthentication` não é usado. Nenhuma verificação de assinatura ou autenticação foi desativada.
+
+Os artefatos do GitHub têm retenção de **1 dia**: Android até 16/11/2026 10:35 UTC, iOS até 16/11/2026 10:55 UTC. Baixar e guardar localmente. Para regenerar o mesmo commit após expiração, usar a execução acima → **Re-run jobs**; isso usa novamente os runners padrão do repositório público. Não habilitar runners maiores, cobranças ou serviços adicionais.
+
+### Executar e testar
+
+Um clone separado preserva o projeto anterior:
+
+```sh
+git clone --branch feat/mobile-expo https://github.com/blackwolfoficiall-glitch/SorteX.git SorteX-mobile
+cd SorteX-mobile/apps/mobile
+npm ci
+npm run typecheck
+npm test
+npm start
+```
+
+**Android:** extrair o ZIP, abrir `app-release.apk` no gerenciador de arquivos e seguir a autorização de instalação do Android. Entrar somente com conta sintética do banco de testes. Pode funcionar sem manter o Mac ligado, porque o JavaScript está no APK e a API é remota; precisa de internet para os dados. Instalação/uso em Android físico ainda não executados neste trabalho.
+
+**Simulador iOS:** extrair o ZIP externo e depois `sortex-ios-simulator.zip`. Com Xcode/runtime já disponíveis, abrir o aplicativo Simulator e iniciar um iPhone com iOS>=16.4. No Mac:
+
+```sh
+xcrun simctl install booted /caminho/SorteXTeste.app
+xcrun simctl launch booted br.com.sortex.development
+```
+
+**iPhone real:** instalar Expo Go compatível com SDK58; autenticar a mesma conta Expo gratuita no Expo Go e no computador que executa Metro (`npx expo login`, fluxo oficial no navegador). Executar `npm start` e ler o QR. Este caminho mantém o computador/ambiente de desenvolvimento ativo. O login no navegador da CLI retorna para localhost do computador que iniciou o comando; não há transferência automática de sessão do Mac para o celular ou para este executor. Um build próprio para aparelho requer assinatura/provisionamento elegíveis; isso não foi configurado nem contratado. Google/Apple exigem development build e conclusão dos fluxos/configurações, conforme pendências acima.
+
+Para criar credenciais sintéticas sem colocá-las no chat, usar `npm run test:api` com o opt-in e um caminho privado **novo** em `/tmp`, conforme README. Ler o arquivo somente no próprio computador. Não reutilizar ou sobrescrever um arquivo de credenciais anterior; não usar contas/senhas/documentos reais.
+
+### Matriz real de validação
+
+| Verificação | Estado |
+|---|---|
+| TypeScript e 16 testes automatizados | Passaram localmente e no job Android. |
+| Build Android, integridade e assinatura | Passaram; permissões conferidas no APK final. |
+| Build iOS, instalação/abertura no simulador | Passaram; imagem nativa do login e Info.plist do pacote final conferidos. Restauração inicial sem sessão carregou a tela correta. |
+| Cadastro comprador/PF/PJ, perfis, slogan e sessão contra API real | Passaram no cliente de integração com banco isolado e dados sintéticos. |
+| Cadastro PJ completo, localidades indisponíveis, retorno entre etapas e endereço persistido | Passaram na interface RN Web/Chromium com a API real de teste. |
+| Login, navegação, pedidos/títulos e perfil | Passaram em RN Web/Chromium; compradores/organizador sintéticos anteriores consultados. |
+| Resultado confirmado e privacidade do ganhador | Passaram em RN Web/Chromium com fixture própria; nenhuma apuração real executada. |
+| Recuperação | API com token sintético de uso único, replay rejeitado e sessão anterior revogada; entrega de e-mail está desativada. |
+| Fluxos autenticados completos no simulador nativo e armazenamento após login | Ainda pendentes de teste nativo interativo; não confundir com os testes de Node/RN Web. |
+| iPhone/Android físicos, VoiceOver/TalkBack e Safari real | Pendentes. Nenhuma validação física declarada. |
+| Google/Apple | Preparação parcial; broker/adaptadores, credenciais e habilitação externa pendentes. Não funcionais. |
+| Endereço completo do comprador após cadastro | Cadastro/persistência disponíveis; edição posterior depende de extensão do contrato de perfil. |
+| CRM/IA, financeiro, afiliados, uploads e demais ações nativas | Mantidos no plano acima; nenhuma tela vazia foi apresentada como módulo concluído. |
+
+### Continuidade
+
+A primeira versão é executável e revisável; não é uma declaração de conclusão de todos os módulos. Priorizar teste físico do núcleo com dados sintéticos, concluir o broker social com as configurações legítimas e ampliar o perfil somente com contrato de API auditado. Não conectar este build ao banco principal ou habilitar cobranças/mensagens reais. Código/estilo do site aprovado permanecem intactos.
+
+Em nova sessão: selecionar o repositório original e `feat/mobile-expo`, ler este documento e `apps/mobile/README.md`, verificar Git status/HEAD antes de comandos, preservar alterações locais, usar apenas a API e o Neon isolados aqui identificados. Não reconstruir, resetar, fazer merge/deploy principal, publicar em lojas ou contratar recursos pagos. Considerar Google/Apple e as validações físicas pendentes até evidências novas.
