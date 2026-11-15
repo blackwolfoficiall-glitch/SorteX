@@ -7,7 +7,11 @@ const config: ExpoConfig = {
   orientation: "portrait",
   userInterfaceStyle: "light",
   icon: "./assets/icon.png",
-  ios: { bundleIdentifier: "br.com.sortex.development", supportsTablet: true },
+  ios: {
+    bundleIdentifier: "br.com.sortex.development",
+    supportsTablet: true,
+    usesAppleSignIn: false,
+  },
   android: {
     package: "br.com.sortex.development",
     permissions: [],

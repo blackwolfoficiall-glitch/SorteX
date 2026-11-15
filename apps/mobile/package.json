@@ -42,5 +42,14 @@
     "typescript": "~6.0.3",
     "tsx": "^4.20.0",
     "@types/node": "^24.0.0"
+  },
+  "expo": {
+    "autolinking": {
+      "ios": {
+        "exclude": [
+          "expo-apple-authentication"
+        ]
+      }
+    }
   }
 }
