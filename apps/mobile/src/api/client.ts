@@ -264,18 +264,25 @@ export class SortexClient {
   }
   async logout() {
     const access = this.tokens?.accessToken;
-    await this.clear();
+    let storageError: unknown;
+    try {
+      await this.clear();
+    } catch (e) {
+      storageError = e;
+    }
     if (access)
       try {
         await this.raw("/auth/logout", "POST", {}, access);
       } catch {
-        this.emit({
-          status: "signedOut",
-          user: null,
-          message:
-            "Sessão removida do aparelho. Sem rede, a revogação remota não foi confirmada; você pode encerrar outras sessões ao entrar novamente.",
-        });
+        if (!storageError)
+          this.emit({
+            status: "signedOut",
+            user: null,
+            message:
+              "Sessão removida do aparelho. Sem rede, a revogação remota não foi confirmada; você pode encerrar outras sessões ao entrar novamente.",
+          });
       }
+    if (storageError) throw storageError;
   }
   async reloadUser() {
     const user = this.appUser(await this.request<User>("/auth/me"));

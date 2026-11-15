@@ -985,7 +985,7 @@ function MainTabs() {
 export default function App() {
   const auth = useSyncExternalStore(client.subscribe, client.snapshot);
   useEffect(() => {
-    void client.restore();
+    void client.restore().catch(() => {});
   }, []);
   return (
     <SafeAreaProvider>
@@ -1000,12 +1000,18 @@ export default function App() {
           <Notice error message={auth.message || "Sem conexão."} />
           <Button
             title="Tentar novamente"
-            onPress={() => void client.restore()}
+            onPress={() =>
+              void (
+                auth.status === "storageError"
+                  ? client.logout()
+                  : client.restore()
+              ).catch(() => {})
+            }
           />
           <Button
             secondary
             title="Remover sessão deste aparelho"
-            onPress={() => void client.logout()}
+            onPress={() => void client.logout().catch(() => {})}
           />
         </Page>
       ) : (
