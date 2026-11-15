@@ -71,9 +71,14 @@ jobs:
       - name: Capture native launch
         run: |
           xcrun simctl io booted screenshot /tmp/sortex-ios-simulator.png
+          app_path="$(xcrun simctl get_app_container booted br.com.sortex.development app)"
+          ditto -c -k --sequesterRsrc --keepParent "$app_path" /tmp/sortex-ios-simulator.zip
+          test "$(stat -f %z /tmp/sortex-ios-simulator.zip)" -lt 100000000
       - uses: actions/upload-artifact@v4
         with:
           name: sortex-ios-simulator-screen-${{ github.sha }}
-          path: /tmp/sortex-ios-simulator.png
+          path: |
+            /tmp/sortex-ios-simulator.png
+            /tmp/sortex-ios-simulator.zip
           retention-days: 1
           if-no-files-found: error

@@ -991,12 +991,12 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar style="dark" />
       {auth.status === "restoring" ? (
-        <Page title="SorteX">
+        <Page title="SorteX" standalone>
           <ActivityIndicator color={colors.purple} />
           <Notice message="Restaurando sua sessão com segurança…" />
         </Page>
       ) : auth.status === "offline" || auth.status === "storageError" ? (
-        <Page title="Vamos reconectar">
+        <Page title="Vamos reconectar" standalone>
           <Notice error message={auth.message || "Sem conexão."} />
           <Button
             title="Tentar novamente"

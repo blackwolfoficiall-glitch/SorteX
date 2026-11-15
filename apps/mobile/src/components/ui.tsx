@@ -80,12 +80,21 @@ export const s = StyleSheet.create({
 export function Page({
   children,
   title,
+  standalone = false,
 }: {
   children: React.ReactNode;
   title?: string;
+  standalone?: boolean;
 }) {
   return (
-    <SafeAreaView edges={["left", "right", "bottom"]} style={s.page}>
+    <SafeAreaView
+      edges={
+        standalone
+          ? ["top", "left", "right", "bottom"]
+          : ["left", "right", "bottom"]
+      }
+      style={s.page}
+    >
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
