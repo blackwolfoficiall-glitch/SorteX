@@ -1,5 +1,11 @@
 import Link from "next/link";
-import Image from "next/image";
+import type { ReactNode } from "react";
+import {
+  DashboardIllustration,
+  CrmIllustration,
+  AiIllustration,
+  LotteryIllustration,
+} from "./ProductIllustrations";
 import {
   ArrowDown,
   ArrowRight,
@@ -183,22 +189,10 @@ export default function ProductHome() {
                   <LayoutDashboard size={15} />
                   Seu espaço de gestão
                 </span>
-                <span className="sx-small-tag">Interface real</span>
+                <span className="sx-small-tag">Visão ilustrada</span>
               </div>
-              <div className="sx-screen sx-screen-hero">
-                <div className="sx-window-bar">
-                  <span />
-                  <span />
-                  <span />
-                  <i>sortex · painel do organizador</i>
-                </div>
-                <Image
-                  src="/product/dashboard-preview.png"
-                  width={1160}
-                  height={850}
-                  priority
-                  alt="Painel real da conta Aurora Demo com vendas simuladas, três campanhas ativas e gráfico de receita"
-                />
+              <div className="sx-hero-illustration">
+                <DashboardIllustration hero />
               </div>
               <div className="sx-stage-caption">
                 <span>
@@ -211,10 +205,6 @@ export default function ProductHome() {
                   <Check size={14} /> Resultados
                 </span>
               </div>
-              <p className="sx-demo-note">
-                Demonstração com dados fictícios · não são resultados de
-                clientes.
-              </p>
             </div>
           </section>
           <div className="sx-container sx-capabilities">
@@ -272,9 +262,9 @@ export default function ProductHome() {
               </h2>
             </div>
             <p>
-              Interface real, conta exclusiva de demonstração e dados fictícios
-              coerentes. Abra as capturas para ver os detalhes, inclusive no
-              celular.
+              Campanhas, clientes e decisões conectados. Composições
+              ilustrativas mostram como cada recurso pode apoiar a gestão, com
+              exemplos simples e legíveis também no celular.
             </p>
           </div>
           <ProductDemo
@@ -287,9 +277,7 @@ export default function ProductHome() {
               "Participantes únicos e ticket médio",
               "Campanhas ativas e cotas vendidas",
             ]}
-            src="dashboard-preview.png"
-            width={1160}
-            height={850}
+            visual={<DashboardIllustration />}
           />
           <ProductDemo
             title="CRM: conheça sua base"
@@ -302,9 +290,7 @@ export default function ProductHome() {
               "Tarefas e notificações internas",
             ]}
             note="O catálogo configura CRM no Profissional. Envios externos de WhatsApp, SMS e e-mail ainda dependem de provedores e não estão ativos nesta prévia."
-            src="crm-preview.png"
-            width={1160}
-            height={850}
+            visual={<CrmIllustration />}
           />
           <ProductDemo
             title="IA SorteX: do dado à próxima ação"
@@ -317,9 +303,7 @@ export default function ProductHome() {
               "Rascunhos de mensagens para revisão",
             ]}
             note="Na prévia, respostas por regras e modelos determinísticos, sem chamadas pagas. Geração por modelo externo exige configuração própria. O catálogo associa IA ao Avançado; projeções não são garantias."
-            src="ai-preview.png"
-            width={1160}
-            height={850}
+            visual={<AiIllustration />}
           />
         </section>
         <section id="como-funciona" className="sx-campaign-flow">
@@ -388,26 +372,7 @@ export default function ProductHome() {
                   implícita no uso desses recursos.
                 </p>
               </div>
-              <div className="sx-screen">
-                <Image
-                  src="/product/campaigns-preview.png"
-                  width={1160}
-                  height={850}
-                  sizes="(max-width: 760px) 100vw, 50vw"
-                  alt="Campanhas reais da conta demonstrativa Aurora, com dados fictícios"
-                />
-                <a
-                  href="/product/campaigns-preview.png"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="sx-capture-link"
-                >
-                  Ampliar campanhas <ArrowUpRight size={15} />
-                </a>
-                <p className="sx-image-credit">
-                  Demonstração com dados fictícios
-                </p>
-              </div>
+              <LotteryIllustration />
             </div>
           </div>
         </section>
@@ -594,9 +559,7 @@ function ProductDemo({
   copy,
   points,
   note,
-  src,
-  width,
-  height,
+  visual,
 }: {
   title: string;
   number: string;
@@ -604,9 +567,7 @@ function ProductDemo({
   copy: string;
   points: string[];
   note?: string;
-  src: string;
-  width: number;
-  height: number;
+  visual: ReactNode;
 }) {
   return (
     <article className="sx-demo-row">
@@ -625,43 +586,7 @@ function ProductDemo({
         </ul>
         {note && <p className="sx-feature-note">{note}</p>}
       </div>
-      <figure className="sx-demo-figure">
-        <div className="sx-screen">
-          <picture>
-            <source
-              media="(max-width: 760px)"
-              srcSet={`/product/${src.replace("-preview", "-mobile")}`}
-            />
-            <Image
-              className="sx-responsive-capture"
-              src={`/product/${src}`}
-              width={width}
-              height={height}
-              sizes="(max-width: 760px) 100vw, 65vw"
-              alt={`${title} — interface real com dados fictícios da conta Aurora Demo`}
-            />
-          </picture>
-        </div>
-        <figcaption>
-          <span>Demonstração com dados fictícios</span>
-          <a
-            className="sx-desktop-capture-link"
-            href={`/product/${src}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Ampliar captura <ArrowUpRight size={15} />
-          </a>
-          <a
-            className="sx-mobile-capture-link"
-            href={`/product/${src.replace("-preview", "-mobile")}`}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Ampliar captura <ArrowUpRight size={15} />
-          </a>
-        </figcaption>
-      </figure>
+      <div className="sx-demo-visual">{visual}</div>
     </article>
   );
 }

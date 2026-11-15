@@ -56,34 +56,13 @@ test("institutional page presents the real product and working account paths", a
   await expect(
     page.getByRole("link", { name: "Quero participar" }),
   ).toHaveAttribute("href", "/cadastro/comprador");
-  for (const src of [
-    "/product/dashboard-preview.png",
-    "/product/campaigns-preview.png",
-  ])
-    expect((await page.request.get(src)).status()).toBe(200);
-  // A static PNG returning 200 is insufficient: exercise the actual Next/Image
-  // URLs rendered by the deployed adapter, including the below-fold capture.
-  await page.locator("img").evaluateAll((images) =>
-    images.forEach((image) => {
-      if (image instanceof HTMLImageElement) image.loading = "eager";
-    }),
+  await expect(page.locator("main img, main picture, main canvas")).toHaveCount(
+    0,
   );
-  await expect
-    .poll(() =>
-      page
-        .locator("img")
-        .evaluateAll(
-          (images) =>
-            images.length >= 2 &&
-            images.every(
-              (image) =>
-                image instanceof HTMLImageElement &&
-                image.complete &&
-                image.naturalWidth > 0,
-            ),
-        ),
-    )
-    .toBe(true);
+  await expect(page.locator("figure[data-illustration]")).toHaveCount(5);
+  await expect(
+    page.getByRole("img", { name: /Evolução fictícia acumulada/ }),
+  ).toHaveCount(2);
   await page.getByText("O que posso fazer na SorteX?", { exact: true }).click();
   await expect(page.locator("details[open]")).toContainText(
     "Organizadores encontram ferramentas",

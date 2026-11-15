@@ -78,44 +78,67 @@ test("plan cards disclose pending approval without old prices or percentage clai
   await expect(plans).toContainText("Nenhum plano é ativado por estes botões");
 });
 
-test("real capture variants load and can be opened at readable size", async ({
+test("commercial compositions use crisp HTML/SVG, stay compact and have no fake controls", async ({
   page,
   isMobile,
 }) => {
+  const captureRequests: string[] = [];
+  page.on("request", (request) => {
+    if (/\/product\/.*\.png/.test(request.url()))
+      captureRequests.push(request.url());
+  });
   await page.goto("/");
-  const figures = page.locator(".sx-demo-figure");
-  await expect(figures).toHaveCount(3);
-  for (const figure of await figures.all()) {
+  const figures = page.locator("figure[data-illustration]");
+  await expect(figures).toHaveCount(5);
+  for (const type of ["dashboard", "crm", "ai", "lottery"]) {
+    const figure = page.locator(`figure[data-illustration="${type}"]`).last();
     await figure.scrollIntoViewIfNeeded();
-    const image = figure.locator("img");
-    await expect
-      .poll(() =>
-        image.evaluate(
-          (node) =>
-            (node as HTMLImageElement).complete &&
-            (node as HTMLImageElement).naturalWidth > 0,
-        ),
-      )
-      .toBe(true);
-    expect(
-      await image.evaluate((node) => (node as HTMLImageElement).currentSrc),
-    ).toContain(isMobile ? "-mobile.png" : "_next/image");
-    const zoom = figure
-      .getByRole("link", { name: "Ampliar captura", exact: true })
-      .filter({ visible: true });
-    const [popup] = await Promise.all([
-      page.waitForEvent("popup"),
-      zoom.click(),
-    ]);
-    await popup.waitForLoadState();
-    expect(popup.url()).toContain("/product/");
-    expect((await popup.request.get(popup.url())).status()).toBe(200);
-    await popup.close();
-    await expect(figure).toContainText("Demonstração com dados fictícios");
+    await expect(figure).toBeVisible();
+    await expect(figure.locator("figcaption")).toHaveText(
+      "Ilustração demonstrativa · dados fictícios",
+    );
+    await expect(
+      figure.locator("img, picture, canvas, button, input, a"),
+    ).toHaveCount(0);
+    if (isMobile) {
+      const box = await figure.boundingBox();
+      expect(box?.height).toBeLessThan(520);
+      expect(
+        await figure.evaluate((node) => node.scrollWidth <= node.clientWidth),
+      ).toBe(true);
+    }
   }
+  expect(captureRequests).toEqual([]);
+  await expect(
+    page.getByRole("link", { name: /Ampliar captura|Ampliar campanhas/ }),
+  ).toHaveCount(0);
   expect(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,
     ),
   ).toBe(true);
+});
+
+test("illustrations identify examples and do not imply an executed draw or autonomous messaging", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const dashboard = page.locator('[data-illustration="dashboard"]').last();
+  await expect(dashboard).toContainText("R$ 48.750");
+  await expect(dashboard).toContainText("Vendas no exemplo");
+  await expect(page.locator('[data-illustration="ai"]')).toContainText(
+    "Conversa ilustrativa",
+  );
+  await expect(page.locator('[data-illustration="ai"]')).toContainText(
+    "Nenhum envio automático",
+  );
+  await expect(page.locator('[data-illustration="lottery"]')).toContainText(
+    "1º prêmio fictício",
+  );
+  await expect(page.locator('[data-illustration="lottery"]')).toContainText(
+    "342",
+  );
+  await expect(page.locator('[data-illustration="lottery"]')).toContainText(
+    "não executa uma apuração",
+  );
 });

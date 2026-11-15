@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import ProductHome from "@/components/marketing/ProductHome";
 import "./sortex-organizer-home.css";
+import "./sortex-product-illustrations.css";
 export const metadata: Metadata = {
   title: "SorteX — Sua campanha, em outro nível",
   description:
