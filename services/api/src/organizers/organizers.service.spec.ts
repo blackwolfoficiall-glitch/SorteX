@@ -130,6 +130,64 @@ describe('OrganizersService', () => {
     service = module.get(OrganizersService);
   });
 
+  it.each([
+    VerificationStatus.REJECTED,
+    VerificationStatus.CORRECTION_REQUESTED,
+  ])('resets review on the profile rather than User (%s)', async (status) => {
+    prisma.user.findFirst = jest.fn().mockResolvedValue(null);
+    prisma.organizerProfile.findUnique.mockResolvedValue(
+      profile({ verificationStatus: status }),
+    );
+    prisma.organizerProfile.updateMany = jest.fn();
+    prisma.user.update.mockResolvedValue(authenticatedOrganizer);
+    await service.updateMyAccount(authenticatedOrganizer, {
+      name: 'Novo nome',
+    });
+    const userData = prisma.user.update.mock.calls[0][0].data;
+    expect(userData).not.toHaveProperty('verificationStatus');
+    expect(userData).not.toHaveProperty('reviewedById');
+    expect(userData.verified).toBe(false);
+    expect(prisma.organizerProfile.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          verificationStatus: VerificationStatus.PENDING,
+          reviewedAt: null,
+          reviewedById: null,
+        }),
+      }),
+    );
+    expect(
+      prisma.organizerProfile.updateMany.mock.calls[0][0].data,
+    ).not.toHaveProperty('rejectionReason');
+    expect(prisma.auditLog.create).toHaveBeenCalled();
+  });
+
+  it('does not reclassify a legacy profile or invalidate an unchanged legacy CPF during unrelated edits', async () => {
+    prisma.organizerProfile.upsert.mockResolvedValue(profile());
+    prisma.organizerProfile.update.mockResolvedValue(profile());
+    await service.updateMyProfile(authenticatedOrganizer, {
+      phone: '71999991111',
+    });
+    expect(
+      prisma.organizerProfile.update.mock.calls[0][0].data,
+    ).not.toHaveProperty('personType');
+  });
+
+  it('rejects modified invalid documents and inconsistent municipalities before writing', async () => {
+    prisma.organizerProfile.upsert.mockResolvedValue(profile());
+    await expect(
+      service.updateMyProfile(authenticatedOrganizer, { cpf: '11111111111' }),
+    ).rejects.toThrow('CPF inválido');
+    await expect(
+      service.updateMyProfile(authenticatedOrganizer, {
+        city: 'Salvador',
+        state: 'SP',
+        municipalityCode: '2927408',
+      }),
+    ).rejects.toThrow('município válido');
+    expect(prisma.user.update).not.toHaveBeenCalled();
+  });
+
   it('cria o perfil inicial a partir do usuário autenticado', async () => {
     prisma.organizerProfile.upsert.mockResolvedValue(profile());
 

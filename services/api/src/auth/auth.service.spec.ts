@@ -108,6 +108,14 @@ describe('AuthService', () => {
     );
 
     const result = await service.register({
+      city: 'Salvador',
+      state: 'BA',
+      municipalityCode: '2927408',
+      postalCode: '40000000',
+      address: 'Rua Sintética',
+      neighborhood: 'Centro',
+      addressNumber: '10',
+
       name: user.name,
       email: user.email.toUpperCase(),
       password: 'senha-segura',
@@ -142,6 +150,14 @@ describe('AuthService', () => {
     );
 
     await service.register({
+      city: 'Salvador',
+      state: 'BA',
+      municipalityCode: '2927408',
+      postalCode: '40000000',
+      address: 'Rua Sintética',
+      neighborhood: 'Centro',
+      addressNumber: '10',
+
       name: 'Organizador Teste',
       email: 'organizador@sortex.test',
       password: 'senha-segura',
@@ -152,6 +168,7 @@ describe('AuthService', () => {
       phone: '5571999990001',
       cpf: '11144477735',
       role: UserRole.ORGANIZER,
+      personType: 'PF',
     });
 
     expect(prisma.user.create).toHaveBeenCalledWith({
@@ -167,6 +184,14 @@ describe('AuthService', () => {
   it('impede cadastro público de administrador', async () => {
     await expect(
       service.register({
+        city: 'Salvador',
+        state: 'BA',
+        municipalityCode: '2927408',
+        postalCode: '40000000',
+        address: 'Rua Sintética',
+        neighborhood: 'Centro',
+        addressNumber: '10',
+
         name: 'Administrador',
         email: 'admin@sortex.test',
         password: 'senha-segura',
@@ -212,6 +237,14 @@ describe('AuthService', () => {
     });
     await expect(
       service.register({
+        city: 'Salvador',
+        state: 'BA',
+        municipalityCode: '2927408',
+        postalCode: '40000000',
+        address: 'Rua Sintética',
+        neighborhood: 'Centro',
+        addressNumber: '10',
+
         name: user.name,
         email: user.email,
         password: 'senha-segura',
@@ -234,6 +267,14 @@ describe('AuthService', () => {
     });
     await expect(
       service.register({
+        city: 'Salvador',
+        state: 'BA',
+        municipalityCode: '2927408',
+        postalCode: '40000000',
+        address: 'Rua Sintética',
+        neighborhood: 'Centro',
+        addressNumber: '10',
+
         name: user.name,
         email: 'novo@sortex.test',
         password: 'senha-segura',

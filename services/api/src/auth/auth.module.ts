@@ -10,12 +10,17 @@ import { RolesGuard } from './guards/roles.guard';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { PasswordResetMailService } from './password-reset-mail.service';
 import { AdminPermissionGuard } from './guards/admin-permission.guard';
+import { SocialAuthController } from './social/social-auth.controller';
+import { SocialAuthService } from './social/social-auth.service';
+import { OidcClient } from './social/oidc-client';
 
 @Module({
   imports: [PrismaModule, PassportModule, JwtModule.register({})],
-  controllers: [AuthController],
+  controllers: [AuthController, SocialAuthController],
   providers: [
     AuthService,
+    SocialAuthService,
+    OidcClient,
     PasswordResetMailService,
     JwtStrategy,
     { provide: APP_GUARD, useClass: JwtAuthGuard },

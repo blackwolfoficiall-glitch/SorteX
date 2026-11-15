@@ -18,6 +18,7 @@ export type DashboardSummary = {
 };
 
 export type DashboardResponse = {
+  revenueHistory: { date: string; revenue: number }[];
   summary: DashboardSummary;
   campaigns: DashboardCampaign[];
   generatedAt: string;
@@ -26,8 +27,7 @@ export type DashboardResponse = {
 export async function getDashboard(): Promise<DashboardResponse> {
   const response = await fetch("/api/dashboard", { cache: "no-store" });
   const payload = (await response.json().catch(() => ({}))) as
-    | DashboardResponse
-    | { message?: string | string[] };
+    DashboardResponse | { message?: string | string[] };
 
   if (!response.ok) {
     const detail = "message" in payload ? payload.message : undefined;

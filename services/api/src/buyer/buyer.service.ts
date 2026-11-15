@@ -1,3 +1,4 @@
+import { changedMunicipality } from '../locations/locations';
 import {
   BadRequestException,
   Injectable,
@@ -165,6 +166,7 @@ export class BuyerService {
         email: true,
         phone: true,
         cpf: true,
+        buyerAddress: true,
         city: true,
         state: true,
         verified: true,
@@ -176,7 +178,22 @@ export class BuyerService {
     return { ...user, cpf: this.mask(user.cpf) };
   }
   async updateProfile(userId: string, body: BuyerProfileDto) {
-    await this.prisma.user.update({ where: { id: userId }, data: body });
+    const current = await this.profile(userId);
+    const location = changedMunicipality(body, current);
+    const { municipalityCode: ignoredCode, ...accountData } = body;
+    void ignoredCode;
+    const { municipalityCode, ...cityState } = location;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.user.update({
+        where: { id: userId },
+        data: { ...accountData, ...cityState },
+      });
+      if (municipalityCode)
+        await tx.buyerAddress.updateMany({
+          where: { userId },
+          data: { ...cityState, municipalityCode },
+        });
+    });
     return this.profile(userId);
   }
   async favorites(userId: string) {

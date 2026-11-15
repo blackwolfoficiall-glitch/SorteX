@@ -6,7 +6,13 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { UserRole } from '@prisma/client';
+import { Prisma, UserRole } from '@prisma/client';
+import {
+  isValidCpf,
+  isValidCnpj,
+  normalizeDocument,
+} from '../common/brazilian-documents';
+import { validateMunicipality } from '../locations/locations';
 import * as bcrypt from 'bcrypt';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -56,11 +62,14 @@ export class AuthService {
     return this.prisma.user.findMany({ select: publicUserSelect });
   }
 
-  async register(data: RegisterDto) {
+  async register(
+    data: RegisterDto,
+    store: Prisma.TransactionClient = this.prisma,
+  ) {
     const role = data.role ?? UserRole.BUYER;
-    const cpf = data.cpf.replace(/\D/g, '');
+    const cpf = normalizeDocument(data.cpf);
     const phone = data.phone.replace(/\D/g, '');
-    const cnpj = data.cnpj?.replace(/\D/g, '');
+    const cnpj = data.cnpj ? normalizeDocument(data.cnpj) : undefined;
 
     if (data.password !== data.passwordConfirmation) {
       throw new BadRequestException('As senhas não conferem.');
@@ -75,7 +84,7 @@ export class AuthService {
       );
     }
 
-    if (!this.isValidCpf(cpf)) {
+    if (!isValidCpf(cpf)) {
       throw new BadRequestException('CPF inválido.');
     }
 
@@ -91,7 +100,67 @@ export class AuthService {
       );
     }
 
-    const existingUser = await this.prisma.user.findFirst({
+    if (
+      role === UserRole.ORGANIZER &&
+      !['PF', 'PJ'].includes(data.personType ?? '')
+    ) {
+      throw new BadRequestException(
+        'Escolha Pessoa Física ou Pessoa Jurídica.',
+      );
+    }
+    const company = role === UserRole.ORGANIZER && data.personType === 'PJ';
+    if (
+      company &&
+      (!cnpj || !isValidCnpj(cnpj) || !data.organizationName?.trim())
+    ) {
+      throw new BadRequestException('Informe um CNPJ válido e a razão social.');
+    }
+    if (
+      !company &&
+      (cnpj ||
+        data.organizationName ||
+        data.fantasyName ||
+        (role === UserRole.BUYER && data.personType))
+    ) {
+      throw new BadRequestException(
+        'Dados empresariais são exclusivos de organizadores PJ.',
+      );
+    }
+    if (
+      data.birthDate &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(data.birthDate) ||
+        !Number.isFinite(Date.parse(data.birthDate)) ||
+        new Date(data.birthDate).toISOString().slice(0, 10) !==
+          data.birthDate ||
+        new Date(data.birthDate) > new Date() ||
+        new Date(data.birthDate).getUTCFullYear() < 1900)
+    ) {
+      throw new BadRequestException('Data de nascimento inválida.');
+    }
+    const location = validateMunicipality(
+      data.state,
+      data.city,
+      data.municipalityCode,
+    );
+    const postalCode = data.postalCode?.replace(/[\s-]/g, '') ?? '';
+    if (
+      !/^\d{8}$/.test(postalCode) ||
+      !data.neighborhood?.trim() ||
+      !data.address?.trim() ||
+      !data.addressNumber?.trim()
+    ) {
+      throw new BadRequestException('Preencha o endereço completo.');
+    }
+    const address = {
+      ...location,
+      postalCode,
+      neighborhood: data.neighborhood.trim(),
+      address: data.address.trim(),
+      addressNumber: data.addressNumber.trim(),
+      addressComplement: data.addressComplement?.trim() || null,
+    };
+
+    const existingUser = await store.user.findFirst({
       where: {
         OR: [
           { email: data.email.toLowerCase() },
@@ -114,27 +183,68 @@ export class AuthService {
 
     const password = await bcrypt.hash(data.password, 12);
 
-    return this.prisma.user.create({
-      data: {
-        name: data.name,
-        email: data.email.toLowerCase(),
-        password,
-        phone,
-        cpf,
-        cnpj,
-        role,
-        city: data.city,
-        state: data.state,
-        consentRecords: {
-          create: [
-            { type: 'TERMS', version: 'cadastro', granted: true },
-            { type: 'PRIVACY', version: 'cadastro', granted: true },
-            { type: 'DATA_PROCESSING', version: 'cadastro', granted: true },
-          ],
+    try {
+      // A nested Prisma write commits user, address/profile and consents atomically.
+      return await store.user.create({
+        data: {
+          name: data.name.trim(),
+          email: data.email.toLowerCase(),
+          password,
+          phone,
+          cpf,
+          cnpj,
+          role,
+          city: location.city,
+          state: location.state,
+          ...(role === UserRole.BUYER
+            ? { buyerAddress: { create: address } }
+            : {
+                organizerProfile: {
+                  create: {
+                    ...address,
+                    personType: data.personType,
+                    fullName: data.name.trim(),
+                    cpf,
+                    phone,
+                    cnpj,
+                    organizationName: company
+                      ? data.organizationName!.trim()
+                      : null,
+                    birthDate: data.birthDate ? new Date(data.birthDate) : null,
+                  },
+                },
+                ...(company
+                  ? {
+                      organizerBrandProfile: {
+                        create: {
+                          publicName:
+                            data.fantasyName?.trim() ||
+                            data.organizationName!.trim(),
+                          fantasyName: data.fantasyName?.trim() || null,
+                        },
+                      },
+                    }
+                  : {}),
+              }),
+          consentRecords: {
+            create: [
+              { type: 'TERMS', version: 'cadastro', granted: true },
+              { type: 'PRIVACY', version: 'cadastro', granted: true },
+              { type: 'DATA_PROCESSING', version: 'cadastro', granted: true },
+            ],
+          },
         },
-      },
-      select: publicUserSelect,
-    });
+        select: publicUserSelect,
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        throw new ConflictException('E-mail, CPF ou CNPJ já cadastrado.');
+      }
+      throw error;
+    }
   }
 
   async lookupBuyerByPhone(value: string) {
@@ -264,19 +374,6 @@ export class AuthService {
     return `${name.slice(0, 2)}${'*'.repeat(Math.max(2, name.length - 2))}@${domain}`;
   }
 
-  private isValidCpf(value: string) {
-    if (!/^\d{11}$/.test(value) || /^(\d)\1{10}$/.test(value)) return false;
-    const digit = (length: number) => {
-      let total = 0;
-      for (let index = 0; index < length; index += 1) {
-        total += Number(value[index]) * (length + 1 - index);
-      }
-      const remainder = (total * 10) % 11;
-      return remainder === 10 ? 0 : remainder;
-    };
-    return digit(9) === Number(value[9]) && digit(10) === Number(value[10]);
-  }
-
   async login(
     data: LoginDto,
     metadata: SessionMetadata = {},
@@ -392,6 +489,60 @@ export class AuthService {
 
   adminLogin(data: LoginDto, metadata: SessionMetadata = {}) {
     return this.login(data, metadata, true);
+  }
+
+  // The provider has already been verified by SocialAuthService. Issue the
+  // existing SorteX tokens/sessions; never accept external JWTs in our guards.
+  async socialSession(
+    userId: string,
+    store: Prisma.TransactionClient = this.prisma,
+  ) {
+    const user = await store.user.findUnique({ where: { id: userId } });
+    if (
+      !user ||
+      !user.isActive ||
+      user.status !== 'ACTIVE' ||
+      user.deletedAt ||
+      user.role === UserRole.ADMIN ||
+      user.forcePasswordReset ||
+      (user.lockedUntil && user.lockedUntil > new Date())
+    ) {
+      throw new ForbiddenException(
+        'Acesso social indisponível para esta conta. Use o acesso por e-mail ou contate o suporte.',
+      );
+    }
+    const session = await store.authSession.create({
+      data: {
+        userId,
+        refreshTokenHash: 'pending',
+        expiresAt: this.refreshTokenExpirationDate(),
+      },
+    });
+    const tokens = await this.issueTokens(user.id, user.role, session.id);
+    await store.authSession.update({
+      where: { id: session.id },
+      data: {
+        refreshTokenHash: await bcrypt.hash(tokens.refreshToken, 12),
+      },
+    });
+    await store.auditLog.create({
+      data: {
+        entityType: 'AuthSession',
+        entityId: session.id,
+        action: 'SOCIAL_LOGIN_SUCCEEDED',
+        actorUserId: user.id,
+        actorRole: user.role,
+      },
+    });
+    return {
+      ...tokens,
+      user: Object.fromEntries(
+        Object.keys(publicUserSelect).map((key) => [
+          key,
+          user[key as keyof typeof user],
+        ]),
+      ),
+    };
   }
 
   async refresh(refreshToken: string) {

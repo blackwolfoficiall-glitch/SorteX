@@ -30,3 +30,6 @@ backups/
 
 # Netlify local linkage (never commit account/site state)
 .netlify/
+
+# Isolated preview runtime packaging (never publish as static files or commit)
+.sortex-preview-runtime/

@@ -18,6 +18,12 @@ import { UpdateCommercialTermsDto } from './dto/update-commercial-terms.dto';
 import type { UploadedOrganizerFile } from './types/uploaded-file.type';
 import { UpdateOrganizerAccountDto } from './dto/update-organizer-account.dto';
 import * as bcrypt from 'bcrypt';
+import {
+  isValidCpf,
+  isValidCnpj,
+  normalizeDocument,
+} from '../common/brazilian-documents';
+import { changedMunicipality } from '../locations/locations';
 
 const profileInclude = {
   user: {
@@ -67,6 +73,16 @@ export class OrganizersService {
   ) {
     const current = await this.ensureProfile(user);
     this.ensureEditable(current.verificationStatus);
+    data = this.validateIdentityChanges(data, current);
+    data = { ...data, ...changedMunicipality(data, current) };
+    if (current.personType === 'PF' && data.cnpj)
+      throw new BadRequestException('Este perfil é Pessoa Física.');
+    if (
+      current.personType === 'PJ' &&
+      data.organizationName !== undefined &&
+      !data.organizationName.trim()
+    )
+      throw new BadRequestException('Informe a razão social.');
     const resetVerification = (
       [
         VerificationStatus.VERIFIED,
@@ -118,6 +134,9 @@ export class OrganizersService {
     user: AuthenticatedUser,
     data: UpdateOrganizerAccountDto,
   ) {
+    data = this.validateIdentityChanges(data, user);
+    const location = changedMunicipality(data, user);
+    data = { ...data, ...location };
     if (data.newPassword) {
       if (!data.currentPassword)
         throw new BadRequestException('Informe a senha atual.');
@@ -147,8 +166,16 @@ export class OrganizersService {
       throw new BadRequestException('E-mail, CPF ou CNPJ já cadastrado.');
     const organizerProfile = await this.prisma.organizerProfile.findUnique({
       where: { userId: user.id },
-      select: { verificationStatus: true },
+      select: { verificationStatus: true, personType: true },
     });
+    if (organizerProfile?.personType === 'PF' && data.cnpj)
+      throw new BadRequestException('Este perfil é Pessoa Física.');
+    const resetVerification = (
+      [
+        VerificationStatus.CORRECTION_REQUESTED,
+        VerificationStatus.REJECTED,
+      ] as VerificationStatus[]
+    ).includes(organizerProfile?.verificationStatus as VerificationStatus);
     const updated = await this.prisma.$transaction(async (tx) => {
       const account = await tx.user.update({
         where: { id: user.id },
@@ -160,18 +187,7 @@ export class OrganizersService {
           cnpj: data.cnpj,
           city: data.city,
           state: data.state?.toUpperCase(),
-          ...((
-            [
-              VerificationStatus.CORRECTION_REQUESTED,
-              VerificationStatus.REJECTED,
-            ] as VerificationStatus[]
-          ).includes(organizerProfile?.verificationStatus as VerificationStatus)
-            ? {
-                verificationStatus: VerificationStatus.PENDING,
-                reviewedAt: null,
-                reviewedById: null,
-              }
-            : {}),
+          ...(resetVerification ? { verified: false } : {}),
           ...(data.newPassword
             ? { password: await bcrypt.hash(data.newPassword, 12) }
             : {}),
@@ -192,6 +208,14 @@ export class OrganizersService {
       await tx.organizerProfile.updateMany({
         where: { userId: user.id },
         data: {
+          ...(resetVerification
+            ? {
+                verificationStatus: VerificationStatus.PENDING,
+                reviewedAt: null,
+                reviewedById: null,
+              }
+            : {}),
+          ...location,
           fullName: data.name,
           phone: data.phone,
           cpf: data.cpf,
@@ -579,14 +603,42 @@ export class OrganizersService {
     }
   }
 
+  private validateIdentityChanges<
+    T extends { cpf?: string; cnpj?: string; birthDate?: string },
+  >(data: T, current: { cpf?: string | null; cnpj?: string | null }) {
+    const next = { ...data };
+    if (
+      (data.cpf !== undefined && typeof data.cpf !== 'string') ||
+      (data.cnpj !== undefined && typeof data.cnpj !== 'string')
+    ) {
+      throw new BadRequestException('CPF e CNPJ devem ser documentos válidos.');
+    }
+    if (data.cpf !== undefined && data.cpf !== current.cpf) {
+      next.cpf = normalizeDocument(data.cpf);
+      if (!isValidCpf(next.cpf)) throw new BadRequestException('CPF inválido.');
+    }
+    if (data.cnpj !== undefined && data.cnpj !== current.cnpj) {
+      next.cnpj = normalizeDocument(data.cnpj);
+      if (!isValidCnpj(next.cnpj))
+        throw new BadRequestException('CNPJ inválido.');
+    }
+    if (data.birthDate && new Date(data.birthDate) > new Date())
+      throw new BadRequestException('Data de nascimento inválida.');
+    return next;
+  }
+
   private missingRequirements(profile: OrganizerProfilePayload) {
     const documents = new Set(profile.documents.map((item) => item.type));
     return [
       ['nome completo', profile.fullName],
       ['CPF', profile.cpf],
       ['celular', profile.phone],
-      ['data de nascimento', profile.birthDate],
-      ['nome da organização', profile.organizationName],
+      ['data de nascimento', profile.personType === 'PJ' || profile.birthDate],
+      [
+        'nome da organização',
+        profile.personType === 'PF' || profile.organizationName,
+      ],
+      ['CNPJ', profile.personType !== 'PJ' || profile.cnpj],
       ['CEP', profile.postalCode],
       ['endereço', profile.address],
       ['número', profile.addressNumber],

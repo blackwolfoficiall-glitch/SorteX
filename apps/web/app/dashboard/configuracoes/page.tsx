@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { Crown, Globe2, Palette, Scale, Share2 } from "lucide-react";
+import { Crown, Globe2, Palette, Scale, Share2, UserRound } from "lucide-react";
 const sections = [
+  [UserRound,"Perfil","Dados da conta e slogan opcional da sua marca.","/perfil"],
   [Crown,"Meu plano","Plano atual, limites, consumo, upgrade e cancelamento.","/dashboard/configuracoes/plano"],
   [Scale,"Central Jurídica","Documentos legais, aceites e solicitações relacionadas aos seus dados.","/dashboard/configuracoes/juridico"],
   [Palette,"Personalização","Identidade, aparência, layout, elementos e templates.","/dashboard/personalizacao"],

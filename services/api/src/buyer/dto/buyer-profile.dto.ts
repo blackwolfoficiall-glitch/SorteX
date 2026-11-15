@@ -3,6 +3,7 @@ import { IsOptional, IsString, IsUrl, Length } from 'class-validator';
 export class BuyerProfileDto {
   @IsOptional() @IsString() @Length(2, 120) name?: string;
   @IsOptional() @IsString() @Length(8, 30) phone?: string;
+  @IsOptional() @IsString() @Length(7, 7) municipalityCode?: string;
   @IsOptional() @IsString() @Length(2, 100) city?: string;
   @IsOptional() @IsString() @Length(2, 2) state?: string;
 }

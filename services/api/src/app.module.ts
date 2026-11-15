@@ -1,3 +1,4 @@
+import { LocationsModule } from './locations/locations.module';
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -22,6 +23,7 @@ import { LegalModule } from './legal/legal.module';
 @Module({
   imports: [
     AuthModule,
+    LocationsModule,
     PrismaModule,
     OrganizersModule,
     CampaignsModule,

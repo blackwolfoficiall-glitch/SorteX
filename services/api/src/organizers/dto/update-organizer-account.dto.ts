@@ -12,6 +12,7 @@ export class UpdateOrganizerAccountDto {
   @IsOptional() @IsString() @MinLength(8) phone?: string;
   @IsOptional() @IsString() cpf?: string;
   @IsOptional() @IsString() cnpj?: string;
+  @IsOptional() @IsString() municipalityCode?: string;
   @IsOptional() @IsString() city?: string;
   @IsOptional() @IsString() @Length(2, 2) state?: string;
   @IsOptional() @IsString() currentPassword?: string;

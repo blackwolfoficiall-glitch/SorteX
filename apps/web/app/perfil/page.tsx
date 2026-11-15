@@ -75,7 +75,7 @@ export default function PerfilPage() {
         ...form,
         phone: form.phone.replace(/\D/g, "") || undefined,
         cpf: form.cpf.replace(/\D/g, "") || undefined,
-        cnpj: form.cnpj.replace(/\D/g, "") || undefined,
+        cnpj: form.cnpj.trim().toUpperCase().replace(/[.\-/\s]/g, "") || undefined,
         city: form.city.trim() || undefined,
         state: form.state.trim().toUpperCase() || undefined,
         currentPassword: form.currentPassword || undefined,

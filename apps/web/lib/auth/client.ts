@@ -70,12 +70,13 @@ export async function authRequest<T>(
       : payload.message;
     const isLoginRequest =
       path === "/api/auth/login" || path === "/api/auth/admin-login";
+    const isSocialRequest = path.startsWith("/api/auth/social/");
     const message =
-      response.status === 401 && !isLoginRequest
+      response.status === 401 && !isLoginRequest && !isSocialRequest
         ? "Sua sessão expirou. Entre novamente para continuar."
         : response.status === 401
           ? apiMessage || "E-mail ou senha inválidos."
-          : response.status === 403 && !isLoginRequest
+          : response.status === 403 && !isLoginRequest && !isSocialRequest
           ? "Você não possui permissão para realizar esta ação."
           : apiMessage || "Não foi possível concluir a solicitação.";
     if (process.env.NODE_ENV !== "production") {

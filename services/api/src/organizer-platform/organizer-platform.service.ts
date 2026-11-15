@@ -56,7 +56,10 @@ export class OrganizerPlatformService {
       status: 'PAID' as const,
       campaign: { organizerId: user.id },
     };
-    const [campaigns, totals, todayTotals, monthTotals, participants] =
+    const historyStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 11, 1),
+    );
+    const [campaigns, totals, todayTotals, monthTotals, participants, history] =
       await Promise.all([
         this.prisma.campaign.findMany({
           where: { organizerId: user.id },
@@ -87,10 +90,24 @@ export class OrganizerPlatformService {
           by: ['buyerId'],
           where: paidWhere,
         }),
+        this.prisma.purchase.groupBy({
+          by: ['confirmedAt'],
+          where: { ...paidWhere, confirmedAt: { gte: historyStart } },
+          _sum: { total: true },
+        }),
       ]);
     const grossRevenue = Number(totals._sum.total ?? 0);
     const paidOrders = totals._count.id;
+    const days = new Map<string, number>();
+    for (const item of history) {
+      if (!item.confirmedAt) continue;
+      const date = item.confirmedAt.toISOString().slice(0, 10);
+      days.set(date, (days.get(date) ?? 0) + Number(item._sum.total ?? 0));
+    }
     return {
+      revenueHistory: [...days]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, revenue]) => ({ date, revenue })),
       summary: {
         grossRevenue,
         revenueToday: Number(todayTotals._sum.total ?? 0),

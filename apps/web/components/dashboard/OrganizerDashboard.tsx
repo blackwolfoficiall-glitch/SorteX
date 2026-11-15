@@ -41,9 +41,13 @@ export default function OrganizerDashboard() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
+  const [revenueHistory, setRevenueHistory] = useState<
+    { date: string; revenue: number }[]
+  >([]);
   const [dashboardError, setDashboardError] = useState("");
   const [crm, setCrm] = useState<CrmDashboard | null>(null);
-  const [organizerProfile, setOrganizerProfile] = useState<OrganizerProfile | null>(null);
+  const [organizerProfile, setOrganizerProfile] =
+    useState<OrganizerProfile | null>(null);
   const [period, setPeriod] = useState("30 dias");
   const [renderedAt] = useState(() => Date.now());
   const [identity, setIdentity] = useState<{
@@ -58,6 +62,7 @@ export default function OrganizerDashboard() {
           setCampaigns(campaignResult.value);
         if (dashboardResult.status === "fulfilled") {
           setDashboard(dashboardResult.value.summary);
+          setRevenueHistory(dashboardResult.value.revenueHistory ?? []);
         } else {
           setDashboardError(
             dashboardResult.reason instanceof Error
@@ -74,8 +79,7 @@ export default function OrganizerDashboard() {
       .then(([user, data, profile]) => {
         setIdentity({ name: user.name, brand: data.brand, id: user.id });
         setOrganizerProfile(profile);
-      },
-      )
+      })
       .catch(() => undefined);
   }, []);
   const published = campaigns.filter((item) => item.status === "PUBLISHED");
@@ -90,6 +94,42 @@ export default function OrganizerDashboard() {
   const averageTicket =
     dashboard?.averageTicket ??
     (totals.sold ? totals.revenue / totals.sold : 0);
+  const chart = useMemo(() => {
+    const now = new Date(renderedAt);
+    const monthly = period === "12 meses";
+    const length = monthly
+      ? 12
+      : period === "Hoje"
+        ? 1
+        : period === "7 dias"
+          ? 7
+          : 30;
+    return Array.from({ length }, (_, i) => {
+      const date = monthly
+        ? new Date(
+            Date.UTC(
+              now.getUTCFullYear(),
+              now.getUTCMonth() - length + i + 1,
+              1,
+            ),
+          )
+        : new Date(
+            Date.UTC(
+              now.getUTCFullYear(),
+              now.getUTCMonth(),
+              now.getUTCDate() - length + i + 1,
+            ),
+          );
+      const key = date.toISOString().slice(0, monthly ? 7 : 10);
+      return {
+        label: monthly ? key : key.slice(5),
+        revenue: revenueHistory
+          .filter((item) => item.date.startsWith(key))
+          .reduce((sum, item) => sum + item.revenue, 0),
+      };
+    });
+  }, [period, renderedAt, revenueHistory]);
+  const chartMax = Math.max(1, ...chart.map((item) => item.revenue));
 
   if (loading)
     return (
@@ -99,26 +139,44 @@ export default function OrganizerDashboard() {
     );
   return (
     <div className="space-y-7">
-      {organizerProfile && organizerProfile.verificationStatus !== "VERIFIED" && (
-        <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 sm:flex sm:items-center sm:justify-between sm:gap-5">
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-black">Seu cadastro está em análise pela Equipe SorteX.</h2>
-              <VerificationStatusBadge status={organizerProfile.verificationStatus} />
+      {organizerProfile &&
+        organizerProfile.verificationStatus !== "VERIFIED" && (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 sm:flex sm:items-center sm:justify-between sm:gap-5">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-black">
+                  Seu cadastro está em análise pela Equipe SorteX.
+                </h2>
+                <VerificationStatusBadge
+                  status={organizerProfile.verificationStatus}
+                />
+              </div>
+              <p className="mt-1 text-sm text-amber-900">
+                Você já pode configurar sua conta e preparar suas campanhas.
+                Publicações e recebimentos reais serão liberados após a
+                aprovação.
+              </p>
+              <p className="mt-1 text-xs text-amber-700">
+                Última atualização:{" "}
+                {new Date(organizerProfile.updatedAt).toLocaleString("pt-BR")}
+              </p>
             </div>
-            <p className="mt-1 text-sm text-amber-900">
-              Você já pode configurar sua conta e preparar suas campanhas. Publicações e recebimentos reais serão liberados após a aprovação.
-            </p>
-            <p className="mt-1 text-xs text-amber-700">
-              Última atualização: {new Date(organizerProfile.updatedAt).toLocaleString("pt-BR")}
-            </p>
-          </div>
-          <div className="mt-4 flex shrink-0 flex-wrap gap-2 sm:mt-0">
-            <Link href="/organizador/verificacao" className="rounded-xl bg-amber-900 px-4 py-2.5 text-sm font-bold text-white">Acompanhar análise</Link>
-            <Link href="/organizador/verificacao?edit=1" className="rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-bold">Revisar cadastro</Link>
-          </div>
-        </section>
-      )}
+            <div className="mt-4 flex shrink-0 flex-wrap gap-2 sm:mt-0">
+              <Link
+                href="/organizador/verificacao"
+                className="rounded-xl bg-amber-900 px-4 py-2.5 text-sm font-bold text-white"
+              >
+                Acompanhar análise
+              </Link>
+              <Link
+                href="/organizador/verificacao?edit=1"
+                className="rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-bold"
+              >
+                Revisar cadastro
+              </Link>
+            </div>
+          </section>
+        )}
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-4">
           {identity?.brand.profileImageUrl ? (
@@ -210,7 +268,7 @@ export default function OrganizerDashboard() {
             <div>
               <h2 className="text-xl font-black">Desempenho de vendas</h2>
               <p className="text-sm text-zinc-500">
-                Receita consolidada das campanhas.
+                Vendas confirmadas por período (UTC).
               </p>
             </div>
             <div className="flex gap-2">
@@ -225,17 +283,24 @@ export default function OrganizerDashboard() {
               ))}
             </div>
           </div>
-          <div className="mt-8 flex h-56 items-end gap-3 rounded-2xl bg-gradient-to-b from-violet-50/70 to-white px-4 pt-10">
-            {[28, 42, 35, 60, 48, 74, 66, 82, 58, 90, 72, 96].map(
-              (height, index) => (
-                <div
-                  key={index}
-                  className="flex-1 rounded-t-lg bg-gradient-to-t from-violet-700 to-violet-400"
-                  style={{ height: `${totals.revenue ? height : 6}%` }}
-                />
-              ),
-            )}
+          <div
+            role="img"
+            aria-label={`Receita de ${period}: ${money(chart.reduce((sum, item) => sum + item.revenue, 0))}`}
+            className="mt-8 flex h-56 items-end gap-1 rounded-2xl bg-gradient-to-b from-violet-50/70 to-white px-4 pt-10"
+          >
+            {chart.map((item) => (
+              <div
+                key={item.label}
+                title={`${item.label}: ${money(item.revenue)}`}
+                className="flex-1 rounded-t-lg bg-gradient-to-t from-violet-700 to-violet-400"
+                style={{ height: `${(item.revenue / chartMax) * 100}%` }}
+              />
+            ))}
           </div>
+          <p className="mt-2 flex justify-between text-xs text-zinc-500">
+            <span>{chart[0]?.label}</span>
+            <span>{chart.at(-1)?.label}</span>
+          </p>
           <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
             <SmallMetric
               label="Participantes"
@@ -250,20 +315,22 @@ export default function OrganizerDashboard() {
           <div className="rounded-3xl bg-zinc-950 p-6 text-white">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-zinc-400">Gateway conectado</p>
-                <h2 className="mt-1 text-xl font-black">Mercado Pago</h2>
+                <p className="text-sm text-zinc-400">
+                  Integrações de pagamento
+                </p>
+                <h2 className="mt-1 text-xl font-black">Gateways</h2>
               </div>
               <CreditCard className="text-violet-400" />
             </div>
             <div className="mt-5 flex justify-between border-t border-zinc-800 pt-4 text-sm">
-              <span>Taxa média</span>
-              <strong>Conforme contrato</strong>
+              <span>Disponibilidade</span>
+              <strong>Conforme configuração</strong>
             </div>
             <Link
-              href="/organizador/gateways/mercado-pago"
+              href="/dashboard/integracoes"
               className="mt-5 block rounded-xl bg-white py-3 text-center text-sm font-bold text-zinc-950"
             >
-              Configurar Gateway
+              Conferir integrações
             </Link>
           </div>
           <div className="rounded-3xl border bg-white p-6">
@@ -340,7 +407,11 @@ export default function OrganizerDashboard() {
           </div>
           <div className="mt-5 space-y-4">
             {published.map((campaign) => (
-              <CampaignRow key={campaign.id} campaign={campaign} renderedAt={renderedAt} />
+              <CampaignRow
+                key={campaign.id}
+                campaign={campaign}
+                renderedAt={renderedAt}
+              />
             ))}
             {!published.length && <Empty text="Nenhuma campanha publicada." />}
           </div>
@@ -434,7 +505,15 @@ function ActionButton({ label, href }: { label: string; href: string }) {
     </Link>
   );
 }
-function Insight({ title, text, href }: { title: string; text: string; href: string }) {
+function Insight({
+  title,
+  text,
+  href,
+}: {
+  title: string;
+  text: string;
+  href: string;
+}) {
   return (
     <Link
       href={href}
@@ -453,7 +532,13 @@ function Empty({ text }: { text: string }) {
     </div>
   );
 }
-function CampaignRow({ campaign, renderedAt }: { campaign: Campaign; renderedAt: number }) {
+function CampaignRow({
+  campaign,
+  renderedAt,
+}: {
+  campaign: Campaign;
+  renderedAt: number;
+}) {
   const percent = campaign.totalNumbers
     ? Math.min(100, (campaign.soldNumbers / campaign.totalNumbers) * 100)
     : 0;
@@ -484,7 +569,7 @@ function CampaignRow({ campaign, renderedAt }: { campaign: Campaign; renderedAt:
       <div>
         <h3 className="font-black">{campaign.title}</h3>
         <p className="mt-1 text-xs text-zinc-500">
-          {campaign.soldNumbers} participantes · {money(campaign.grossRevenue)}{" "}
+          {campaign.soldNumbers} cotas vendidas · {money(campaign.grossRevenue)}{" "}
           · {days === null ? "Sem data" : `${days} dias restantes`}
         </p>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-100">

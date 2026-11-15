@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
-import { Eye, EyeOff, LogIn } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle, LogIn } from "lucide-react";
+import SocialAccess from "@/components/auth/SocialAccess";
 import { AuthShell, authInputClass } from "@/components/auth/AuthShell";
 import { AuthApiError, authRequest } from "@/lib/auth/client";
 import type { AuthUser } from "@/lib/auth/types";
@@ -32,24 +33,30 @@ function LoginForm() {
     setLoading(true);
 
     try {
-      const { user } = await authRequest<{ user: AuthUser }>("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
-      });
+      const { user } = await authRequest<{ user: AuthUser }>(
+        "/api/auth/login",
+        {
+          method: "POST",
+          body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
+        },
+      );
       const session = await authRequest<AuthUser>("/api/auth/me", {
         cache: "no-store",
       });
       if (session.id !== user.id) {
-        throw new Error("A sessão criada não corresponde ao usuário autenticado.");
+        throw new Error(
+          "A sessão criada não corresponde ao usuário autenticado.",
+        );
       }
       const requestedPath = searchParams.get("next");
-      let destination = requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
-        ? requestedPath
-        : user.role === "BUYER"
-          ? "/comprador"
-          : user.role === "ADMIN"
-            ? "/admin/dashboard"
-            : "/dashboard";
+      let destination =
+        requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
+          ? requestedPath
+          : user.role === "BUYER"
+            ? "/comprador"
+            : user.role === "ADMIN"
+              ? "/admin/dashboard"
+              : "/dashboard";
       if (user.role === "ORGANIZER" && !requestedPath) {
         try {
           const plan = await getCurrentPlan();
@@ -59,10 +66,14 @@ function LoginForm() {
               : destination;
         } catch (cause) {
           if (process.env.NODE_ENV !== "production") {
-            console.warn("[SorteX login] plano não carregado após autenticação", {
-              status: cause instanceof AuthApiError ? cause.status : undefined,
-              fallback: "/dashboard",
-            });
+            console.warn(
+              "[SorteX login] plano não carregado após autenticação",
+              {
+                status:
+                  cause instanceof AuthApiError ? cause.status : undefined,
+                fallback: "/dashboard",
+              },
+            );
           }
           destination = "/dashboard";
         }
@@ -76,7 +87,9 @@ function LoginForm() {
       }
       window.location.assign(destination);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Não foi possível entrar.");
+      setError(
+        cause instanceof Error ? cause.message : "Não foi possível entrar.",
+      );
     } finally {
       setLoading(false);
     }
@@ -88,6 +101,16 @@ function LoginForm() {
       description="Acesse sua área de comprador ou organizador com segurança."
       backHref="/"
     >
+      <SocialAccess />
+      {searchParams.get("social_error") && (
+        <p role="alert" className="sx-auth-alert mb-5">
+          {searchParams.get("social_error") === "cancelled"
+            ? "O acesso com o provedor foi cancelado. Você pode tentar novamente ou usar e-mail."
+            : searchParams.get("social_error") === "unavailable"
+              ? "Este provedor aguarda configuração. Continue com e-mail e senha."
+              : "Não foi possível validar esse acesso. Inicie novamente; sua conta existente foi preservada."}
+        </p>
+      )}
       <form onSubmit={submit} className="space-y-4">
         <label className="block text-sm font-semibold text-zinc-700">
           E-mail
@@ -126,23 +149,26 @@ function LoginForm() {
         </label>
 
         <div className="text-right">
-          <Link href="/esqueci-senha" className="text-sm font-semibold text-violet-700">
+          <Link
+            href="/esqueci-senha"
+            className="text-sm font-semibold text-violet-700"
+          >
             Esqueci minha senha
           </Link>
         </div>
 
         {error && (
-          <p role="alert" className="rounded-2xl bg-red-50 p-3 text-sm text-red-700">
+          <p role="alert" className="sx-auth-alert">
             {error}
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-violet-700 to-purple-600 font-bold text-white disabled:opacity-60"
-        >
-          <LogIn size={20} />
+        <button type="submit" disabled={loading} className="sx-auth-submit">
+          {loading ? (
+            <LoaderCircle size={17} className="animate-spin" />
+          ) : (
+            <LogIn size={17} />
+          )}
           {loading ? "Entrando..." : "Entrar"}
         </button>
 
@@ -158,5 +184,9 @@ function LoginForm() {
 }
 
 function AuthPageLoading() {
-  return <main className="flex min-h-screen items-center justify-center"><div className="h-10 w-10 animate-spin rounded-full border-4 border-violet-200 border-t-violet-700" /></main>;
+  return (
+    <main className="flex min-h-screen items-center justify-center">
+      <div className="h-10 w-10 animate-spin rounded-full border-4 border-violet-200 border-t-violet-700" />
+    </main>
+  );
 }
