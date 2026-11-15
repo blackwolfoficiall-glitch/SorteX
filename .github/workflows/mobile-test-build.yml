@@ -75,6 +75,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Select an available iPhone simulator explicitly
         run: |
+          # Expo CLI writes its device-tool cache here on a fresh runner.
+          mkdir -p "$HOME/.expo"
           simulator_id="$(xcrun simctl list devices available --json | node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{const groups=JSON.parse(s).devices;const device=Object.entries(groups).filter(([runtime])=>runtime.includes("iOS")).flatMap(([,devices])=>devices).find(d=>d.isAvailable && d.name.startsWith("iPhone"));if(!device)process.exit(1);console.log(device.udid);});')"
           xcrun simctl bootstatus "$simulator_id" -b
           echo "SORTEX_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
