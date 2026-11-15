@@ -25,3 +25,11 @@ for (const file of files) {
 console.log(
   "PASS: no unconfigured social capabilities in email-only simulator build. SecureStore remains enabled.",
 );
+
+for (const file of walk("ios").filter(
+  (file) => file.endsWith("/Info.plist") && !file.includes("/Pods/"),
+)) {
+  if (fs.readFileSync(file, "utf8").includes("NSFaceIDUsageDescription"))
+    throw new Error("Email-only app does not request Face ID.");
+}
+console.log("PASS: no unused Face ID request in the email-only app.");

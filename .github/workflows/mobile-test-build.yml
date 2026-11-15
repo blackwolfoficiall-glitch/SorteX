@@ -43,12 +43,16 @@ jobs:
           test "$(stat -c %s android/app/build/outputs/apk/release/app-release.apk)" -lt 150000000
           sha256sum android/app/build/outputs/apk/release/app-release.apk
           analyzer="$(find "$ANDROID_HOME/cmdline-tools" -name apkanalyzer -type f | head -1)"
+          "$analyzer" manifest min-sdk android/app/build/outputs/apk/release/app-release.apk
+          "$analyzer" manifest target-sdk android/app/build/outputs/apk/release/app-release.apk
           "$analyzer" manifest permissions android/app/build/outputs/apk/release/app-release.apk > /tmp/sortex-apk-permissions.txt
           cat /tmp/sortex-apk-permissions.txt
-          if grep -Eq 'android.permission.(CAMERA|RECORD_AUDIO|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|SYSTEM_ALERT_WINDOW|VIBRATE)$' /tmp/sortex-apk-permissions.txt; then
+          if grep -Eq 'android.permission.(CAMERA|RECORD_AUDIO|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|SYSTEM_ALERT_WINDOW|VIBRATE|USE_BIOMETRIC|USE_FINGERPRINT)$' /tmp/sortex-apk-permissions.txt; then
             echo 'Unexpected permission in test APK'
             exit 1
           fi
+          signer="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          "$signer" verify --print-certs android/app/build/outputs/apk/release/app-release.apk
       - uses: actions/upload-artifact@v4
         with:
           name: sortex-android-test-${{ github.sha }}

@@ -23,10 +23,12 @@ const config: ExpoConfig = {
       "android.permission.VIBRATE",
       // Explicit removal from the merged manifest: no overlay permission.
       "android.permission.SYSTEM_ALERT_WINDOW",
+      "android.permission.USE_BIOMETRIC",
+      "android.permission.USE_FINGERPRINT",
     ],
   },
   plugins: [
-    "expo-secure-store",
+    ["expo-secure-store", { faceIDPermission: false }],
     [
       "expo-splash-screen",
       {
