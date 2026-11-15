@@ -230,16 +230,24 @@ export class SortexClient {
   async request<T>(path: string, method = "GET", body?: unknown): Promise<T> {
     if (!this.tokens || this.state.status !== "signedIn")
       throw new ApiError("Entre para continuar.", 401);
+    const revision = this.revision;
     try {
       return await this.raw<T>(path, method, body, this.tokens.accessToken);
     } catch (e) {
       if (!(e instanceof ApiError) || e.status !== 401) throw e;
+      if (revision !== this.revision)
+        throw new ApiError("A sessão mudou. Tente novamente.", 401);
       await this.renew();
-      if (!this.tokens) throw new ApiError("Entre novamente.", 401);
+      if (!this.tokens || revision !== this.revision)
+        throw new ApiError("Entre novamente.", 401);
       try {
         return await this.raw<T>(path, method, body, this.tokens.accessToken);
       } catch (retry) {
-        if (retry instanceof ApiError && retry.status === 401)
+        if (
+          revision === this.revision &&
+          retry instanceof ApiError &&
+          retry.status === 401
+        )
           await this.clear("Sua sessão expirou. Entre novamente.");
         throw retry;
       }
@@ -265,6 +273,7 @@ export class SortexClient {
   async logout() {
     const access = this.tokens?.accessToken;
     let storageError: unknown;
+    const clearedRevision = this.revision + 1;
     try {
       await this.clear();
     } catch (e) {
@@ -274,7 +283,7 @@ export class SortexClient {
       try {
         await this.raw("/auth/logout", "POST", {}, access);
       } catch {
-        if (!storageError)
+        if (!storageError && clearedRevision === this.revision)
           this.emit({
             status: "signedOut",
             user: null,
@@ -285,7 +294,8 @@ export class SortexClient {
     if (storageError) throw storageError;
   }
   async reloadUser() {
+    const revision = this.revision;
     const user = this.appUser(await this.request<User>("/auth/me"));
-    this.emit({ status: "signedIn", user });
+    if (revision === this.revision) this.emit({ status: "signedIn", user });
   }
 }

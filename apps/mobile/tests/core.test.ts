@@ -245,3 +245,90 @@ test("contratos puros e catálogo permanecem compatíveis com o servidor", () =>
       assert.equal(isValidCpf(root + suffix), serverCpf(root + suffix));
   }
 });
+test("requisição da conta anterior não é repetida com a sessão de outra pessoa", async () => {
+  let release: () => void = () => {};
+  const wait = new Promise<void>((r) => {
+    release = r;
+  });
+  let logins = 0,
+    mutations = 0;
+  const app = setup(async (p) => {
+    if (p === "/auth/login") {
+      logins++;
+      return response({
+        user: { ...user, id: String(logins) },
+        accessToken: "a" + logins,
+        refreshToken: "r" + logins,
+      });
+    }
+    if (p === "/auth/me") return response({ ...user, id: String(logins) });
+    if (p === "/auth/logout") return response({});
+    if (p === "/buyer/profile") {
+      mutations++;
+      await wait;
+      return response({}, 401);
+    }
+    throw Error("Não deveria renovar/repetir sob nova sessão");
+  });
+  await app.client.login(user.email, "synthetic");
+  const mutation = app.client
+    .request("/buyer/profile", "PATCH", { name: "Conta antiga" })
+    .catch(() => {});
+  await app.client.logout();
+  await app.client.login("other@sortex.example.invalid", "synthetic");
+  release();
+  await mutation;
+  assert.equal(mutations, 1);
+  assert.equal(app.client.snapshot().user?.id, "2");
+  assert.equal(app.stored()?.accessToken, "a2");
+});
+test("falha remota tardia do logout não encerra uma nova sessão", async () => {
+  let release: () => void = () => {};
+  const wait = new Promise<void>((r) => {
+    release = r;
+  });
+  let n = 0;
+  const app = setup(async (p) => {
+    if (p === "/auth/login")
+      return response({ user, accessToken: "a" + ++n, refreshToken: "r" + n });
+    if (p === "/auth/me") return response({ ...user, id: String(n) });
+    if (p === "/auth/logout") {
+      await wait;
+      throw Error("offline");
+    }
+    return response({});
+  });
+  await app.client.login(user.email, "synthetic");
+  const logout = app.client.logout();
+  await new Promise((r) => setTimeout(r, 0));
+  await app.client.login("other@sortex.example.invalid", "synthetic");
+  release();
+  await logout;
+  assert.equal(app.client.snapshot().status, "signedIn");
+  assert.equal(app.client.snapshot().user?.id, "2");
+});
+test("perfil retornado da sessão anterior não substitui o novo usuário", async () => {
+  let release: () => void = () => {};
+  const wait = new Promise<void>((r) => {
+    release = r;
+  });
+  let n = 0,
+    me = 0;
+  const app = setup(async (p) => {
+    if (p === "/auth/login")
+      return response({ user, accessToken: "a" + ++n, refreshToken: "r" + n });
+    if (p === "/auth/me") {
+      const current = n;
+      if (++me === 2) await wait;
+      return response({ ...user, id: String(current) });
+    }
+    return response({});
+  });
+  await app.client.login(user.email, "synthetic");
+  const reload = app.client.reloadUser();
+  await app.client.logout();
+  await app.client.login("other@sortex.example.invalid", "synthetic");
+  release();
+  await reload;
+  assert.equal(app.client.snapshot().user?.id, "2");
+});

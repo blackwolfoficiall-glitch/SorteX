@@ -46,13 +46,19 @@ const message = (e: unknown) =>
   e instanceof Error
     ? e.message
     : "Não foi possível concluir. Tente novamente.";
-function useData<T>(path: string) {
+function useData<T>(path: string | null) {
   const [data, setData] = useState<T | null>(null),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(true),
     [version, setVersion] = useState(0);
   useEffect(() => {
     let active = true;
+    if (!path) {
+      setData(null);
+      setLoading(false);
+      setError("");
+      return;
+    }
     setLoading(true);
     setError("");
     client
@@ -724,9 +730,7 @@ function Profile() {
   const state = useData<any>(
     organizer ? "/organizers/me/profile" : "/buyer/profile",
   );
-  const brand = useData<any>(
-    organizer ? "/organizer/personalization" : "/buyer/profile",
-  );
+  const brand = useData<any>(organizer ? "/organizer/personalization" : null);
   const [name, setName] = useState(""),
     [phone, setPhone] = useState(""),
     [slogan, setSlogan] = useState(""),
@@ -847,7 +851,7 @@ function Profile() {
         <Notice message="Documentos anteriores preservados. Edição de endereço completo do comprador exige ampliação do contrato da API." />
         <Button
           title="Salvar perfil"
-          busy={busy || brand.loading || !!brand.error}
+          busy={busy || (organizer && (brand.loading || !!brand.error))}
           onPress={() => void save()}
         />
         {!!info && <Notice message={info} />}
