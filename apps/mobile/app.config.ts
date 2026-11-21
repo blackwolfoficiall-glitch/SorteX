@@ -28,6 +28,7 @@ const config: ExpoConfig = {
     ],
   },
   plugins: [
+    "expo-web-browser",
     ["expo-secure-store", { faceIDPermission: false }],
     [
       "expo-splash-screen",

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Local, interactive launcher. No server credentials, signing bypass or paid build. */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -27,7 +27,9 @@ async function main() {
       !['--tunnel', '--lan'].includes(connection) || process.argv.length > 4)
     fail('Uso: node .github/mobile/iphone.mjs [check|go|xcode] [--tunnel|--lan]');
   const [major, minor] = process.versions.node.split('.').map(Number);
-  if (major < 24 || (major === 24 && minor < 3)) fail('Instale Node 24.3+ compatível com Expo SDK 58.');
+  const supportedNode = major % 2 === 0 &&
+    ((major === 22 && minor >= 13) || (major === 24 && minor >= 3) || major >= 26);
+  if (!supportedNode) fail('Use Node 22.13+, 24.3+ ou 26+ de uma linha par suportada pelo Expo SDK 58.');
   const branch = capture('git', ['branch', '--show-current'], { cwd: root });
   if (branch.status !== 0 || branch.stdout.trim() !== 'feat/mobile-expo')
     fail('Use um clone separado na branch feat/mobile-expo; nenhuma branch foi alterada.');
@@ -63,7 +65,19 @@ async function main() {
   }
 
   if (process.platform !== 'darwin') fail('Instalação física com Xcode exige executar este comando no Mac.');
-  run('xcodebuild', ['-version']);
+  const selection = capture('xcode-select', ['--print-path']);
+  if (selection.status !== 0 || !selection.stdout.trim().endsWith('/Contents/Developer'))
+    fail('Selecione o Xcode completo em Xcode → Settings → Locations → Command Line Tools. Não use apenas /Library/Developer/CommandLineTools.');
+  console.log(`Developer Directory selecionado: ${selection.stdout.trim()}`);
+  // DEVELOPER_DIR can override xcode-select; show the tool actually resolved by xcrun.
+  run('xcrun', ['--find', 'xcodebuild']);
+  const xcode = capture('xcodebuild', ['-version']);
+  const xcodeVersion = /Xcode\s+(\d+)\.(\d+)/.exec(xcode.stdout || '');
+  if (xcode.status !== 0 || !xcodeVersion ||
+      Number(xcodeVersion[1]) < 26 ||
+      (Number(xcodeVersion[1]) === 26 && Number(xcodeVersion[2]) < 4))
+    fail('Expo SDK 58 requer Xcode 26.4 ou posterior. Confira Command Line Tools e DEVELOPER_DIR.');
+  console.log(xcode.stdout.trim());
   run('xcodebuild', ['-checkFirstLaunchStatus']); // Check only. Never accept a license.
   run('pod', ['--version']); // CocoaPods must already be installed by the owner.
   if (!existsSync(path.join(app, 'ios')))
@@ -71,10 +85,11 @@ async function main() {
   else console.log('Projeto ios existente preservado: prebuild não será repetido.');
   run('node', ['scripts/check-native-config.cjs']);
   const ios = path.join(app, 'ios');
-  if (!readdirSync(ios).some(file => file.endsWith('.xcworkspace')))
-    run('pod', ['install'], { cwd: ios });
-  const workspace = readdirSync(ios).find(file => file.endsWith('.xcworkspace'));
-  if (!workspace) fail('Workspace iOS não encontrado após pod install.');
+  // Reconcile native dependencies even when an older workspace already exists.
+  // `pod install` preserves locked versions where possible; never use `pod update`.
+  run('pod', ['install'], { cwd: ios });
+  const workspace = 'SorteXTeste.xcworkspace';
+  if (!existsSync(path.join(ios, workspace))) fail('SorteXTeste.xcworkspace não encontrado após pod install; nenhum outro projeto será aberto.');
   console.log('No Xcode: selecione o iPhone físico e seu Personal Team em Signing & Capabilities.');
   console.log('Não selecione simulador, Archive, distribuição de loja nem uma capacidade Apple não configurada.');
   console.log('Em outro terminal: cd apps/mobile && npm run start:dev-client -- --lan --port 8082');
