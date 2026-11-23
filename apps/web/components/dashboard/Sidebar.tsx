@@ -12,6 +12,7 @@ import { authRequest } from "@/lib/auth/client";
 
 const menu = [
   [LayoutDashboard, "Dashboard", "/dashboard"],
+  [Boxes, "Painel mobile", "/painel-mobile.html"],
   [Ticket, "Campanhas", "/dashboard/campanhas"],
   [Trophy, "Ganhadores", "/dashboard/campanhas/ganhadores"],
   [ClipboardList, "Pedidos", "/dashboard/pedidos"],
