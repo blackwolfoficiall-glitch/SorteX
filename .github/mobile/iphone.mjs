@@ -31,8 +31,9 @@ async function main() {
     ((major === 22 && minor >= 13) || (major === 24 && minor >= 3) || major >= 26);
   if (!supportedNode) fail('Use Node 22.13+, 24.3+ ou 26+ de uma linha par suportada pelo Expo SDK 58.');
   const branch = capture('git', ['branch', '--show-current'], { cwd: root });
-  if (branch.status !== 0 || branch.stdout.trim() !== 'feat/mobile-expo')
-    fail('Use um clone separado na branch feat/mobile-expo; nenhuma branch foi alterada.');
+  const testBranches = ['feat/mobile-expo', 'homologacao/web-ios-integrada'];
+  if (branch.status !== 0 || !testBranches.includes(branch.stdout.trim()))
+    fail('Use um clone separado na branch feat/mobile-expo ou homologacao/web-ios-integrada; nenhuma branch foi alterada.');
   const head = capture('git', ['rev-parse', 'HEAD'], { cwd: root });
   if (head.status !== 0) fail('Não foi possível identificar o commit.');
   console.log(`SorteX · teste iPhone · ${head.stdout.trim()}`);
@@ -45,7 +46,7 @@ async function main() {
   process.env.EXPO_PUBLIC_API_URL = api;
   const response = await fetch(`${api}/health`, { redirect: 'error', signal: AbortSignal.timeout(30000) });
   if (!response.ok || (await response.json()).status !== 'ok') fail(`API isolada indisponível (HTTP ${response.status}).`);
-  console.log('PASS: API isolada acessível por HTTPS. Isso ainda não comprova a rede do iPhone.');
+  console.log('PASS: prévia Fase 1 acessível por HTTPS. Isso não comprova a rede do iPhone nem que a candidata usa a base integrada.');
   if (!existsSync(path.join(app, 'node_modules/expo/package.json')))
     fail('Dependências ausentes. Execute npm ci em apps/mobile e tente novamente.');
   run('npx', ['--no-install', 'expo', 'install', '--check']);
