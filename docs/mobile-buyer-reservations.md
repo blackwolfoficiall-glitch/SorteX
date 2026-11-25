@@ -59,3 +59,8 @@ cotas sintéticas e não chama nenhuma rota de pagamento.
 
 Ainda não inclui pagamento nativo, cupons/seleção de promoções no app, carteira
 de títulos agregada, regra de expiração offline ou certificação no iPhone.
+
+Na branch integrada, a montagem nativa está disponível por
+`EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS=1`, desativada por padrão. Ative apenas
+quando a candidata apontar para o ambiente de dados sintéticos verificado.
+Não aplique este trecho automaticamente sobre o App.tsx não commitado do Mac.

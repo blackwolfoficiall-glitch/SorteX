@@ -31,6 +31,7 @@ import {
 } from "./src/components/ui";
 import { LocationPicker } from "./src/components/LocationPicker";
 import { NativeOrganizerDraft } from "./src/components/NativeOrganizerDraft";
+import { NativeBuyerOrder, NativeBuyerReservation } from "./src/buyer/NativeBuyerPurchase";
 import {
   initial,
   registrationPayload,
@@ -44,6 +45,7 @@ import type {
 } from "../../packages/contracts/src/mobile";
 const Stack = createNativeStackNavigator(),
   Tabs = createBottomTabNavigator();
+const reservationTestsEnabled = process.env.EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS === "1";
 const message = (e: unknown) =>
   e instanceof Error
     ? e.message
@@ -617,7 +619,13 @@ function CampaignDetail({ route, navigation }: any) {
             }
           />
         ) : (
-          <Notice message="Consulta disponível. Compras e pagamentos no aplicativo ainda não implementados." />
+          reservationTestsEnabled && state.data && state.data.status === "PUBLISHED" ? (
+            <NativeBuyerReservation client={client} campaign={state.data}
+              onOrder={(order) => navigation.navigate("Order", { item: order, totalNumbers: state.data?.totalNumbers })}
+            />
+          ) : (
+            <Notice message="Campanha disponível para consulta. Pagamento no aplicativo ainda não está homologado." />
+          )
         )}
       </Load>
     </Page>
@@ -698,19 +706,24 @@ function OrderDetail({ route }: any) {
   const auth = useSyncExternalStore(client.subscribe, client.snapshot),
     organizer = auth.user?.role === "ORGANIZER",
     item = route.params.item as Purchase;
+  const nativeBuyer = reservationTestsEnabled && !organizer;
   const state = useData<Purchase>(
-    organizer ? `/organizer/orders/${item.id}` : `/purchases/${item.id}`,
+    nativeBuyer ? null : organizer ? `/organizer/orders/${item.id}` : `/purchases/${item.id}`,
   );
   const tickets = useData<any>(
-    !organizer && item.status === "PAID"
+    nativeBuyer ? null : !organizer && state.data?.status === "PAID"
       ? `/purchases/${item.id}/tickets`
-      : organizer
-        ? `/organizer/orders/${item.id}`
-        : `/purchases/${item.id}`,
+      : organizer ? `/organizer/orders/${item.id}` : null,
   );
   const list = Array.isArray(tickets.data)
     ? tickets.data
     : tickets.data?.tickets || [];
+  if (nativeBuyer) return (
+    <Page title="Pedido">
+      <NativeBuyerOrder client={client} orderId={item.id}
+        totalNumbers={typeof route.params.totalNumbers === "number" ? route.params.totalNumbers : undefined} />
+    </Page>
+  );
   return (
     <Page title="Pedido">
       <Load state={state}>
