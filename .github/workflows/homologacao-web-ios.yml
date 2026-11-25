@@ -85,7 +85,7 @@ jobs:
           mkdir -p "$ORGANIZER_UPLOAD_DIR"
           (
             cd services/api
-            exec env NODE_ENV=development APP_ENV=development PORT=3338 \
+            exec env NODE_ENV=development APP_ENV=staging STORAGE_DRIVER=filesystem PORT=3338 \
               APP_VERSION="$GITHUB_SHA" node dist/src/main.js
           ) >"$RUNNER_TEMP/sortex-api.log" 2>&1 &
           api_pid=$!
@@ -95,11 +95,20 @@ jobs:
           ) >"$RUNNER_TEMP/sortex-web.log" 2>&1 &
           web_pid=$!
           trap 'kill "$api_pid" "$web_pid" 2>/dev/null || true' EXIT
-          for base in "$SORTEX_PARITY_API" "$SORTEX_PARITY_WEB/api"; do
-            if ! curl --retry 30 --retry-delay 1 --retry-connrefused --max-time 4 --fail --silent --show-error "$base/health/ready" >/dev/null; then
-              echo "Serviços de teste não ficaram prontos."
-              exit 1
-            fi
-          done
+          wait_ready() {
+            local base="$1" pid="$2" service="$3"
+            for attempt in {1..40}; do
+              if ! kill -0 "$pid" 2>/dev/null; then
+                echo "$service encerrou antes de ficar pronto. Confira suas opções de inicialização."
+                return 1
+              fi
+              if curl --max-time 3 --fail --silent "$base/health/ready" >/dev/null; then return 0; fi
+              sleep 1
+            done
+            echo "$service não ficou pronto no prazo."
+            return 1
+          }
+          wait_ready "$SORTEX_PARITY_API" "$api_pid" "API"
+          wait_ready "$SORTEX_PARITY_WEB/api" "$web_pid" "Site"
           cd apps/mobile
           node --import tsx scripts/test-web-ios-parity.ts
