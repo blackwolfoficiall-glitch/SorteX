@@ -21,6 +21,27 @@ export class PaymentsController {
     return this.payments.createPix(user, body);
   }
 
+  @Get('native-sandbox-pix/config')
+  nativeSandboxPixConfig() {
+    return this.payments.nativeSandboxPixConfig();
+  }
+
+  @Post('native-sandbox-pix')
+  nativeSandboxPix(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: CreatePixPaymentDto,
+  ) {
+    return this.payments.createNativeSandboxPix(user, body);
+  }
+
+  @Get('native-sandbox-pix/purchase/:purchaseId')
+  nativeSandboxPixStatus(
+    @Param('purchaseId') purchaseId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.payments.nativeSandboxPixStatus(purchaseId, user);
+  }
+
   @Post('card')
   card(
     @CurrentUser() user: AuthenticatedUser,

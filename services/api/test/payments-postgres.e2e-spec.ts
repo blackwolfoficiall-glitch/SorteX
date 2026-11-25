@@ -1,7 +1,8 @@
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { Order } from 'mercadopago';
+import { hash } from 'bcrypt';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -250,5 +251,197 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
     });
     expect(account.pendingBalance.toString()).toBe('0');
     expect(account.availableBalance.toString()).toBe('0');
+  });
+  it('bloqueia Pix nativo sem prova e reutiliza a tentativa verificada do mesmo pedido', async () => {
+    const run = randomUUID();
+    const password = 'sandbox-http-fixture-pw';
+    const [organizer, buyer, anotherBuyer] = await Promise.all(
+      (['ORGANIZER', 'BUYER', 'BUYER'] as const).map(async (role, index) =>
+        prisma.user.create({
+          data: {
+            name: 'Conta sintética',
+            email: `native-${run}-${index}@example.test`,
+            password: await hash(password, 4),
+            role,
+          },
+        }),
+      ),
+    );
+    async function access(email: string) {
+      const result = await request(app.getHttpServer())
+        .post('/auth/login')
+        .send({ email, password })
+        .expect(201);
+      return (result.body as { accessToken: string }).accessToken;
+    }
+
+    const campaign = await prisma.campaign.create({
+      data: {
+        title: 'Campanha de teste',
+        slug: `native-${run}`,
+        organizerId: organizer.id,
+        totalNumbers: 10,
+        numberPrice: 5,
+        reservedNumbers: 1,
+      },
+    });
+    const expiresAt = new Date(Date.now() + 1_800_000);
+    const purchase = await prisma.purchase.create({
+      data: {
+        campaignId: campaign.id,
+        buyerId: buyer.id,
+        selectionMode: 'MANUAL',
+        quantity: 1,
+        unitPrice: 5,
+        subtotal: 5,
+        total: 5,
+        expiresAt,
+        status: 'AWAITING_PAYMENT',
+      },
+    });
+    await prisma.ticket.create({
+      data: {
+        number: 2,
+        purchaseId: purchase.id,
+        buyerId: buyer.id,
+        campaignId: campaign.id,
+        reservedUntil: expiresAt,
+      },
+    });
+    const providerPaymentId = `native-${run}`;
+    const sdk = jest
+      .spyOn(Order.prototype, 'create')
+      .mockImplementation(async ({ body }) => ({
+        id: providerPaymentId,
+        external_reference: body.external_reference,
+        total_amount: body.total_amount,
+        status: 'action_required',
+        status_detail: 'waiting_transfer',
+        transactions: {
+          payments: [
+            {
+              payment_method: {
+                type: 'bank_transfer',
+                ticket_url:
+                  'https://www.mercadopago.com.br/sandbox/payments/1234/ticket',
+                qr_code: 'synthetic-must-not-be-exposed',
+              },
+            },
+          ],
+        },
+      }));
+    const token = await access(buyer.email);
+    const secondToken = await access(anotherBuyer.email);
+    const nativeUrl = '/payments/native-sandbox-pix';
+    const send = () =>
+      request(app.getHttpServer())
+        .post(nativeUrl)
+        .auth(token, { type: 'bearer' })
+        .send({ purchaseId: purchase.id, acceptedTerms: true });
+    const env = { ...process.env };
+    try {
+      process.env.ENABLE_NATIVE_SANDBOX_PIX = '1';
+      process.env.FEATURE_REAL_PAYMENTS = 'false';
+      process.env.FEATURE_PAYOUTS = 'false';
+      delete process.env.MERCADO_PAGO_VERIFIED_TEST_TOKEN_SHA256;
+      await request(app.getHttpServer())
+        .get(nativeUrl + '/config')
+        .expect(401);
+      await request(app.getHttpServer())
+        .get(nativeUrl + '/config')
+        .auth(token, { type: 'bearer' })
+        .expect(200, {
+          enabled: false,
+          environment: 'sandbox',
+          method: 'PIX',
+          provider: 'MERCADO_PAGO',
+        });
+      await send().expect(503);
+      expect(sdk).not.toHaveBeenCalled();
+      expect(
+        await prisma.payment.count({ where: { purchaseId: purchase.id } }),
+      ).toBe(0);
+
+      process.env.MERCADO_PAGO_VERIFIED_TEST_TOKEN_SHA256 = createHash('sha256')
+        .update(process.env.MERCADO_PAGO_ACCESS_TOKEN!)
+        .digest('hex');
+      const first = await send().expect(201);
+      const record = first.body as { id: string };
+      expect(first.body).toEqual({
+        id: expect.any(String),
+        purchaseId: purchase.id,
+        amount: 5,
+        status: 'PENDING',
+        environment: 'sandbox',
+        expiresAt: expect.any(String),
+        awaitingProvider: false,
+      });
+      await send().expect(201, first.body);
+      expect(sdk).toHaveBeenCalledTimes(1);
+      expect(
+        await prisma.payment.count({ where: { purchaseId: purchase.id } }),
+      ).toBe(1);
+      const stored = await prisma.payment.findUniqueOrThrow({
+        where: { id: record.id },
+      });
+      expect(stored).toMatchObject({
+        method: 'PIX',
+        pixCopyPaste: null,
+        metadata: { nativeSandboxPix: true },
+      });
+      await request(app.getHttpServer())
+        .get(nativeUrl + '/purchase/' + purchase.id)
+        .auth(token, { type: 'bearer' })
+        .expect(200, first.body);
+      await request(app.getHttpServer())
+        .get(nativeUrl + '/purchase/' + purchase.id)
+        .auth(secondToken, { type: 'bearer' })
+        .expect(200)
+        .expect(({ text }) => {
+          // Express represents a null result as an empty successful response.
+          expect(['', 'null']).toContain(text);
+        });
+      jest.spyOn(Order.prototype, 'get').mockResolvedValueOnce({
+        id: providerPaymentId,
+        external_reference: stored.externalReference,
+        total_amount: '5.00',
+        status: 'processed',
+        status_detail: 'accredited',
+      });
+      const ts = String(Math.floor(Date.now() / 1000));
+      const requestId = randomUUID();
+      const signature = createHmac('sha256', secret)
+        .update(`id:${providerPaymentId};request-id:${requestId};ts:${ts};`)
+        .digest('hex');
+      await request(app.getHttpServer())
+        .post('/webhooks/payments/mercado-pago')
+        .query({ 'data.id': providerPaymentId })
+        .set('x-request-id', requestId)
+        .set('x-signature', `ts=${ts},v1=${signature}`)
+        .send({ id: `native-approved-${run}`, action: 'order.updated' })
+        .expect(200);
+      const [mobile, web] = await Promise.all([
+        request(app.getHttpServer())
+          .get(nativeUrl + '/purchase/' + purchase.id)
+          .auth(token, { type: 'bearer' })
+          .expect(200),
+        request(app.getHttpServer())
+          .get('/payments/purchase/' + purchase.id)
+          .auth(token, { type: 'bearer' })
+          .expect(200),
+      ]);
+      for (const { body } of [mobile, web])
+        expect(body).toMatchObject({
+          id: record.id,
+          purchaseId: purchase.id,
+          status: 'APPROVED',
+        });
+      expect(web.body.purchase.tickets).toEqual([
+        { number: 2, status: 'SOLD' },
+      ]);
+    } finally {
+      process.env = env;
+      sdk.mockRestore();
+    }
   });
 });

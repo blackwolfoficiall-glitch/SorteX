@@ -1,9 +1,11 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   GatewayProvider,
@@ -30,6 +32,11 @@ import { FinancialLedgerService } from '../finance/financial-ledger.service';
 import { AffiliateCommissionService } from '../affiliates/affiliate-commission.service';
 import { CrmSyncService } from '../crm/crm-sync.service';
 import { CampaignMilestonesService } from '../campaigns/campaign-milestones.service';
+
+import {
+  nativeSandboxPixEnabled,
+  sandboxPixTicketUrl,
+} from './native-sandbox-pix';
 
 const paymentInclude = {
   purchase: {
@@ -66,16 +73,102 @@ export class PaymentsService {
     private readonly campaignMilestones: CampaignMilestonesService,
   ) {}
 
-  createPix(user: AuthenticatedUser, data: CreatePixPaymentDto) {
-    return this.create(user, data.purchaseId, PaymentMethod.PIX);
+  async createPix(user: AuthenticatedUser, data: CreatePixPaymentDto) {
+    return this.sanitize(
+      await this.create(user, data.purchaseId, PaymentMethod.PIX),
+    );
   }
 
-  createCard(user: AuthenticatedUser, data: CreateCardPaymentDto) {
-    return this.create(user, data.purchaseId, PaymentMethod.CREDIT_CARD, {
-      cardToken: data.cardToken,
-      paymentMethodId: data.paymentMethodId,
-      installments: data.installments,
+  nativeSandboxPixConfig() {
+    return {
+      provider: GatewayProvider.MERCADO_PAGO,
+      method: PaymentMethod.PIX,
+      environment: 'sandbox' as const,
+      enabled: nativeSandboxPixEnabled(),
+    };
+  }
+
+  async createNativeSandboxPix(
+    user: AuthenticatedUser,
+    data: CreatePixPaymentDto,
+  ) {
+    this.ensureBuyer(user);
+    this.requireNativeSandboxPix();
+    if (data.acceptedTerms !== true)
+      throw new BadRequestException('Confirme que se trata de um teste.');
+    return this.nativeSandboxPixRecord(
+      await this.create(
+        user,
+        data.purchaseId,
+        PaymentMethod.PIX,
+        undefined,
+        true,
+      ),
+    );
+  }
+
+  async nativeSandboxPixStatus(purchaseId: string, user: AuthenticatedUser) {
+    this.ensureBuyer(user);
+    this.requireNativeSandboxPix();
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        purchaseId,
+        buyerId: user.id,
+        provider: GatewayProvider.MERCADO_PAGO,
+        method: PaymentMethod.PIX,
+        metadata: { path: ['nativeSandboxPix'], equals: true },
+      },
+      select: {
+        id: true,
+        purchaseId: true,
+        status: true,
+        amount: true,
+        expiresAt: true,
+        providerPaymentId: true,
+      },
+      orderBy: { createdAt: 'desc' },
     });
+    return payment ? this.nativeSandboxPixRecord(payment) : null;
+  }
+
+  private requireNativeSandboxPix() {
+    if (!nativeSandboxPixEnabled()) {
+      throw new ServiceUnavailableException(
+        'Pix de teste indisponível neste ambiente.',
+      );
+    }
+  }
+
+  private nativeSandboxPixRecord(
+    payment: Pick<
+      PaymentPayload,
+      | 'id'
+      | 'purchaseId'
+      | 'status'
+      | 'amount'
+      | 'expiresAt'
+      | 'providerPaymentId'
+    >,
+  ) {
+    return {
+      id: payment.id,
+      purchaseId: payment.purchaseId,
+      status: payment.status,
+      amount: Number(payment.amount),
+      expiresAt: payment.expiresAt,
+      environment: 'sandbox' as const,
+      awaitingProvider: !payment.providerPaymentId,
+    };
+  }
+
+  async createCard(user: AuthenticatedUser, data: CreateCardPaymentDto) {
+    return this.sanitize(
+      await this.create(user, data.purchaseId, PaymentMethod.CREDIT_CARD, {
+        cardToken: data.cardToken,
+        paymentMethodId: data.paymentMethodId,
+        installments: data.installments,
+      }),
+    );
   }
 
   async get(id: string, user: AuthenticatedUser) {
@@ -113,6 +206,8 @@ export class PaymentsService {
       );
     }
 
+    if (this.jsonObject(payment.metadata).nativeSandboxPix === true)
+      this.requireNativeSandboxPix();
     const gatewayPayment = await this.gateways
       .get(payment.provider)
       .getPaymentStatus(payment.providerPaymentId);
@@ -192,6 +287,8 @@ export class PaymentsService {
       throw new BadRequestException('Este pagamento não pode ser cancelado.');
     }
     if (current.providerPaymentId) {
+      if (this.jsonObject(current.metadata).nativeSandboxPix === true)
+        this.requireNativeSandboxPix();
       await this.gateways
         .get(current.provider)
         .cancelPayment(current.providerPaymentId);
@@ -287,7 +384,7 @@ export class PaymentsService {
         provider: GatewayProvider.MERCADO_PAGO,
         providerPaymentId: event.resourceId,
       },
-      select: { id: true },
+      select: { id: true, metadata: true },
     });
     if (!trackedPayment) {
       await this.prisma.$transaction(async (transaction) => {
@@ -318,6 +415,8 @@ export class PaymentsService {
     }
 
     try {
+      if (this.jsonObject(trackedPayment.metadata).nativeSandboxPix === true)
+        this.requireNativeSandboxPix();
       const gatewayPayment = await provider.getPaymentStatus(event.resourceId);
       const result = await this.processGatewayUpdate(
         storedEvent.id,
@@ -421,6 +520,7 @@ export class PaymentsService {
       paymentMethodId: string;
       installments: number;
     },
+    nativeSandbox = false,
   ) {
     this.ensureBuyer(user);
     const prepared = await this.preparePayment(
@@ -428,9 +528,10 @@ export class PaymentsService {
       purchaseId,
       method,
       card?.installments,
+      nativeSandbox,
     );
     if (prepared.existing && prepared.payment.providerPaymentId) {
-      return this.sanitize(prepared.payment);
+      return prepared.payment;
     }
     const provider = this.gateways.get(prepared.payment.provider);
     const names = user.name.trim().split(/\s+/);
@@ -451,6 +552,7 @@ export class PaymentsService {
     };
 
     try {
+      if (nativeSandbox) this.requireNativeSandboxPix();
       const gatewayResult =
         method === PaymentMethod.PIX
           ? await provider.createPixPayment(input)
@@ -460,6 +562,20 @@ export class PaymentsService {
               paymentMethodId: card!.paymentMethodId,
               installments: card!.installments,
             });
+      if (
+        nativeSandbox &&
+        (!gatewayResult.providerPaymentId ||
+          !sandboxPixTicketUrl(gatewayResult.boletoUrl) ||
+          gatewayResult.externalReference !==
+            prepared.payment.externalReference ||
+          !new Prisma.Decimal(gatewayResult.amount).equals(
+            prepared.payment.amount,
+          ))
+      ) {
+        throw new BadGatewayException(
+          'O provedor não confirmou uma cobrança Pix do ambiente de teste.',
+        );
+      }
       const storedStatus =
         gatewayResult.status === PaymentStatus.APPROVED
           ? PaymentStatus.PROCESSING
@@ -469,15 +585,18 @@ export class PaymentsService {
         data: {
           providerPaymentId: gatewayResult.providerPaymentId,
           status: storedStatus,
-          pixQrCode: gatewayResult.pixQrCode,
-          pixQrCodeBase64: gatewayResult.pixQrCodeBase64,
-          pixCopyPaste: gatewayResult.pixCopyPaste,
-          boletoUrl: gatewayResult.boletoUrl,
+          pixQrCode: nativeSandbox ? null : gatewayResult.pixQrCode,
+          pixQrCodeBase64: nativeSandbox ? null : gatewayResult.pixQrCodeBase64,
+          pixCopyPaste: nativeSandbox ? null : gatewayResult.pixCopyPaste,
+          boletoUrl: nativeSandbox ? null : gatewayResult.boletoUrl,
           cardBrand: gatewayResult.cardBrand,
           cardLastFour: gatewayResult.cardLastFour,
           installments: gatewayResult.installments ?? card?.installments,
           failureReason: gatewayResult.failureReason,
-          metadata: { providerStatus: gatewayResult.rawStatus || '' },
+          metadata: {
+            ...this.jsonObject(prepared.payment.metadata),
+            providerStatus: gatewayResult.rawStatus || '',
+          },
           ...(storedStatus === PaymentStatus.REJECTED
             ? {
                 rejectedAt: new Date(),
@@ -494,7 +613,7 @@ export class PaymentsService {
         prepared.payment.status,
         updated.status,
       );
-      return this.sanitize(updated);
+      return updated;
     } catch (error) {
       await this.prisma.payment.update({
         where: { id: prepared.payment.id },
@@ -518,6 +637,7 @@ export class PaymentsService {
     purchaseId: string,
     method: PaymentMethod,
     installments?: number,
+    nativeSandbox = false,
   ) {
     return this.prisma.$transaction(
       async (transaction) => {
@@ -532,6 +652,23 @@ export class PaymentsService {
             throw new ConflictException(
               'Já existe um pagamento ativo com outro método.',
             );
+          if (
+            (this.jsonObject(existing.metadata).nativeSandboxPix === true) !==
+            nativeSandbox
+          )
+            throw new ConflictException(
+              'Já existe uma tentativa de pagamento criada por outro fluxo.',
+            );
+          if (
+            nativeSandbox &&
+            !existing.providerPaymentId &&
+            (existing.purchase.status !== PurchaseStatus.AWAITING_PAYMENT ||
+              existing.purchase.expiresAt <= new Date())
+          ) {
+            throw new BadRequestException(
+              'A reserva terminou; não retome este Pix.',
+            );
+          }
           return { payment: existing, existing: true };
         }
 
@@ -625,6 +762,7 @@ export class PaymentsService {
               platformFeeRule: fee.reason,
               platformFeeSource: fee.source,
               paymentEnvironment: process.env.PAYMENT_ENV || 'sandbox',
+              ...(nativeSandbox ? { nativeSandboxPix: true } : {}),
             },
           },
           include: paymentInclude,

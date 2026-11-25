@@ -24,6 +24,8 @@ import {
   type ReservationInput,
 } from "./purchases";
 
+import { SandboxPixCard } from "./SandboxPixCard";
+
 type CampaignRef = Pick<Campaign, "id" | "slug" | "totalNumbers">;
 const errorText = (error: unknown) =>
   error instanceof Error
@@ -546,6 +548,14 @@ function OrderCard({
         <>
           <Text style={s.label}>{data.order.campaign.title}</Text>
           <ReservationSummary order={data.order} />
+          {process.env.EXPO_PUBLIC_ENABLE_NATIVE_SANDBOX_PIX === "1" && (
+            <SandboxPixCard
+              client={client}
+              buyerId={buyerId}
+              order={data.order}
+              onOrderChanged={() => setReload((value) => value + 1)}
+            />
+          )}
           <Text style={s.label}>Títulos confirmados</Text>
           {data.tickets.length ? (
             <Text selectable style={s.text}>

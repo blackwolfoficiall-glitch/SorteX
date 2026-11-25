@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   GatewayProvider,
@@ -14,6 +16,7 @@ import {
   TicketStatus,
   UserRole,
 } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { PaymentsService } from './payments.service';
 
 const buyer = {
@@ -195,6 +198,155 @@ describe('PaymentsService', () => {
       expect.objectContaining({ amount: '10.00' }),
     );
     expect(result.pixCopyPaste).toBe('copy-paste');
+  });
+
+  describe('Pix nativo sandbox', () => {
+    const data = { purchaseId: 'purchase-1', acceptedTerms: true };
+    const originalEnv = process.env;
+    beforeEach(() => {
+      const token = 'APP_USR-test-fixture-not-a-credential';
+      process.env = {
+        ...originalEnv,
+        ENABLE_NATIVE_SANDBOX_PIX: '1',
+        APP_ENV: 'staging',
+        PAYMENT_ENV: 'sandbox',
+        FEATURE_REAL_PAYMENTS: 'false',
+        FEATURE_PAYOUTS: 'false',
+        MERCADO_PAGO_ACCESS_TOKEN: token,
+        MERCADO_PAGO_VERIFIED_TEST_TOKEN_SHA256: createHash('sha256')
+          .update(token)
+          .digest('hex'),
+        MERCADO_PAGO_WEBHOOK_SECRET_TEST: 'local-fixture',
+        MERCADO_PAGO_WEBHOOK_SECRET: '',
+        MERCADO_PAGO_WEBHOOK_SECRET_PRODUCTION: '',
+      };
+    });
+
+    afterEach(() => {
+      process.env = originalEnv;
+    });
+
+    it('recusa criação sem prova ou consentimento, antes de consultar a compra', async () => {
+      await expect(
+        service.createNativeSandboxPix(buyer, {
+          ...data,
+          acceptedTerms: false,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      delete process.env.MERCADO_PAGO_VERIFIED_TEST_TOKEN_SHA256;
+      expect(service.nativeSandboxPixConfig()).toMatchObject({
+        enabled: false,
+      });
+      await expect(
+        service.createNativeSandboxPix(buyer, data),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(prisma.payment.findUnique).not.toHaveBeenCalled();
+      expect(provider.createPixPayment).not.toHaveBeenCalled();
+    });
+
+    it('não adota pagamento já iniciado pelo checkout web', async () => {
+      prisma.payment.findUnique.mockResolvedValue(payment());
+      await expect(
+        service.createNativeSandboxPix(buyer, data),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(provider.createPixPayment).not.toHaveBeenCalled();
+    });
+
+    it('revalida o token antes de chamar o provedor', async () => {
+      (service as any).preparePayment = jest
+        .fn()
+        .mockImplementation(async () => {
+          process.env.MERCADO_PAGO_ACCESS_TOKEN = 'different-fixture';
+          return {
+            payment: payment({
+              providerPaymentId: null,
+              metadata: { nativeSandboxPix: true },
+            }),
+            existing: false,
+          };
+        });
+      await expect(
+        service.createNativeSandboxPix(buyer, data),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(provider.createPixPayment).not.toHaveBeenCalled();
+    });
+
+    it('não registra resposta sem ticket de teste e não fornece QR ou código bancário', async () => {
+      const attempt = payment({
+        providerPaymentId: null,
+        metadata: { nativeSandboxPix: true },
+      });
+      (service as any).preparePayment = jest
+        .fn()
+        .mockResolvedValue({ payment: attempt, existing: false });
+      provider.createPixPayment.mockResolvedValueOnce(
+        gatewayResult({
+          boletoUrl: 'https://www.mercadopago.com.br/payments/12345/ticket',
+        }),
+      );
+      await expect(
+        service.createNativeSandboxPix(buyer, data),
+      ).rejects.toBeInstanceOf(BadGatewayException);
+      expect(prisma.payment.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            providerPaymentId: expect.anything(),
+          }),
+        }),
+      );
+
+      provider.createPixPayment.mockResolvedValueOnce(
+        gatewayResult({
+          boletoUrl:
+            'https://www.mercadopago.com.br/sandbox/payments/12345/ticket',
+          status: PaymentStatus.APPROVED,
+        }),
+      );
+      prisma.payment.update.mockResolvedValue(
+        payment({ status: PaymentStatus.PROCESSING }),
+      );
+      const result = await service.createNativeSandboxPix(buyer, data);
+      expect(result).toMatchObject({
+        purchaseId: data.purchaseId,
+        environment: 'sandbox',
+        status: PaymentStatus.PROCESSING,
+      });
+      for (const field of [
+        'pixQrCode',
+        'pixCopyPaste',
+        'boletoUrl',
+        'providerPaymentId',
+      ])
+        expect(result).not.toHaveProperty(field);
+      expect(prisma.payment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: PaymentStatus.PROCESSING,
+            pixQrCode: null,
+            pixCopyPaste: null,
+            boletoUrl: null,
+            metadata: expect.objectContaining({ nativeSandboxPix: true }),
+          }),
+        }),
+      );
+    });
+
+    it('consulta somente o estado persistido da tentativa nativa do comprador', async () => {
+      prisma.payment.findFirst.mockResolvedValue(null);
+      await expect(
+        service.nativeSandboxPixStatus(data.purchaseId, buyer),
+      ).resolves.toBeNull();
+      expect(prisma.payment.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            buyerId: buyer.id,
+            purchaseId: data.purchaseId,
+            metadata: { path: ['nativeSandboxPix'], equals: true },
+          }),
+        }),
+      );
+      expect(provider.getPaymentStatus).not.toHaveBeenCalled();
+    });
   });
 
   it('cria cartão apenas com token seguro e sem persistir CVV', async () => {

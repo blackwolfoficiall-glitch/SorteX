@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SortexClient, type Vault } from "../src/api/client";
 import { TEST_API, validateApiUrl } from "../src/api/config";
+import { BuyerSandboxPix } from "../src/buyer/sandbox-pix";
 import {
   initial,
   validateRegistration,
@@ -331,4 +332,101 @@ test("perfil retornado da sessão anterior não substitui o novo usuário", asyn
   release();
   await reload;
   assert.equal(app.client.snapshot().user?.id, "2");
+});
+
+
+test("Pix nativo exige opt-in, HTTPS conhecido, comprador e config explícita", async () => {
+  const calls: string[] = [];
+  let remote: unknown = {
+    enabled: true,
+    environment: "production",
+    method: "PIX",
+    provider: "MERCADO_PAGO",
+  };
+  const signed = {
+    baseUrl: TEST_API,
+    snapshot: () =>
+      ({ status: "signedIn", user }) as ReturnType<SortexClient["snapshot"]>,
+    request: async <T>(path: string) => {
+      calls.push(path);
+      return remote as T;
+    },
+  };
+  assert.equal(
+    await new BuyerSandboxPix(signed, user.id, false).enabled(),
+    false,
+  );
+  assert.equal(
+    await new BuyerSandboxPix(
+      { ...signed, baseUrl: "http://127.0.0.1:3338" },
+      user.id,
+      true,
+    ).enabled(),
+    false,
+  );
+  await assert.rejects(
+    new BuyerSandboxPix(signed, "different-user", true).enabled(),
+    /conta de comprador/,
+  );
+  assert.deepEqual(calls, []);
+
+  const api = new BuyerSandboxPix(signed, user.id, true);
+  await assert.rejects(api.create("purchase-1", false), /apenas para teste/);
+  await assert.rejects(api.create("purchase-1", true), /indisponível/);
+  assert.deepEqual(calls, ["/payments/native-sandbox-pix/config"]);
+  remote = {
+    enabled: true,
+    environment: "sandbox",
+    method: "PIX",
+    provider: "MERCADO_PAGO",
+  };
+  assert.equal(await api.enabled(), true);
+});
+
+test("Pix nativo vincula solicitação e resposta ao pedido, sem enviar valor ou dados de banco", async () => {
+  const calls: unknown[] = [];
+  let payment = {
+    id: "pix-1",
+    purchaseId: "purchase-1",
+    status: "PENDING",
+    environment: "sandbox",
+    amount: 1.5,
+    expiresAt: null,
+    awaitingProvider: false,
+  };
+  const api = new BuyerSandboxPix(
+    {
+      baseUrl: TEST_API,
+      snapshot: () =>
+        ({ status: "signedIn", user }) as ReturnType<SortexClient["snapshot"]>,
+      request: async <T>(path: string, method?: string, body?: unknown) => {
+        calls.push([path, method, body]);
+        return (
+          path.endsWith("/config")
+            ? {
+                enabled: true,
+                environment: "sandbox",
+                method: "PIX",
+                provider: "MERCADO_PAGO",
+              }
+            : payment
+        ) as T;
+      },
+    },
+    user.id,
+    true,
+  );
+  assert.deepEqual(await api.create("purchase-1", true), payment);
+  assert.deepEqual(calls, [
+    ["/payments/native-sandbox-pix/config", undefined, undefined],
+    [
+      "/payments/native-sandbox-pix",
+      "POST",
+      { purchaseId: "purchase-1", acceptedTerms: true },
+    ],
+  ]);
+  payment = { ...payment, purchaseId: "other-purchase" };
+  await assert.rejects(api.get("purchase-1"), /deste pedido/);
+  payment = { ...payment, purchaseId: "purchase-1", environment: "production" };
+  await assert.rejects(api.get("purchase-1"), /deste pedido/);
 });

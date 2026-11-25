@@ -205,3 +205,34 @@ de PIX, expiração ou estorno no ambiente externo do Mercado Pago.
 - não há saque, split, repasse, tratamento completo de contestação ou conciliação externa;
 - ativação de produção exige revisão jurídica, financeira, segurança e testes de
   homologação independentes.
+
+## Pix nativo isolado (desativado por padrão)
+
+O pedido nativo pode mostrar o estado gravado pela API e solicitar uma
+cobrança de **teste**, sem apresentar código pagável por banco, QR ou links
+externos. O app consulta apenas a API, sem iniciar uma consulta ao Mercado
+Pago a cada atualização de tela. O fluxo reutiliza a mesma reserva, valor
+calculado pela API, chave idempotente, webhook e extrato do checkout web.
+Não retoma pedidos de outro comprador ou tentativas já iniciadas no checkout web.
+
+- O build precisa de `EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS=1`,
+  `EXPO_PUBLIC_ENABLE_NATIVE_SANDBOX_PIX=1` **e** da URL
+  HTTPS da prévia isolada já permitida no app; HTTP local não habilita Pix.
+- O backend exige `ENABLE_NATIVE_SANDBOX_PIX=1`, `APP_ENV=staging` e
+  `PAYMENT_ENV=sandbox`, sem pagamentos/saques reais, ativo somente com
+  `MERCADO_PAGO_WEBHOOK_SECRET_TEST`. O segredo genérico e o de produção
+  devem estar ausentes.
+- Uma pessoa com acesso ao [painel do provedor](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/resources/credentials)
+  deve confirmar a origem do token em **Teste** para a aplicação isolada,
+  colocar o token correspondente apenas no backend e registrar seu SHA-256
+  em `MERCADO_PAGO_VERIFIED_TEST_TOKEN_SHA256`, também apenas no backend.
+  O fingerprint comprova a coincidência com o token verificado, não prova
+  a origem do token por si só. Não derivar o fingerprint de um token
+  já configurado sem comparar com o painel. Não transmitir a credencial por chat.
+- A API revalida esses requisitos antes da criação no SDK e não registra
+  como válida uma resposta sem o ticket sandbox, referência e valor
+  esperados. O formato do ticket vem do [exemplo oficial de Pix de teste](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/integration-test/pix).
+  Não publique a prévia com essa chave ativa sem evidência independente.
+- Sem comprovação das credenciais de teste, o recurso permanece desligado,
+  mesmo se a build solicitar. Os testes locais não contatam o Mercado Pago
+  e não demonstram entrega de webhook externo nem aceite no iPhone.
