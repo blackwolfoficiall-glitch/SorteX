@@ -15,3 +15,7 @@
 2. Rode a API Nest de desenvolvimento em `127.0.0.1:3338` com chaves locais novas, `PAYMENT_ENV=test`, sem credenciais dos provedores e com `APP_VERSION` igual ao SHA validado. Configure o Next com `API_INTERNAL_URL` e `SORTEX_HOMOLOGATION_API_URL` iguais ao endereço local dessa API.
 3. Em `apps/mobile`, execute `SORTEX_PARITY_WEB=http://127.0.0.1:4408 SORTEX_PARITY_API=http://127.0.0.1:3338 node --import tsx scripts/test-web-ios-parity.ts`. O teste rejeita URL remota/API não marcada como desenvolvimento e escreve apenas dados sintéticos. Ele não publica campanhas nem toca pagamentos.
 4. Em `apps/web`, execute `node --test lib/api-upstream.test.mjs` com Node 22+ que suporte TypeScript nativo, ou use a versão Node 24 da validação.
+
+## Renovação de sessão
+
+A API agora vincula cada renovação à credencial completa e emite um identificador novo por refresh, inclusive para renovações no mesmo segundo. A alteração não apaga contas nem modifica a tabela de sessões. Registros de refresh legados deixam de renovar; na implantação aprovada, comunique que esses usuários precisam reautenticar. Esse comportamento foi testado no backend, não no SecureStore do aparelho.

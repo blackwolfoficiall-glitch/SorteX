@@ -6,6 +6,7 @@ import { validateApiUrl } from "../src/api/config";
 type Identity = { id: string; role: string; adminPermissions?: string[] };
 type Profile = { id: string; userId: string };
 type Campaign = { id: string; title: string };
+type Refresh = { accessToken: string; refreshToken: string };
 
 function loopback(name: string): string {
   const url = new URL(process.env[name] ?? "");
@@ -118,6 +119,11 @@ async function main() {
     return { userId: w.id, organizerProfileId: p.id };
   }
 
+  const issued = await mA.publicRequest<Refresh>("/auth/login", "POST", { email: organizerA.email, password });
+  const renewed = await mA.publicRequest<Refresh>("/auth/refresh", "POST", { refreshToken: issued.refreshToken });
+  assert.ok(renewed.refreshToken && renewed.accessToken);
+  assert.notEqual(renewed.refreshToken, issued.refreshToken);
+
   const a = await compare(reqA, mA, webRegistration);
   const b = await compare(reqB, mB, appRegistration);
   assert.notEqual(a.userId, b.userId);
@@ -142,6 +148,7 @@ async function main() {
     database: ready.database, storage: ready.storage,
     webToMobile: a, mobileToWeb: b, draftCampaignId: draft.id,
     sameRoles: true, draftSyncedInBothDirections: true, organizerIsolation: true,
+    refreshTokenRotated: true,
   }, null, 2));
 }
 
