@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { createReadStream, existsSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import { GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+import { localUploadRoot } from './local-upload-storage';
 import { objectStorage, usesObjectStorage } from './object-storage';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -27,10 +28,7 @@ type StorageOptions = {
 
 @Injectable()
 export class OrganizerStorageService {
-  private readonly root = resolve(
-    process.env.ORGANIZER_UPLOAD_DIR ??
-      join(process.cwd(), 'storage', 'organizers'),
-  );
+  private readonly root = localUploadRoot();
 
   async save(
     profileId: string,
@@ -83,8 +81,11 @@ export class OrganizerStorageService {
       );
     } else {
       const directory = join(this.root, profileId);
-      await mkdir(directory, { recursive: true });
-      await writeFile(join(directory, filename), file.buffer, { flag: 'wx' });
+      await mkdir(directory, { recursive: true, mode: 0o700 });
+      await writeFile(join(directory, filename), file.buffer, {
+        flag: 'wx',
+        mode: 0o600,
+      });
     }
 
     return {
