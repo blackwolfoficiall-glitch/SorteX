@@ -1,0 +1,105 @@
+name: Homologação Web + iOS (HTTP isolado)
+
+on:
+  push:
+    branches: [homologacao/web-ios-integrada]
+  pull_request:
+    branches: [infra/netlify-northflank-neon]
+    paths:
+      - .github/workflows/homologacao-web-ios.yml
+      - apps/web/**
+      - apps/mobile/**
+      - packages/contracts/**
+      - services/api/**
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    if: github.event.repository.private == false
+    name: API e paridade HTTP (sem deploy nem iPhone)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: sortex_ci
+          POSTGRES_PASSWORD: ci-isolated-only
+          POSTGRES_DB: sortex_homologacao_local
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sortex_ci -d sortex_homologacao_local"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_homologacao_local
+      SORTEX_HOMOLOGATION_API_URL: http://127.0.0.1:3338
+      API_INTERNAL_URL: http://127.0.0.1:3338
+      API_URL: http://127.0.0.1:3338
+      WEB_URL: http://127.0.0.1:4408
+      APP_URL: http://127.0.0.1:4408
+      SORTEX_PARITY_API: http://127.0.0.1:3338
+      SORTEX_PARITY_WEB: http://127.0.0.1:4408
+      EMAIL_DELIVERY_MODE: disabled
+      NEXT_TELEMETRY_DISABLED: "1"
+      EXPO_NO_TELEMETRY: "1"
+      PAYMENT_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            services/api/package-lock.json
+            apps/web/package-lock.json
+            apps/mobile/package-lock.json
+      - name: Aplicar migrações e testar a API
+        working-directory: services/api
+        run: |
+          npm ci --no-audit --no-fund
+          npx --no-install prisma generate
+          npx --no-install prisma migrate deploy
+          npm test -- --runInBand
+          npm run build
+      - name: Testar configuração e build do site
+        working-directory: apps/web
+        run: |
+          npm ci --no-audit --no-fund
+          node --test lib/api-upstream.test.mjs
+          npm run build
+      - name: Validar cliente móvel
+        working-directory: apps/mobile
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          npm test
+      - name: Exercitar os dois clientes no mesmo banco descartável
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JWT_ACCESS_SECRET="$(openssl rand -hex 40)"
+          export JWT_REFRESH_SECRET="$(openssl rand -hex 40)"
+          export ORGANIZER_UPLOAD_DIR="$RUNNER_TEMP/sortex-storage"
+          mkdir -p "$ORGANIZER_UPLOAD_DIR"
+          (
+            cd services/api
+            exec env NODE_ENV=development APP_ENV=development PORT=3338 \
+              APP_VERSION="$GITHUB_SHA" node dist/src/main.js
+          ) >"$RUNNER_TEMP/sortex-api.log" 2>&1 &
+          api_pid=$!
+          (
+            cd apps/web
+            exec node_modules/.bin/next start --hostname 127.0.0.1 --port 4408
+          ) >"$RUNNER_TEMP/sortex-web.log" 2>&1 &
+          web_pid=$!
+          trap 'kill "$api_pid" "$web_pid" 2>/dev/null || true' EXIT
+          for base in "$SORTEX_PARITY_API" "$SORTEX_PARITY_WEB/api"; do
+            if ! curl --retry 30 --retry-delay 1 --retry-connrefused --max-time 4 --fail --silent --show-error "$base/health/ready" >/dev/null; then
+              echo "Serviços de teste não ficaram prontos."
+              exit 1
+            fi
+          done
+          cd apps/mobile
+          node --import tsx scripts/test-web-ios-parity.ts
