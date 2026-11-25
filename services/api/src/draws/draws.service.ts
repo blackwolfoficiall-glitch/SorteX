@@ -9,6 +9,7 @@ import {
   CampaignDrawStatus,
   CampaignStatus,
   LotteryDrawStatus,
+  LotterySourceType,
   Prisma,
   TicketStatus,
   UserRole,
@@ -17,6 +18,7 @@ import {
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { CaixaFederalResultsService } from './caixa-federal-results.service';
 import { AuditHashService } from './audit-hash.service';
 import {
   DrawRuleDefinition,
@@ -36,6 +38,7 @@ export class DrawsService {
     private readonly prisma: PrismaService,
     private readonly engine: DrawRuleEngineService,
     private readonly hashes: AuditHashService,
+    private readonly caixa: CaixaFederalResultsService,
   ) {}
 
   simulateRule(dto: SimulateRuleDto) {
@@ -47,6 +50,10 @@ export class DrawsService {
 
   async createLotteryDraw(user: AuthenticatedUser, dto: CreateLotteryDrawDto) {
     this.assertFivePrizes(dto);
+    if (dto.sourceType === LotterySourceType.OFFICIAL_API)
+      throw new BadRequestException(
+        'Use a importação oficial para registrar uma resposta da CAIXA.',
+      );
     const draw = await this.prisma.lotteryDraw.create({
       data: {
         ...dto,
@@ -58,6 +65,55 @@ export class DrawsService {
     await this.audit('LotteryDraw', draw.id, 'CREATED', user, undefined, draw);
     return draw;
   }
+  async importCaixaLotteryDraw(
+    user: AuthenticatedUser,
+    extractionNumber: string,
+  ) {
+    const record = await this.caixa.fetchExtraction(extractionNumber);
+    const [firstPrize, secondPrize, thirdPrize, fourthPrize, fifthPrize] =
+      record.prizes;
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const draw = await tx.lotteryDraw.create({
+          data: {
+            provider: 'LOTERIA_FEDERAL',
+            lotteryName: 'Loteria Federal',
+            extractionNumber: record.extractionNumber,
+            drawDate: record.drawDate,
+            firstPrize,
+            secondPrize,
+            thirdPrize,
+            fourthPrize,
+            fifthPrize,
+            sourcePrizes: record.sourcePrizes,
+            sourceUrl: record.sourceUrl,
+            sourceDocumentHash: record.sourceDocumentHash,
+            sourceType: LotterySourceType.OFFICIAL_API,
+            enteredByUserId: user.id,
+            status: LotteryDrawStatus.PENDING_REVIEW,
+          },
+        });
+        await this.audit(
+          'LotteryDraw',
+          draw.id,
+          'IMPORTED_CAIXA',
+          user,
+          undefined,
+          draw,
+          tx,
+        );
+        return draw;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      )
+        throw new ConflictException('Esta extração já está cadastrada.');
+      throw error;
+    }
+  }
+
   listLotteryDraws() {
     return this.prisma.lotteryDraw.findMany({ orderBy: { drawDate: 'desc' } });
   }
@@ -74,12 +130,33 @@ export class DrawsService {
     const current = await this.getLotteryDraw(id);
     if (current.status === LotteryDrawStatus.LOCKED)
       throw new ConflictException('Resultado bloqueado não pode ser alterado.');
+    if (
+      current.sourceType === LotterySourceType.OFFICIAL_API ||
+      dto.sourceType === LotterySourceType.OFFICIAL_API
+    )
+      throw new ConflictException(
+        'Registros importados da CAIXA não podem ser editados manualmente. Use a revisão administrativa.',
+      );
+    this.assertFivePrizes({ ...current, ...dto });
     const next = await this.prisma.lotteryDraw.update({
       where: { id },
       data: {
-        ...dto,
+        provider: dto.provider,
+        lotteryName: dto.lotteryName,
+        extractionNumber: dto.extractionNumber,
         drawDate: dto.drawDate ? new Date(dto.drawDate) : undefined,
+        drawTime: dto.drawTime,
+        firstPrize: dto.firstPrize,
+        secondPrize: dto.secondPrize,
+        thirdPrize: dto.thirdPrize,
+        fourthPrize: dto.fourthPrize,
+        fifthPrize: dto.fifthPrize,
+        sourceUrl: dto.sourceUrl,
+        sourceType: dto.sourceType,
+        notes: dto.notes,
         status: LotteryDrawStatus.PENDING_REVIEW,
+        reviewedByUserId: null,
+        reviewedAt: null,
       },
     });
     await this.audit('LotteryDraw', id, 'UPDATED', user, current, next);
@@ -96,17 +173,32 @@ export class DrawsService {
     const current = await this.getLotteryDraw(id);
     if (current.status === LotteryDrawStatus.LOCKED)
       throw new ConflictException('Resultado já está bloqueado.');
-    const next = await this.prisma.lotteryDraw.update({
-      where: { id },
-      data: {
-        status,
-        reviewedByUserId: user.id,
-        reviewedAt: new Date(),
-        notes: reason,
-      },
+    if (
+      current.sourceType === LotterySourceType.OFFICIAL_API &&
+      status === LotteryDrawStatus.LOCKED &&
+      current.status !== LotteryDrawStatus.VERIFIED
+    )
+      throw new ConflictException(
+        'Verifique a extração da CAIXA antes de bloquear alterações.',
+      );
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.lotteryDraw.updateMany({
+        where: { id, status: current.status, updatedAt: current.updatedAt },
+        data: {
+          status,
+          reviewedByUserId: user.id,
+          reviewedAt: new Date(),
+          notes: reason,
+        },
+      });
+      if (updated.count !== 1)
+        throw new ConflictException(
+          'A extração mudou durante a revisão. Recarregue e tente novamente.',
+        );
+      const next = await tx.lotteryDraw.findUniqueOrThrow({ where: { id } });
+      await this.audit('LotteryDraw', id, status, user, current, next, tx);
+      return next;
     });
-    await this.audit('LotteryDraw', id, status, user, current, next);
-    return next;
   }
 
   async simulateCampaign(
@@ -174,6 +266,11 @@ export class DrawsService {
         extractionNumber: lottery.extractionNumber,
         drawDate: lottery.drawDate,
         prizes: this.prizes(lottery),
+        ...(lottery.sourcePrizes && {
+          sourcePrizes: lottery.sourcePrizes,
+          sourceUrl: lottery.sourceUrl,
+          sourceDocumentHash: lottery.sourceDocumentHash,
+        }),
       },
       ticketId: ticket?.id ?? null,
       policy: campaign.unsoldNumberPolicy,
@@ -812,7 +909,12 @@ export class DrawsService {
       draw.fifthPrize,
     ] as [string, string, string, string, string];
   }
-  private assertFivePrizes(dto: CreateLotteryDrawDto) {
+  private assertFivePrizes(
+    dto: Pick<
+      CreateLotteryDrawDto,
+      'firstPrize' | 'secondPrize' | 'thirdPrize' | 'fourthPrize' | 'fifthPrize'
+    >,
+  ) {
     [
       dto.firstPrize,
       dto.secondPrize,
@@ -820,7 +922,7 @@ export class DrawsService {
       dto.fourthPrize,
       dto.fifthPrize,
     ].forEach((v) => {
-      if (!/^\d{5}$/.test(v))
+      if (typeof v !== 'string' || v.length !== 5 || !/^\d{5}$/.test(v))
         throw new BadRequestException(
           'Cada prêmio deve conter exatamente cinco dígitos.',
         );
@@ -841,8 +943,9 @@ export class DrawsService {
     user: AuthenticatedUser,
     previousData?: unknown,
     newData?: unknown,
+    client: Pick<Prisma.TransactionClient, 'auditLog'> = this.prisma,
   ) {
-    return this.prisma.auditLog.create({
+    return client.auditLog.create({
       data: {
         entityType,
         entityId,

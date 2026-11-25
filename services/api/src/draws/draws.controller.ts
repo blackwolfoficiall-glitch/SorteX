@@ -19,6 +19,7 @@ import {
   ConfirmReceiptDto,
   CreateInstantPrizeDto,
   CreateLotteryDrawDto,
+  ImportCaixaLotteryDrawDto,
   ExecuteDrawDto,
   ManualWinnerLookupDto,
   RejectDrawDto,
@@ -234,6 +235,12 @@ export class AdminLotteryDrawsController {
     @Body() dto: CreateLotteryDrawDto,
   ) {
     return this.draws.createLotteryDraw(user, dto);
+  }
+  @Post('import/caixa') importCaixa(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ImportCaixaLotteryDrawDto,
+  ) {
+    return this.draws.importCaixaLotteryDraw(user, dto.extractionNumber);
   }
   @Get() list() {
     return this.draws.listLotteryDraws();

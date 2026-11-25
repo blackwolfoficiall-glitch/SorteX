@@ -1,3 +1,4 @@
+import { CaixaFederalResultsService } from './caixa-federal-results.service';
 import { Module } from '@nestjs/common';
 import { AuditHashService } from './audit-hash.service';
 import { DrawRuleEngineService } from './draw-rule-engine.service';
@@ -26,6 +27,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     DrawRuleEngineService,
     AuditHashService,
     DrawsService,
+    CaixaFederalResultsService,
     InstantPrizeDetectionService,
     RouletteService,
     {

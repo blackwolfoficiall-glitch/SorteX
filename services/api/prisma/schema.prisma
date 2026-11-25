@@ -2492,6 +2492,7 @@ model LotteryDraw {
   fifthPrize         String
   sourceUrl          String?
   sourceDocumentHash String?
+  sourcePrizes       Json?
   sourceType         LotterySourceType        @default(MANUAL)
   status             LotteryDrawStatus        @default(DRAFT)
   notes              String?

@@ -68,6 +68,7 @@ describe('DrawsService winner lookup', () => {
       prisma as never,
       engine as never,
       {} as never,
+      {} as never,
     );
     return { prisma, engine, service };
   }
