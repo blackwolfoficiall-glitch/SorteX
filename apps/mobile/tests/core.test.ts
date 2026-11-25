@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { SortexClient, type Vault } from "../src/api/client";
-import { TEST_API, validateApiUrl } from "../src/api/config";
+import { QA_API, TEST_API, validateApiUrl } from "../src/api/config";
 import { BuyerSandboxPix } from "../src/buyer/sandbox-pix";
 import {
   initial,
@@ -48,6 +48,9 @@ function setup(
 }
 test("API principal, credenciais e proxy arbitrário recusados", () => {
   assert.equal(validateApiUrl(TEST_API), TEST_API);
+  assert.equal(validateApiUrl(QA_API + "/"), QA_API);
+  assert.throws(() => validateApiUrl(QA_API.replace("sortexqa", "other")));
+  assert.throws(() => validateApiUrl(QA_API + "/another/path"));
   for (const url of [
     "https://sortex-homologacao.netlify.app",
     "https://user:pass@sortex-fase1-review.netlify.app",

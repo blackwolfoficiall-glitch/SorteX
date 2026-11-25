@@ -70,7 +70,7 @@ jobs:
     env:
       CI: '1'
       EXPO_NO_TELEMETRY: '1'
-      EXPO_PUBLIC_API_URL: https://sortex-fase1-review.netlify.app/.netlify/functions/sortex-api
+      EXPO_PUBLIC_API_URL: ${{ github.ref == 'refs/heads/homologacao/web-ios-integrada' && 'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech' || 'https://sortex-fase1-review.netlify.app/.netlify/functions/sortex-api' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

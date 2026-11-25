@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomBytes, randomInt } from "node:crypto";
 import fs from "node:fs";
 import { SortexClient, type Vault } from "../src/api/client";
-import { TEST_API, validateApiUrl } from "../src/api/config";
+import { QA_API, validateApiUrl } from "../src/api/config";
 import { initial, registrationPayload } from "../src/domain/registration";
 import {
   isValidCpf,
@@ -18,7 +18,7 @@ if (process.env.SORTEX_TEST_WRITES !== "isolated-synthetic-only")
   throw Error(
     "Use SORTEX_TEST_WRITES=isolated-synthetic-only to authorize synthetic fixtures.",
   );
-const base = validateApiUrl(process.env.EXPO_PUBLIC_API_URL || TEST_API);
+const base = validateApiUrl(process.env.EXPO_PUBLIC_API_URL || QA_API);
 const file = process.env.SORTEX_TEST_CREDENTIAL_FILE;
 if (!file || !file.startsWith("/tmp/"))
   throw Error(

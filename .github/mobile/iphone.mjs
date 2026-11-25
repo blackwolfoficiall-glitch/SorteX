@@ -7,7 +7,8 @@ import path from 'node:path';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const app = path.join(root, 'apps/mobile');
-const api = 'https://sortex-fase1-review.netlify.app/.netlify/functions/sortex-api';
+const phase1Api = 'https://sortex-fase1-review.netlify.app/.netlify/functions/sortex-api';
+const qaApi = 'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech';
 const mode = process.argv[2] || 'go';
 const connection = process.argv[3] || '--tunnel';
 function fail(message) { throw new Error(message); }
@@ -34,6 +35,8 @@ async function main() {
   const testBranches = ['feat/mobile-expo', 'homologacao/web-ios-integrada'];
   if (branch.status !== 0 || !testBranches.includes(branch.stdout.trim()))
     fail('Use um clone separado na branch feat/mobile-expo ou homologacao/web-ios-integrada; nenhuma branch foi alterada.');
+  const integrated = branch.stdout.trim() === 'homologacao/web-ios-integrada';
+  const api = integrated ? qaApi : phase1Api;
   const head = capture('git', ['rev-parse', 'HEAD'], { cwd: root });
   if (head.status !== 0) fail('Não foi possível identificar o commit.');
   console.log(`SorteX · teste iPhone · ${head.stdout.trim()}`);
@@ -44,9 +47,11 @@ async function main() {
     fail('API recusada: este iniciador aceita somente a prévia isolada.');
   // Explicitly override dotenv API values in the child process; never print env contents.
   process.env.EXPO_PUBLIC_API_URL = api;
-  const response = await fetch(`${api}/health`, { redirect: 'error', signal: AbortSignal.timeout(30000) });
-  if (!response.ok || (await response.json()).status !== 'ok') fail(`API isolada indisponível (HTTP ${response.status}).`);
-  console.log('PASS: prévia Fase 1 acessível por HTTPS. Isso não comprova a rede do iPhone nem que a candidata usa a base integrada.');
+  const response = await fetch(`${api}/health${integrated ? '/ready' : ''}`, { redirect: 'error', signal: AbortSignal.timeout(30000) });
+  if (!response.ok || (await response.json()).status !== (integrated ? 'ready' : 'ok')) fail(`API isolada indisponível (HTTP ${response.status}).`);
+  console.log(integrated
+    ? 'PASS: API isolada Web + iOS pronta por HTTPS. Ainda não comprova a rede do iPhone.'
+    : 'PASS: prévia Fase 1 acessível por HTTPS. Não comprova a base integrada.');
   if (!existsSync(path.join(app, 'node_modules/expo/package.json')))
     fail('Dependências ausentes. Execute npm ci em apps/mobile e tente novamente.');
   run('npx', ['--no-install', 'expo', 'install', '--check']);
