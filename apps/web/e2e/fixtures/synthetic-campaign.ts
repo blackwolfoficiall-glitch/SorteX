@@ -18,11 +18,12 @@ export async function createSyntheticCampaign(
   if (!base || ![base, ...upstreams].every((url) => loopback.includes(new URL(url).hostname))) {
     throw new Error("Campanhas sintéticas exigem Next e API de teste locais e isolados.");
   }
-  const slug = `homologacao-e2e-${randomUUID()}`;
+  const runId = randomUUID();
+  const slug = `homologacao-e2e-${runId}`;
   const now = Date.now();
   const created = await request.post("/api/campaigns", {
     data: {
-      title: `[HOMOLOGAÇÃO] ${label}`,
+      title: `[HOMOLOGAÇÃO] ${label} ${runId.slice(0, 8)}`,
       slug,
       category: "OTHER",
       regulation: "Regulamento exclusivo de homologação automatizada.",

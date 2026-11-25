@@ -159,8 +159,14 @@ test("alinhamentos da marca, falha da imagem e estados das metas são determiní
   ]};
   await page.route(`**/api/public/campaigns/${source!.slug}`,route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(milestoneBody)}),{times:1});
   await page.goto(`/campanha/${source!.slug}`);
-  const states=await page.getByTestId("milestone-card").evaluateAll(cards=>cards.map(card=>({percentage:Number(card.getAttribute("data-milestone-percentage")),state:card.getAttribute("data-milestone-state")})));
-  expect(states).toEqual([
+  const milestoneCards = page.getByTestId("milestone-card");
+  await expect(milestoneCards).toHaveCount(milestoneBody.milestonePrizes.length);
+  await expect.poll(() => milestoneCards.evaluateAll(
+    (cards) => cards.map((card) => ({
+      percentage: Number(card.getAttribute("data-milestone-percentage")),
+      state: card.getAttribute("data-milestone-state"),
+    })),
+  )).toEqual([
     {percentage:20,state:"DRAWN"},
     {percentage:30,state:"RELEASED"},
     {percentage:40,state:"SCHEDULED"},
