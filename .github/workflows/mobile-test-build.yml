@@ -1,7 +1,7 @@
 name: Mobile isolated test builds
 on:
   push:
-    branches: [feat/mobile-expo]
+    branches: [feat/mobile-expo, homologacao/web-ios-integrada]
     paths: ['apps/mobile/**', 'packages/contracts/**', '.github/workflows/mobile-test-build.yml']
   workflow_dispatch:
 permissions:
@@ -61,7 +61,7 @@ jobs:
           compression-level: 0
           if-no-files-found: error
   ios-simulator:
-    if: github.ref == 'refs/heads/feat/mobile-expo' && github.event.repository.private == false
+    if: (github.ref == 'refs/heads/feat/mobile-expo' || github.ref == 'refs/heads/homologacao/web-ios-integrada') && github.event.repository.private == false
     runs-on: macos-latest
     timeout-minutes: 40
     defaults:
@@ -97,6 +97,7 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$app_path" /tmp/sortex-ios-simulator.zip
           test "$(stat -f %z /tmp/sortex-ios-simulator.zip)" -lt 100000000
       - uses: actions/upload-artifact@v4
+        if: github.ref == 'refs/heads/feat/mobile-expo'
         with:
           name: sortex-ios-simulator-screen-${{ github.sha }}
           path: |
