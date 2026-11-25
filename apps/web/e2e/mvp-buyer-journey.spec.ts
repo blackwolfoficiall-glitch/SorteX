@@ -3,9 +3,13 @@ import { expect, test } from "@playwright/test";
 test.use({ storageState: { cookies: [], origins: [] } });
 
 async function loginBuyer(page: import("@playwright/test").Page) {
+  const email = process.env.E2E_BUYER_EMAIL;
+  const password = process.env.E2E_BUYER_PASSWORD;
+  if (!email || !password)
+    throw new Error("Defina E2E_BUYER_EMAIL e E2E_BUYER_PASSWORD para a conta sintética.");
   await page.goto("/login");
-  await page.getByLabel("E-mail").fill("buyer1@sortex.example.invalid");
-  await page.getByLabel("Senha", { exact: true }).fill("SortexTest!2026Mvp");
+  await page.getByLabel("E-mail").fill(email);
+  await page.getByLabel("Senha", { exact: true }).fill(password);
   await page.getByRole("button", { name: "Entrar", exact: true }).click();
   await expect(page).toHaveURL(/\/comprador/);
 }
@@ -26,7 +30,7 @@ test("comprador visualiza campanha, reserva e acessa checkout sandbox", async ({
   await expect(page.getByRole("button", { name: "Gerar PIX de teste" })).toBeDisabled();
 });
 
-test("compra aprovada e títulos persistidos aparecem apó novo login", async ({ page }) => {
+test("compra aprovada e títulos persistidos aparecem após novo login", async ({ page }) => {
   await loginBuyer(page);
   await page.goto("/comprador/meus-numeros");
   await expect(page.getByRole("heading", { name: "Meus títulos" })).toBeVisible();
