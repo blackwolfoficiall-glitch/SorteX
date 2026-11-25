@@ -1,97 +1,48 @@
-"use client";
-
 import Link from "next/link";
-import {
-  ArrowLeft,
-  ShieldCheck,
-  CreditCard,
-  Smartphone,
-  CircleCheck,
-} from "lucide-react";
+import { ArrowLeft, CreditCard, QrCode, ShieldCheck } from "lucide-react";
 
 export default function MercadoPagoPage() {
   return (
     <main className="min-h-screen bg-zinc-50">
-
       <div className="mx-auto max-w-md p-6">
-
         <Link
           href="/cadastro/organizador/financeiro"
           className="inline-flex items-center gap-2 text-violet-700"
         >
-          <ArrowLeft size={20} />
+          <ArrowLeft aria-hidden="true" size={20} />
           Voltar
         </Link>
 
         <div className="mt-8 rounded-3xl bg-white p-8 shadow">
-
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/gateways/mercadopago.png"
-            alt="Mercado Pago"
-            className="mx-auto h-16 object-contain"
-          />
-
-          <h1 className="mt-6 text-center text-3xl font-black">
-            Mercado Pago
-          </h1>
-
+          <h1 className="text-center text-3xl font-black">Mercado Pago</h1>
           <p className="mt-3 text-center text-zinc-500">
-            Conecte sua conta para começar a receber
-            pagamentos automaticamente pela SorteX.
+            A SorteX possui um adaptador para testar Pix e cartão de crédito em
+            sandbox. A validação com o provedor ainda está pendente.
           </p>
 
-          <div className="mt-8 space-y-4">
+          <ul className="mt-8 space-y-4">
+            <li className="flex items-center gap-3">
+              <QrCode aria-hidden="true" className="text-violet-700" /> Pix de
+              teste
+            </li>
+            <li className="flex items-center gap-3">
+              <CreditCard aria-hidden="true" className="text-violet-700" />{" "}
+              Cartão de teste
+            </li>
+            <li className="flex items-center gap-3">
+              <ShieldCheck aria-hidden="true" className="text-violet-700" /> Sem
+              recebimento, split ou saque real
+            </li>
+          </ul>
 
-            <div className="flex items-center gap-3">
-
-              <CircleCheck className="text-green-600" />
-
-              PIX
-
-            </div>
-
-            <div className="flex items-center gap-3">
-
-              <CreditCard className="text-green-600" />
-
-              Cartão de Crédito
-
-            </div>
-
-            <div className="flex items-center gap-3">
-
-              <Smartphone className="text-green-600" />
-
-              Cartão de Débito
-
-            </div>
-
-            <div className="flex items-center gap-3">
-
-              <ShieldCheck className="text-green-600" />
-
-              Recebimento automático
-
-            </div>
-
-          </div>
-
-          <button
-            className="mt-10 w-full rounded-2xl bg-sky-500 py-5 text-lg font-bold text-white"
+          <Link
+            href="/dashboard/financeiro"
+            className="mt-10 block w-full rounded-2xl bg-violet-700 py-5 text-center text-lg font-bold text-white transition hover:bg-violet-800"
           >
-            Conectar com Mercado Pago
-          </button>
-
-          <p className="mt-6 text-center text-sm text-zinc-500">
-            Você será redirecionado para o Mercado Pago
-            para autorizar a conexão.
-          </p>
-
+            Abrir painel financeiro
+          </Link>
         </div>
-
       </div>
-
     </main>
   );
 }
