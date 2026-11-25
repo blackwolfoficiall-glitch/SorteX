@@ -20,7 +20,13 @@ export class HealthController {
   }
   @Get('ready') @Public() async ready() {
     try {
-      await this.p.$queryRaw`SELECT 1`;
+      // A reachable but empty database must not be marked ready. Probe
+      // core tables without requiring seeded records or scanning tables.
+      await this.p.$transaction([
+        this.p.user.findFirst({ select: { id: true } }),
+        this.p.campaign.findFirst({ select: { id: true } }),
+        this.p.payment.findFirst({ select: { id: true } }),
+      ]);
       let storage: 'disabled' | 'up' | 'not-initialized';
       if (process.env.UPLOADS_DISABLED === 'true') {
         storage = 'disabled';

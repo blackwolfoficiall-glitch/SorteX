@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
+const { spawnSync } = require('node:child_process');
 
 const project = 'crimson-bread-73821703';
 const branch = 'br-lingering-voice-bc92seow';
@@ -10,6 +11,25 @@ const slug = 'sortexapi';
 const root = 'https://console.neon.tech/api/v2';
 
 async function main() {
+  // This helper predates the isolated Web+iOS QA environment. Never let
+  // a candidate checkout publish to the legacy homologation site.
+  const legacyRef = 'refs/heads/infra/netlify-northflank-neon';
+  const repo = path.resolve(__dirname, '../../..');
+  const checkout = spawnSync('git', ['symbolic-ref', '-q', 'HEAD'], {
+    cwd: repo,
+    encoding: 'utf8',
+  });
+  const fromLegacyWorkflow =
+    checkout.status === 1 &&
+    process.env.GITHUB_ACTIONS === 'true' &&
+    process.env.GITHUB_REF === legacyRef &&
+    spawnSync('git', ['rev-parse', 'HEAD'], { cwd: repo, encoding: 'utf8' })
+      .stdout?.trim() === process.env.GITHUB_SHA;
+  if (checkout.stdout?.trim() !== legacyRef && !fromLegacyWorkflow) {
+    throw new Error(
+      'Publicador exclusivo da homologação legada. Não use na candidata Web + iOS.',
+    );
+  }
   const key = process.env.NEON_API_KEY;
   if (!key) throw new Error('Configure NEON_API_KEY como segredo do ambiente.');
   const filename = process.argv[2];
