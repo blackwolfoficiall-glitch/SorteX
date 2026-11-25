@@ -120,6 +120,10 @@ describe('MercadoPagoGatewayProvider', () => {
 
   it.each([
     ['processed', 'accredited', 'APPROVED'],
+    ['processed', 'partially_refunded', 'PROCESSING'],
+    ['processed', undefined, 'PENDING'],
+    ['processing', 'in_review', 'PROCESSING'],
+    ['charged_back', 'in_process', 'CHARGEBACK'],
     ['action_required', 'waiting_transfer', 'PENDING'],
     ['processing', 'in_process', 'PROCESSING'],
     ['expired', 'expired', 'EXPIRED'],

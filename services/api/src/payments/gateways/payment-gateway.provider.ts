@@ -39,6 +39,7 @@ export type GatewayPaymentResult = {
   installments?: number;
   failureReason?: string;
   rawStatus?: string;
+  reconciliationIssue?: 'PARTIAL_REFUND' | 'CHARGEBACK_REIMBURSED';
 };
 
 export type GatewayWebhookContext = {

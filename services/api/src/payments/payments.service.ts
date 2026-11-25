@@ -679,10 +679,32 @@ export class PaymentsService {
         if (!new Prisma.Decimal(gateway.amount).equals(payment.amount)) {
           throw new ConflictException('Valor do webhook divergente.');
         }
-        if (
+        if (gateway.reconciliationIssue) {
+          throw new ConflictException(
+            gateway.reconciliationIssue === 'PARTIAL_REFUND'
+              ? 'Estorno parcial confirmado; requer conciliação manual.'
+              : 'Contestação devolvida ao vendedor; requer conciliação manual.',
+          );
+        }
+        const localApproval =
           payment.status === PaymentStatus.APPROVED &&
-          payment.purchase.status === PurchaseStatus.PAID
-        ) {
+          payment.purchase.status === PurchaseStatus.PAID;
+        const reversed =
+          payment.status === PaymentStatus.REFUNDED ||
+          payment.status === PaymentStatus.CHARGEBACK;
+        const reversal =
+          gateway.status === PaymentStatus.REFUNDED ||
+          gateway.status === PaymentStatus.CHARGEBACK
+            ? gateway.status
+            : null;
+        if (reversal && !localApproval && !reversed) {
+          throw new ConflictException(
+            'Reversão informada sem aprovação local; requer conciliação manual.',
+          );
+        }
+        // A confirmação nunca pode ser reaberta por uma notificação tardia.
+        // O ledger permite apenas um débito de reversão por pagamento liquidado.
+        if (reversed || (localApproval && !reversal)) {
           await transaction.auditLog.create({
             data: {
               entityType: 'PAYMENT',
@@ -699,6 +721,7 @@ export class PaymentsService {
               processed: true,
               processedAt: new Date(),
               paymentId: payment.id,
+              errorMessage: null,
             },
           });
           return payment;
@@ -756,23 +779,25 @@ export class PaymentsService {
             payment.id,
           );
           await this.crmSync.syncApprovedPayment(transaction, payment.id);
+        } else if (reversal) {
+          await transaction.payment.update({
+            where: { id: payment.id },
+            data: {
+              status: reversal,
+              refundedAt:
+                reversal === PaymentStatus.REFUNDED ? new Date() : undefined,
+              activePurchaseKey: null,
+              failureReason: null,
+            },
+          });
+          await this.ledger.recordReversal(transaction, payment.id, reversal);
+          await this.affiliateCommissions.reversePayment(
+            transaction,
+            payment.id,
+            reversal,
+          );
         } else {
           await this.applyNonApprovedStatus(transaction, payment, gateway);
-          if (
-            gateway.status === PaymentStatus.REFUNDED ||
-            gateway.status === PaymentStatus.CHARGEBACK
-          ) {
-            await this.ledger.recordReversal(
-              transaction,
-              payment.id,
-              gateway.status,
-            );
-            await this.affiliateCommissions.reversePayment(
-              transaction,
-              payment.id,
-              gateway.status,
-            );
-          }
         }
         if (payment.status !== gateway.status) {
           await transaction.auditLog.create({

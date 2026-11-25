@@ -120,6 +120,11 @@ describe('PaymentsService', () => {
   let service: PaymentsService;
   let prisma: any;
   let provider: any;
+  let ledger: { recordApprovedPayment: jest.Mock; recordReversal: jest.Mock };
+  let commissions: {
+    recordApprovedPayment: jest.Mock;
+    reversePayment: jest.Mock;
+  };
 
   beforeEach(() => {
     prisma = {
@@ -158,13 +163,18 @@ describe('PaymentsService', () => {
       parseWebhookEvent: jest.fn(),
       normalizeStatus: jest.fn(),
     };
+    ledger = { recordApprovedPayment: jest.fn(), recordReversal: jest.fn() };
+    commissions = {
+      recordApprovedPayment: jest.fn(),
+      reversePayment: jest.fn(),
+    };
     service = new PaymentsService(
       prisma,
       { get: jest.fn().mockReturnValue(provider) } as any,
       { calculate: jest.fn() } as any,
       { detectForPurchase: jest.fn() } as any,
-      { recordApprovedPayment: jest.fn() } as any,
-      { recordApprovedPayment: jest.fn(), reversePayment: jest.fn() } as any,
+      ledger as any,
+      commissions as any,
       { syncApprovedPayment: jest.fn() } as any,
       { evaluateReached: jest.fn() } as any,
     );
@@ -423,6 +433,97 @@ describe('PaymentsService', () => {
       }),
     );
     expect(result.status).toBe(PaymentStatus.APPROVED);
+  });
+
+  it.each([PaymentStatus.REFUNDED, PaymentStatus.CHARGEBACK])(
+    'concilia %s integral após aprovação sem revender títulos',
+    async (status) => {
+      const approved = payment({
+        status: PaymentStatus.APPROVED,
+        purchase: { ...payment().purchase, status: PurchaseStatus.PAID },
+        campaign: { id: 'campaign-1', reservedNumbers: 0 },
+      });
+      prisma.payment.findFirst
+        .mockResolvedValueOnce(approved)
+        .mockResolvedValue({ ...approved, status });
+      prisma.payment.findUniqueOrThrow.mockResolvedValue({
+        ...approved,
+        status,
+      });
+      const result = await (service as any).processGatewayUpdate(
+        'event-reversal',
+        gatewayResult({ status }),
+      );
+      await (service as any).processGatewayUpdate(
+        'event-reversal-duplicate',
+        gatewayResult({ status }),
+      );
+      expect(result.status).toBe(status);
+      expect(prisma.payment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status, activePurchaseKey: null }),
+        }),
+      );
+      expect(ledger.recordReversal).toHaveBeenCalledTimes(1);
+      expect(ledger.recordReversal).toHaveBeenCalledWith(
+        prisma,
+        approved.id,
+        status,
+      );
+      expect(commissions.reversePayment).toHaveBeenCalledTimes(1);
+      expect(prisma.ticket.updateMany).not.toHaveBeenCalled();
+      expect(prisma.ticket.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.purchase.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('não reaprova cobrança estornada após atualização tardia', async () => {
+    const refunded = payment({
+      status: PaymentStatus.REFUNDED,
+      purchase: { ...payment().purchase, status: PurchaseStatus.PAID },
+      campaign: { id: 'campaign-1', reservedNumbers: 0 },
+    });
+    prisma.payment.findFirst.mockResolvedValue(refunded);
+    const result = await (service as any).processGatewayUpdate(
+      'event-stale',
+      gatewayResult({ status: PaymentStatus.APPROVED }),
+    );
+    expect(result.status).toBe(PaymentStatus.REFUNDED);
+    expect(ledger.recordApprovedPayment).not.toHaveBeenCalled();
+    expect(prisma.payment.update).not.toHaveBeenCalled();
+    expect(prisma.ticket.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('não lança estorno sem liquidação anterior no ledger', async () => {
+    prisma.payment.findFirst.mockResolvedValue(payment());
+    await expect(
+      (service as any).processGatewayUpdate(
+        'event-unreconciled',
+        gatewayResult({ status: PaymentStatus.REFUNDED }),
+      ),
+    ).rejects.toThrow('sem aprovação local');
+    expect(ledger.recordReversal).not.toHaveBeenCalled();
+    expect(prisma.payment.update).not.toHaveBeenCalled();
+  });
+
+  it('encaminha estorno parcial para conciliação sem débito integral', async () => {
+    prisma.payment.findFirst.mockResolvedValue(
+      payment({
+        status: PaymentStatus.APPROVED,
+        purchase: { ...payment().purchase, status: PurchaseStatus.PAID },
+      }),
+    );
+    await expect(
+      (service as any).processGatewayUpdate(
+        'event-partial',
+        gatewayResult({
+          status: PaymentStatus.PROCESSING,
+          reconciliationIssue: 'PARTIAL_REFUND',
+        }),
+      ),
+    ).rejects.toThrow('Estorno parcial');
+    expect(ledger.recordReversal).not.toHaveBeenCalled();
+    expect(prisma.payment.update).not.toHaveBeenCalled();
   });
 
   it('rejeita webhook com valor divergente antes de alterar títulos', async () => {

@@ -110,7 +110,7 @@ para análise.
 ```text
 CREATED -> PENDING | PROCESSING
 PENDING | PROCESSING -> APPROVED | REJECTED | CANCELLED | EXPIRED
-APPROVED -> REFUNDED | CHARGEBACK (estrutura preparada)
+APPROVED -> REFUNDED | CHARGEBACK (só após confirmação pelo provedor)
 ```
 
 Na aprovação:
@@ -125,6 +125,17 @@ Campaign -> reservados diminuem, vendidos e receita aumentam
 Rejeição libera a trava para nova tentativa, mas mantém a reserva até seu prazo.
 Cancelamento e expiração liberam os títulos. Títulos `SOLD` nunca retornam para
 `AVAILABLE` automaticamente.
+
+O estorno confirmado pelo provedor gera um único débito no extrato interno do
+organizador e reverte a comissão, sem revender os mesmos títulos. Uma atualização
+tardia de aprovação não reabre o pagamento estornado. O estorno solicitado pelo
+usuário continua sendo apenas pedido para análise, sem chamar o provedor.
+Estorno parcial, reversão sem aprovação local e devolução de contestação ao
+vendedor exigem conciliação manual e não geram débito integral automático.
+
+Os estados são interpretados conforme a
+[referência de transações da Orders API](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/payment-management/status/transaction-status).
+`processed` sozinho não comprova crédito: é necessário o detalhe `accredited`.
 
 ## Tarifas
 
@@ -147,12 +158,50 @@ primeira campanha, taxa personalizada, criação PIX/cartão, assinatura, webhoo
 duplicado, divergência de valor/referência, transição para `PAID`/`SOLD`,
 expiração, cancelamento, permissão, rollback e sanitização.
 
+### Regressão com banco descartável
+
+A suíte `services/api/test/payments-postgres.e2e-spec.ts` roda com
+`SORTEX_PAYMENTS_TEST_DATABASE_URL` apontando para um PostgreSQL local e
+descartável em `127.0.0.1`, banco `sortex_payments_test_*` já migrado.
+Na pasta `services/api`:
+
+```sh
+npm run test:e2e -- --runInBand payments-postgres
+```
+
+O teste exerce HTTP, validação HMAC do SDK, transações Prisma e persistência
+de pagamento, títulos e lançamentos. Só a consulta de order ao SDK recebe
+respostas de teste. Isso **não** comprova entrega de webhook, processamento
+de PIX, expiração ou estorno no ambiente externo do Mercado Pago.
+
+### Aceite externo pendente
+
+- Selecionar **Teste** no painel da integração e configurar a chave pública,
+  o token e o segredo de webhook **exclusivamente** nos segredos do ambiente
+  isolado. O [guia oficial de credenciais de teste](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/resources/credentials)
+  informa que o token de teste de Orders usa prefixo `APP_USR`; o prefixo
+  não confirma o ambiente. Nunca copiar credenciais de produção.
+- Com o [roteiro oficial de PIX de teste](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/integration-test/pix),
+  confirmar no ambiente de teste a criação da cobrança, entrega autenticada,
+  reentrega, expiração/cancelamento/estorno e conciliação. Não pagar QR Code
+  como cliente real. Validar o mesmo pedido no web e no iPhone.
+- Manter separado saldo interno, pendente e disponível; nenhum desses
+  valores comprova split efetivamente liquidado ou saque executado.
+
+### Gateways adicionais, ainda sem adaptadores de cobrança
+
+| Gateway | Pré-requisitos antes de implementar e habilitar |
+| --- | --- |
+| Stone | Definir o produto com a Stone. [Stone Online](https://online.stone.com.br/docs/o-que-e-o-stone-online) é a API transacional que pressupõe serviços complementares já existentes; [Connect Stone](https://connect-stone.stone.com.br/docs/processo-de-integra%C3%A7%C3%A3o) atende terminal/PDV e exige o programa de parcerias. Não são substitutos diretos para um checkout web/iOS. |
+| PagBank | Usar conta/token de sandbox e a [API de Pedidos](https://developer.pagbank.com.br/reference/criar-pedido); validar [Pix e sua notificação](https://developer.pagbank.com.br/reference/criar-pedido-com-qr-code-pix-v2), estados e reentregas no [ambiente separado](https://developer.pagbank.com.br/docs/ambientes-disponiveis). |
+| Pagar.me | Usar conta e chaves de teste da [Core API v5](https://docs.pagar.me/docs/quickstart-pagarme), verificar o [contrato de autenticação](https://docs.pagar.me/reference/autentica%C3%A7%C3%A3o-2) do produto escolhido e validar webhooks, cancelamento e estorno antes de expor no checkout. Split exige validação separada de recebedores e liquidação. |
+
 ## Limitações
 
 - migração Prisma ainda precisa ser revisada e aplicada manualmente;
 - credenciais e webhook precisam ser configurados no painel do Mercado Pago;
 - taxa do gateway é estimada até haver dados de tarifa na resposta/conciliação;
 - refund-request apenas registra solicitação para análise;
-- não há saque, split, repasse, chargeback completo ou conciliação;
+- não há saque, split, repasse, tratamento completo de contestação ou conciliação externa;
 - ativação de produção exige revisão jurídica, financeira, segurança e testes de
   homologação independentes.
