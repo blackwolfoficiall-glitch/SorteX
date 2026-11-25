@@ -10,7 +10,9 @@ test("comprador vê a capa publicada carregada no card do sorteio", async ({ pag
   if (!email || !password)
     throw new Error("Defina E2E_BUYER_EMAIL e E2E_BUYER_PASSWORD para a conta sintética.");
 
-  await page.request.post("/api/auth/logout");
+  // The organizer fixture is shared by other tests. Clear only this context's
+  // cookie rather than revoking the shared session in the backend.
+  await page.context().clearCookies();
   await page.goto("/login");
   await page.getByLabel("E-mail").fill(email);
   await page.getByLabel("Senha", { exact: true }).fill(password);
