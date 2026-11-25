@@ -12,3 +12,9 @@
 | Logout | Encerra a sessão em ambos os clientes móveis de teste | Dois POST /auth/logout retornaram 201, cliente deixa de estar autenticado |
 
 Execução de 15:29:04 UTC no código de integração sobre `6f8ba34`, com resolvedor e script ainda na cópia de trabalho. PostgreSQL 18.7 isolado com 19 migrações, sem banco preexistente e sem acesso a pagamento real. O armazenamento reportou `up` por existir diretório local, o que não prova upload, armazenamento hospedado ou recuperação.
+
+### Reexecução na integração
+
+- Protocolo HTTP local executado às 15:46:08 UTC no SHA `86bc012` com 20 migrações. Rascunho web `cmwwapwc20013pe4yc0l60lra`; rascunho criado pelo cliente móvel `cmwwapx6d0015pe4ygafzr469`. Mesmo ID, papel e perfil em ambos os sentidos; renovação emitindo um novo token; outro organizador sem acesso de escrita.
+- Chromium: 93/93 na suíte completa do trabalho web com HTTPS local, Nest e PostgreSQL 18.7. Novo teste focado da capa passou ao confirmar HTTP 200 e imagem renderizada. WebKit com viewport de iPhone 13: 32/32 na mesma trilha web, incluindo a capa e os casos de cadastro.
+- Integração recente: 305/305 testes unitários da API; 25/25 testes móveis; TypeScript e bundle Metro iOS com a reserva ativada. Bundle, navegador e cliente HTTP não são compilação/instalação de iPhone físico.

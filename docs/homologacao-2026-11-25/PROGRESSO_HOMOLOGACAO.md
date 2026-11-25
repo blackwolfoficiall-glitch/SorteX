@@ -19,3 +19,17 @@
 ## Renovação de sessão
 
 A API agora vincula cada renovação à credencial completa e emite um identificador novo por refresh, inclusive para renovações no mesmo segundo. A alteração não apaga contas nem modifica a tabela de sessões. Registros de refresh legados deixam de renovar; na implantação aprovada, comunique que esses usuários precisam reautenticar. Esse comportamento foi testado no backend, não no SecureStore do aparelho.
+
+## Evidências adicionais de 25/11
+
+| Área | Entrega desta rodada | Prova e limite |
+|---|---|---|
+| Web | Correções nas nove falhas da auditoria; revisão de seleção de mídia, retorno de automações, busca de pedidos, ordem de prêmios e URL canônica da capa no comprador. | 93/93 no Chromium no laboratório local; 32/32 no WebKit com viewport de iPhone e capa real. Não prova OAuth real nem hardware. |
+| Organizador móvel | Criar e editar rascunhos nativos com os componentes visuais existentes e a API central. | HTTP real local comprovou criação/edição bidirecional, mesma entidade, papéis, renovação de sessão e isolamento. A tela ainda precisa do iPhone. |
+| Comprador móvel | Reserva manual/aleatória, prazo do servidor, cancelamento, consulta do pedido e títulos apenas quando confirmados. Montado sob flag de teste. | Vitórias locais HTTP + PostgreSQL e tipo/bundle iOS. Não houve pagamento, título liquidado no provedor ou teste físico. |
+| Financeiro | Conciliar reversões sem duplicação e não informar gateways indisponíveis como conectados. | Regressão com assinatura e persistência local; resposta do provedor controlada. Ainda falta pedido e webhook real do sandbox. |
+| Federal | Importar concurso oficial para revisão, guardar cinco valores brutos, hash e representação canônica sem perder zeros. | CAIXA 6091 via navegador, teste HTTP/PG de revisão e trava. Sem publicação automática ou comparação no iPhone. |
+| Storage | Inicializar diretório privado local/montado, distinguir arquivos desabilitados e restringir documentos ao dono ou revisor autorizado. | HTTP + PostgreSQL + filesystem isolados; acesso e auditoria verificados. Bucket hospedado e restauração continuam abertos. |
+| Infraestrutura | Criado projeto Neon Free separado `sortex-web-ios-qa`, PostgreSQL 18, sem cópia das bases existentes. | Consulta de catálogo confirmou zero tabelas de aplicação. A tentativa de acesso direto para aplicar migrações recebeu Prisma P1001 neste executor; API e site ainda não foram ligados a ele. |
+
+**Não é homologação final.** Estado formal de aceite: 0/9. Preservar o checkout do Mac antes de conciliar WebView, executar instalada no iPhone e usar credenciais verificadas da área Teste, sem escanear Pix ou movimentar dinheiro. A aprovação da App Store e autorizações jurídicas/comerciais são portões externos distintos.
