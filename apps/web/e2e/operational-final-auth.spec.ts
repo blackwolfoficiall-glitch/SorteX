@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { createSyntheticCampaign } from "./fixtures/synthetic-campaign";
 
 test.use({
   storageState: { cookies: [], origins: [] },
@@ -155,17 +156,11 @@ test("organizador — sessão, módulos, cópia editável e publicação", async
       : ["/dashboard/campanhas", "/dashboard/personalizacao"];
   for (const path of modulePaths) await openHealthy(page, path);
 
-  const listResponse = await page.request.get("/api/campaigns/my");
-  expect(listResponse.status(), await listResponse.text()).toBe(200);
-  const listPayload = await listResponse.json();
-  const campaigns = Array.isArray(listPayload)
-    ? listPayload
-    : (listPayload.items ?? listPayload.campaigns ?? []);
-  const source = campaigns.find(
-    (item: { id?: string; status?: string }) =>
-      item.id && item.status === "PUBLISHED",
-  );
-  expect(source, "Nenhuma campanha publicada para duplicação segura").toBeTruthy();
+  // Legacy seeds may be already published despite missing today's mandatory
+  // fields. Duplicate a source that passed the real publication checklist.
+  const source = await createSyntheticCampaign(page.request, "Origem da cópia", {
+    publish: true,
+  });
 
   const duplicate = await page.request.post(
     `/api/campaigns/${source.id}/duplicate`,

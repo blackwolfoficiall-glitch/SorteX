@@ -103,6 +103,8 @@ export default function Automacoes() {
   const [message, setMessage] = useState("Acompanhamento automático da SorteX");
   const [builderOpen, setBuilderOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
+  const [testError, setTestError] = useState("");
+  const [testingId, setTestingId] = useState<string | null>(null);
   const load = () => automations().then(setItems);
   useEffect(() => {
     void load();
@@ -134,6 +136,25 @@ export default function Automacoes() {
     setBuilderOpen(false);
     await load();
   }
+  async function runSandboxTest(id: string) {
+    if (testingId) return;
+    setTestingId(id);
+    setFeedback("");
+    setTestError("");
+    try {
+      const updated = await testAutomation(id);
+      setItems((current) =>
+        current.map((item) => item.id === id ? updated : item),
+      );
+      setFeedback("Teste executado no sandbox. Nenhuma mensagem externa foi enviada.");
+    } catch (cause) {
+      setTestError(
+        cause instanceof Error ? cause.message : "Não foi possível executar o teste sandbox.",
+      );
+    } finally {
+      setTestingId(null);
+    }
+  }
   function applyTemplate(template: (typeof automationTemplates)[number]) {
     setName(template.name);
     setTriggerType(template.trigger);
@@ -163,6 +184,7 @@ export default function Automacoes() {
           <CrmNav />
         </div>
         {feedback && <p role="status" className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm font-bold text-emerald-800">{feedback}</p>}
+        {testError && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-bold text-red-800">{testError}</p>}
         <section className="mt-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -338,13 +360,10 @@ export default function Automacoes() {
                 {item.status === "ACTIVE" && (
                   <>
                     <button
-                      onClick={() =>
-                        testAutomation(item.id).then(() => {
-                          setFeedback("Teste executado no sandbox. Nenhuma mensagem externa foi enviada.");
-                          return load();
-                        })
-                      }
-                      className="text-sm font-bold text-violet-700"
+                      type="button"
+                      onClick={() => void runSandboxTest(item.id)}
+                      disabled={testingId !== null}
+                      className="text-sm font-bold text-violet-700 disabled:opacity-50"
                     >
                       Executar teste sandbox
                     </button>

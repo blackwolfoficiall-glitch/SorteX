@@ -163,52 +163,56 @@ test("social completion UI prefills provider data without requesting a password 
   await expect(page.getByLabel("CNPJ", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Slogan", { exact: true })).toHaveCount(0);
 });
-test("an email collision offers explicit linking and never a silent merge (UI fixture only)", async ({
-  page,
-}) => {
-  await page.route("**/api/auth/social/pending", (route) =>
-    route.fulfill({
-      json: {
-        provider: "google",
-        email: "synthetic-existing@example.test",
-        name: null,
-        linkRequired: true,
-      },
-    }),
-  );
-  await page.goto("/cadastro/completar");
-  await expect(
-    page.getByText("Nenhuma conta foi unida.", { exact: false }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Entrar na conta existente" }),
-  ).toHaveAttribute("href", "/login?next=%2Fcadastro%2Fcompletar");
-});
-test("an existing user may explicitly request linking even with a different provider email (UI fixture only)", async ({
-  page,
-}) => {
-  await page.route("**/api/auth/social/pending", (route) =>
-    route.fulfill({
-      json: {
-        provider: "apple",
-        email: "synthetic@privaterelay.appleid.com",
-        name: null,
-        linkRequired: false,
-      },
-    }),
-  );
-  await page.goto("/cadastro/completar");
-  await page
-    .getByRole("button", {
-      name: "Já tenho uma conta — quero vincular esta identidade",
-    })
-    .click();
-  await expect(
-    page.getByText("Você escolheu vincular à sua conta existente", {
-      exact: false,
-    }),
-  ).toBeVisible();
-  await expect(
-    page.getByRole("link", { name: "Entrar na conta existente" }),
-  ).toBeVisible();
+test.describe("signed-out social linking entry", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("an email collision offers explicit linking and never a silent merge (UI fixture only)", async ({
+    page,
+  }) => {
+    await page.route("**/api/auth/social/pending", (route) =>
+      route.fulfill({
+        json: {
+          provider: "google",
+          email: "synthetic-existing@example.test",
+          name: null,
+          linkRequired: true,
+        },
+      }),
+    );
+    await page.goto("/cadastro/completar");
+    await expect(
+      page.getByText("Nenhuma conta foi unida.", { exact: false }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Entrar na conta existente" }),
+    ).toHaveAttribute("href", "/login?next=%2Fcadastro%2Fcompletar");
+  });
+  test("an existing user may explicitly request linking even with a different provider email (UI fixture only)", async ({
+    page,
+  }) => {
+    await page.route("**/api/auth/social/pending", (route) =>
+      route.fulfill({
+        json: {
+          provider: "apple",
+          email: "synthetic@privaterelay.appleid.com",
+          name: null,
+          linkRequired: false,
+        },
+      }),
+    );
+    await page.goto("/cadastro/completar");
+    await page
+      .getByRole("button", {
+        name: "Já tenho uma conta — quero vincular esta identidade",
+      })
+      .click();
+    await expect(
+      page.getByText("Você escolheu vincular à sua conta existente", {
+        exact: false,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Entrar na conta existente" }),
+    ).toBeVisible();
+  });
 });

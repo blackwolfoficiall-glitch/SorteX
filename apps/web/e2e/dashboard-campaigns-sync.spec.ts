@@ -24,7 +24,8 @@ test("Dashboard navega para Campanhas publicadas e para as análises da IA", asy
 
 test("Filtros de Pedidos têm identificação e não geram overflow", async ({ page }) => {
   await page.goto("/dashboard/pedidos");
-  for (const label of ["Busca", "Data inicial", "Data final", "Valor mínimo", "Valor máximo"]) {
+  await expect(page.getByRole("searchbox", { name: "Busca", exact: true })).toBeVisible();
+  for (const label of ["Data inicial", "Data final", "Valor mínimo", "Valor máximo"]) {
     await expect(page.getByLabel(label, { exact: true })).toBeVisible({ timeout: 15_000 });
   }
   for (const name of ["Campanha", "Status", "Método de pagamento"]) {

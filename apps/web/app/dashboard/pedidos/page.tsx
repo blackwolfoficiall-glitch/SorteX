@@ -291,21 +291,26 @@ export default function PedidosPage() {
           Filtros
         </div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <label className="xl:col-span-2">
-            <FilterLabel>Busca</FilterLabel>
+          <div className="xl:col-span-2">
+            <label htmlFor="orders-search">
+              <FilterLabel>Busca</FilterLabel>
+            </label>
             <span className="relative block">
               <Search
+                aria-hidden="true"
                 className="absolute left-3 top-3 text-zinc-400"
                 size={18}
               />
               <input
+                id="orders-search"
+                type="search"
                 value={filters.search}
                 onChange={(e) => change({ search: e.target.value })}
                 placeholder="Comprador, telefone ou e-mail"
                 className={`${control} pl-10`}
               />
             </span>
-          </label>
+          </div>
           <label>
             <FilterLabel>Campanha</FilterLabel>
             <select

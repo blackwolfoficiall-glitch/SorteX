@@ -3405,8 +3405,7 @@ function MilestoneEditor({
                 imageUrl={milestone.imageUrl}
                 imageCrop={milestone.imageCrop}
                 prizeName={milestone.name}
-                onChange={(imageUrl) => update(index, { imageUrl })}
-                onCropChange={(imageCrop) => update(index, { imageCrop })}
+                onPhotoChange={(patch) => update(index, patch)}
               />
               <Field label="Vídeo opcional">
                 <Input
@@ -3479,15 +3478,15 @@ function MilestonePhotoField({
   imageUrl,
   imageCrop,
   prizeName,
-  onChange,
-  onCropChange,
+  onPhotoChange,
 }: {
   campaignId?: string;
   imageUrl?: string;
   imageCrop?: HeroImageCrop;
   prizeName: string;
-  onChange: (imageUrl: string | undefined) => void;
-  onCropChange: (imageCrop: HeroImageCrop) => void;
+  onPhotoChange: (
+    patch: Pick<Partial<CampaignMilestoneInput>, "imageUrl" | "imageCrop">,
+  ) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -3512,7 +3511,7 @@ function MilestonePhotoField({
     setBusy(true);
     try {
       const url = await uploadCampaignMilestoneImage(campaignId, file);
-      onChange(url);
+      onPhotoChange({ imageUrl: url, imageCrop: defaultHeroCrop });
       setFailedUrl("");
     } catch (cause) {
       setError(
@@ -3574,8 +3573,7 @@ function MilestonePhotoField({
                 type="button"
                 disabled={busy}
                 onClick={() => {
-                  onChange(undefined);
-                  onCropChange(defaultHeroCrop);
+                  onPhotoChange({ imageUrl: undefined, imageCrop: undefined });
                   setError("");
                 }}
                 className="min-h-10 rounded-xl border px-4 text-xs font-black text-red-700 hover:bg-red-50 disabled:opacity-50"
@@ -3600,7 +3598,7 @@ function MilestonePhotoField({
         <HeroImageCropEditor
           savedUrl={previewUrl}
           value={imageUrl ? imageCrop || defaultHeroCrop : defaultHeroCrop}
-          onChange={onCropChange}
+          onChange={(crop) => onPhotoChange({ imageCrop: crop })}
           variant="MILESTONE"
         />
       )}

@@ -92,9 +92,15 @@ async function main() {
   for (const [index, user] of [organizer, organizer2].entries()) {
     await prisma.organizerProfile.upsert({
       where: { userId: user.id },
-      update: { verificationStatus: VerificationStatus.VERIFIED },
+      update: {
+        verificationStatus: VerificationStatus.VERIFIED,
+        onboardingStatus: 'COMPLETE',
+        planSelectedAt: new Date(),
+      },
       create: {
         userId: user.id,
+        onboardingStatus: 'COMPLETE',
+        planSelectedAt: new Date(),
         fullName: `Responsável Teste ${index + 1}`,
         cpf: `0000000000${index + 1}`,
         phone: `55000000000${index + 1}`,
@@ -105,6 +111,26 @@ async function main() {
       },
     });
   }
+
+  // CRM's manual run requires a real sandbox subscription. Never relax that
+  // check in the application to accommodate a local browser fixture.
+  const periodStart = new Date();
+  const periodEnd = new Date(periodStart.getTime() + 30 * 86400000);
+  await prisma.subscription.upsert({
+    where: { id: 'seed-organizer-crm-sandbox' },
+    update: { currentPeriodStart: periodStart, currentPeriodEnd: periodEnd },
+    create: {
+      id: 'seed-organizer-crm-sandbox',
+      organizerId: organizer.id,
+      plan: 'BASIC',
+      sandboxMode: true,
+      autoRenew: false,
+      status: 'TRIAL',
+      monthlyPrice: 0,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+    },
+  });
 
   const campaign = await prisma.campaign.upsert({
     where: { slug: 'campanha-piloto-homologacao' },
