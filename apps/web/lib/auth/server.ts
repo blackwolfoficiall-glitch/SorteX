@@ -1,3 +1,4 @@
+import { resolveApiUpstream } from "@/lib/api-upstream";
 import type { AuthTokens } from "./types";
 import { cookies, headers } from "next/headers";
 
@@ -9,12 +10,6 @@ type CookieStore = {
 export const ACCESS_COOKIE = "sortex_access_token";
 export const REFRESH_COOKIE = "sortex_refresh_token";
 
-const API_URL = (
-  process.env.API_INTERNAL_URL ||
-  process.env.API_URL ||
-  "http://localhost:3333"
-).replace(/\/$/, "");
-
 const cookieBase = {
   httpOnly: true,
   sameSite: "lax" as const,
@@ -23,7 +18,7 @@ const cookieBase = {
 };
 
 async function upstreamFetch(path: string, init: RequestInit = {}) {
-  const endpoint = `${API_URL}${path}`;
+  const endpoint = `${resolveApiUpstream()}${path}`;
   const timeoutSignal = AbortSignal.timeout(path.startsWith('/auth/social/') ? 45_000 : 15_000);
   const signal = init.signal
     ? AbortSignal.any([init.signal, timeoutSignal])

@@ -1,11 +1,6 @@
 import type { NextConfig } from "next";
 
-const apiInternalUrl = (
-  process.env.API_INTERNAL_URL ||
-  process.env.API_URL ||
-  process.env.PLAYWRIGHT_API_URL ||
-  "http://localhost:3333"
-).replace(/\/$/, "");
+import { resolveApiUpstream } from "./lib/api-upstream";
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: [
@@ -21,7 +16,7 @@ const nextConfig: NextConfig = {
       fallback: [
         {
           source: "/api/:path*",
-          destination: `${apiInternalUrl}/:path*`,
+          destination: `${resolveApiUpstream()}/:path*`,
         },
       ],
     };
