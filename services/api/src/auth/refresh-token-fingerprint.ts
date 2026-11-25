@@ -8,7 +8,10 @@ export function fingerprintRefreshToken(token: string): string {
   return prefix + createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
-export function matchesRefreshToken(token: string, fingerprint: string): boolean {
+export function matchesRefreshToken(
+  token: string,
+  fingerprint: string,
+): boolean {
   if (!format.test(fingerprint)) return false;
   return timingSafeEqual(
     Buffer.from(fingerprintRefreshToken(token), 'ascii'),

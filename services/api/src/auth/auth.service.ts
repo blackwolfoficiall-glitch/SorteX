@@ -28,7 +28,10 @@ import type {
   RefreshTokenPayload,
 } from './types/token-payload.type';
 import { PasswordResetMailService } from './password-reset-mail.service';
-import { fingerprintRefreshToken, matchesRefreshToken } from './refresh-token-fingerprint';
+import {
+  fingerprintRefreshToken,
+  matchesRefreshToken,
+} from './refresh-token-fingerprint';
 
 const publicUserSelect = {
   id: true,
