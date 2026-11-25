@@ -320,8 +320,9 @@ export class BuyerService {
       numberPrice: Number(item.numberPrice),
       cashAlternative:
         item.cashAlternative === null ? null : Number(item.cashAlternative),
+      // Public media is resolved by campaign ID and asset type, not storage key.
       coverImageUrl: item.coverImage
-        ? `/api/public/campaign-media/${item.coverImage}`
+        ? `/api/public/campaign-media/${encodeURIComponent(item.id)}/cover`
         : null,
       soldPercentage: item.totalNumbers
         ? Math.min(
