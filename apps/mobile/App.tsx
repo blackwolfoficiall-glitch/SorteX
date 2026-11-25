@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import {
   NavigationContainer,
+  useIsFocused,
   usePreventRemove,
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -29,6 +30,7 @@ import {
   colors,
 } from "./src/components/ui";
 import { LocationPicker } from "./src/components/LocationPicker";
+import { NativeOrganizerDraft } from "./src/components/NativeOrganizerDraft";
 import {
   initial,
   registrationPayload,
@@ -538,14 +540,16 @@ function Campaigns({ navigation }: any) {
   const auth = useSyncExternalStore(client.subscribe, client.snapshot),
     organizer = auth.user?.role === "ORGANIZER";
   const [page, setPage] = useState(1);
+  const focused = useIsFocused();
   const state = useData<Campaign[] | PageResult<Campaign>>(
-    organizer ? "/campaigns/my" : `/buyer/campaigns?page=${page}&limit=15`,
+    !focused ? null : organizer ? "/campaigns/my" : `/buyer/campaigns?page=${page}&limit=15`,
   );
   const items = Array.isArray(state.data)
     ? state.data
     : state.data?.items || [];
   return (
     <Page title="Campanhas">
+      {organizer && <Button title="Criar rascunho" onPress={() => navigation.navigate("OrganizerDraft")} />}
       <Load state={state}>
         {items.map((item) => (
           <CampaignCard key={item.id} item={item} navigation={navigation} />
@@ -578,8 +582,9 @@ function CampaignDetail({ route, navigation }: any) {
   const auth = useSyncExternalStore(client.subscribe, client.snapshot),
     organizer = auth.user?.role === "ORGANIZER";
   const item = route.params.item as Campaign;
+  const focused = useIsFocused();
   const state = useData<Campaign>(
-    organizer
+    !focused ? null : organizer
       ? `/campaigns/${encodeURIComponent(item.id)}`
       : `/public/campaigns/${encodeURIComponent(item.slug)}`,
   );
@@ -601,6 +606,9 @@ function CampaignDetail({ route, navigation }: any) {
         </View>
         <Text style={s.label}>Regulamento</Text>
         <Text style={s.text}>{state.data?.regulation || "Não informado."}</Text>
+        {organizer && state.data?.status === "DRAFT" && (
+          <Button secondary title="Editar rascunho" onPress={() => navigation.navigate("OrganizerDraft", { campaignId: item.id })} />
+        )}
         {organizer ? (
           <Button
             title="Acompanhar pedidos e participantes"
@@ -614,6 +622,14 @@ function CampaignDetail({ route, navigation }: any) {
       </Load>
     </Page>
   );
+}
+function OrganizerDraftScreen({ navigation, route }: any) {
+  const auth = useSyncExternalStore(client.subscribe, client.snapshot);
+  if (auth.user?.role !== "ORGANIZER")
+    return <Page title="Rascunho"><Notice error message="Somente organizadores podem editar campanhas." /></Page>;
+  const campaignId = typeof route.params?.campaignId === "string" ? route.params.campaignId : undefined;
+  return <NativeOrganizerDraft key={`${auth.user.id}:${campaignId ?? "new"}`} organizerId={auth.user.id}
+    campaignId={campaignId} onSaved={() => navigation.goBack()} />;
 }
 function Orders({ navigation, route }: any) {
   const auth = useSyncExternalStore(client.subscribe, client.snapshot),
@@ -1054,6 +1070,11 @@ export default function App() {
                   name="Campaign"
                   component={CampaignDetail}
                   options={{ title: "Campanha" }}
+                />
+                <Stack.Screen
+                  name="OrganizerDraft"
+                  component={OrganizerDraftScreen}
+                  options={{ title: "Rascunho" }}
                 />
                 <Stack.Screen
                   name="CampaignOrders"

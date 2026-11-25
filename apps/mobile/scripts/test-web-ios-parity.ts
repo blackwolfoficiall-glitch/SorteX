@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomBytes, randomInt } from "node:crypto";
 import { ApiError, SortexClient, type Vault } from "../src/api/client";
 import { validateApiUrl } from "../src/api/config";
+import { draftFields, saveOrganizerDraft, type OrganizerDraftRecord } from "../src/domain/organizer-draft";
 
 type Identity = { id: string; role: string; adminPermissions?: string[] };
 type Profile = { id: string; userId: string };
@@ -129,16 +130,21 @@ async function main() {
   assert.notEqual(a.userId, b.userId);
   const draft = await reqA<Campaign>("/campaigns", 201, "POST", { title: `Rascunho sintético ${run}` });
   assert.ok(draft.id);
-  const fromMobile = await mA.request<Campaign>(`/campaigns/${draft.id}`);
+  const fromMobile = await mA.request<OrganizerDraftRecord>(`/campaigns/${draft.id}`);
   assert.deepEqual([fromMobile.id, fromMobile.title], [draft.id, draft.title]);
   assert.ok((await mA.request<Campaign[]>("/campaigns/my")).some((item) => item.id === draft.id));
   const nextTitle = `Rascunho alterado ${run}`;
-  await mA.request(`/campaigns/${draft.id}`, "PATCH", { title: nextTitle });
+  await saveOrganizerDraft(mA, { ...draftFields(fromMobile), title: nextTitle }, fromMobile);
   assert.equal((await reqA<Campaign>(`/campaigns/${draft.id}`, 200)).title, nextTitle);
   assert.ok(!(await reqB<Campaign[]>("/campaigns/my", 200)).some((item) => item.id === draft.id));
   await assert.rejects(mB.request(`/campaigns/${draft.id}`, "PATCH", { title: "Negado" }),
     (error) => error instanceof ApiError && [403, 404].includes(error.status));
   assert.equal((await reqA<Campaign>(`/campaigns/${draft.id}`, 200)).title, nextTitle);
+  const nativeDraft = await saveOrganizerDraft(mB, {
+    title: `Rascunho criado no cliente móvel ${run}`, description: "Sintético",
+    mainPrizeName: "Prêmio sintético", numberPrice: "0,12", totalNumbers: "500",
+  });
+  assert.equal((await reqB<Campaign>(`/campaigns/${nativeDraft.id}`, 200)).id, nativeDraft.id);
   await mA.logout();
   assert.notEqual(mA.snapshot().status, "signedIn");
   await mB.logout();
@@ -146,7 +152,7 @@ async function main() {
     type: "local-real-http-protocol-not-ios-acceptance",
     timestamp: new Date().toISOString(), apiVersion: appHealth.version,
     database: ready.database, storage: ready.storage,
-    webToMobile: a, mobileToWeb: b, draftCampaignId: draft.id,
+    webToMobile: a, mobileToWeb: b, draftCampaignId: draft.id, nativeDraftCampaignId: nativeDraft.id,
     sameRoles: true, draftSyncedInBothDirections: true, organizerIsolation: true,
     refreshTokenRotated: true,
   }, null, 2));

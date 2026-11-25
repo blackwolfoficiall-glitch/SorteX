@@ -74,7 +74,7 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm run typecheck
-          npm test
+          node --import tsx --test tests/*.test.ts
       - name: Exercitar os dois clientes no mesmo banco descartável
         shell: bash
         run: |
