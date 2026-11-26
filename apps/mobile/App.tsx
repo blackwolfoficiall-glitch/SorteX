@@ -31,6 +31,8 @@ import {
 } from "./src/components/ui";
 import { LocationPicker } from "./src/components/LocationPicker";
 import { NativeOrganizerDraft } from "./src/components/NativeOrganizerDraft";
+import { NativeOrganizerFinance } from "./src/organizer/NativeOrganizerFinance";
+import { organizerFinanceSession } from "./src/organizer/finance";
 import { NativeBuyerPrizes } from "./src/buyer/NativeBuyerPrizes";
 import { NativeBuyerDrawResults } from "./src/buyer/NativeBuyerDrawResults";
 import { NativePublicDrawProof } from "./src/components/NativePublicDrawProof";
@@ -509,6 +511,13 @@ function Home({ navigation }: any) {
   return (
     <Page title={`Olá, ${auth.user?.name.split(" ")[0] || ""}`}>
       <Notice message="Desenvolvimento · somente dados sintéticos" />
+      {organizer && (
+        <Button
+          secondary
+          title="Consultar financeiro e extrato"
+          onPress={() => navigation.navigate("OrganizerFinance")}
+        />
+      )}
       <Load state={state}>
         {organizer ? (
           <>
@@ -657,6 +666,24 @@ function OrganizerDraftScreen({ navigation, route }: any) {
   const campaignId = typeof route.params?.campaignId === "string" ? route.params.campaignId : undefined;
   return <NativeOrganizerDraft key={`${auth.user.id}:${campaignId ?? "new"}`} organizerId={auth.user.id}
     campaignId={campaignId} onSaved={() => navigation.goBack()} />;
+}
+function OrganizerFinanceScreen() {
+  useSyncExternalStore(client.subscribe, client.snapshot);
+  useSyncExternalStore(client.subscribe, client.activeSessionRevision);
+  const session = organizerFinanceSession(client);
+  if (!session)
+    return (
+      <Page title="Financeiro">
+        <Notice error message="Somente organizadores com sessão ativa podem consultar o financeiro." />
+      </Page>
+    );
+  return (
+    <NativeOrganizerFinance
+      key={`${session.organizerId}:${session.revision}`}
+      client={client}
+      session={session}
+    />
+  );
 }
 function Orders({ navigation, route }: any) {
   const auth = useSyncExternalStore(client.subscribe, client.snapshot),
@@ -1052,6 +1079,13 @@ export default function App() {
                   component={OrganizerDraftScreen}
                   options={{ title: "Editor de campanha" }}
                 />
+                {auth.user?.role === "ORGANIZER" && (
+                  <Stack.Screen
+                    name="OrganizerFinance"
+                    component={OrganizerFinanceScreen}
+                    options={{ title: "Financeiro" }}
+                  />
+                )}
                 <Stack.Screen
                   name="CampaignOrders"
                   component={Orders}

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Header,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import {
   AdminPermission,
   FinancialAccountStatus,
@@ -12,6 +20,7 @@ import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import {
   CreateAdjustmentDto,
   CreatePayoutDto,
+  FinanceSnapshotQueryDto,
   AdminAccountQueryDto,
   AdminPayoutQueryDto,
   AdminSubscriptionQueryDto,
@@ -31,11 +40,24 @@ export class FinanceController {
   @Get('balance') balance(@CurrentUser() user: AuthenticatedUser) {
     return this.finance.overview(user).then((v) => v.balance);
   }
+  @Get('balance/snapshot')
+  @Header('Cache-Control', 'private, no-store')
+  balanceSnapshot(@CurrentUser() user: AuthenticatedUser) {
+    return this.finance.balanceSnapshot(user);
+  }
   @Get('statement') statement(
     @CurrentUser() user: AuthenticatedUser,
     @Query() q: StatementQueryDto,
   ) {
     return this.finance.statement(user, q);
+  }
+  @Get('statement/snapshot')
+  @Header('Cache-Control', 'private, no-store')
+  statementSnapshot(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() q: FinanceSnapshotQueryDto,
+  ) {
+    return this.finance.statementSnapshot(user, q);
   }
   @Get('campaigns') campaigns(@CurrentUser() user: AuthenticatedUser) {
     return this.finance.campaigns(user);

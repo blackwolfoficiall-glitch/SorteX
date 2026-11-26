@@ -97,6 +97,18 @@ jobs:
           DATABASE_URL="$SORTEX_PAYMENTS_TEST_DATABASE_URL" npx --no-install prisma migrate deploy
           DATABASE_URL="$SORTEX_DRAW_AUDIT_DATABASE_URL" npx --no-install prisma migrate deploy
           npm run test:e2e -- --runInBand payments-postgres draw-audit
+      - name: Conferir saldo e extrato somente para o próprio organizador (PostgreSQL descartável)
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_FINANCE_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_finance_ci
+          PRISMA_USE_PG_ADAPTER: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_finance_ci
+          DATABASE_URL="$SORTEX_FINANCE_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          npm run test:e2e -- --runInBand --runTestsByPath test/organizer-finance-snapshot.e2e-spec.ts
       - name: Validar permissões administrativas e revogação isoladas (cenário 9)
         working-directory: services/api
         env:

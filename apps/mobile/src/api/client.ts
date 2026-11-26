@@ -27,6 +27,7 @@ export class SortexClient {
   private state: AuthState = { status: "restoring", user: null };
   private listeners = new Set<() => void>();
   private revision = 0;
+  private authenticatedRevision = -1;
   private refreshing: Promise<void> | null = null;
   private writes: Promise<void> = Promise.resolve();
   constructor(
@@ -35,6 +36,10 @@ export class SortexClient {
     private transport: typeof fetch = (input, init) => fetch(input, init),
   ) {}
   snapshot = () => this.state;
+  // Scoped reads can fence both logout in progress and a same-account login
+  // without exposing credentials or invalidating requests during token renewal.
+  activeSessionRevision = () =>
+    this.authenticatedRevision === this.revision ? this.revision : null;
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
     return () => {
@@ -43,7 +48,13 @@ export class SortexClient {
   };
   private emit(state: AuthState) {
     this.state = state;
+    this.authenticatedRevision = state.status === "signedIn" ? this.revision : -1;
     this.listeners.forEach((f) => f());
+  }
+  private nextRevision() {
+    const revision = ++this.revision;
+    this.listeners.forEach((f) => f());
+    return revision;
   }
   private async raw<T>(
     path: string,
@@ -134,7 +145,7 @@ export class SortexClient {
     this.tokens = tokens;
   }
   async login(email: string, password: string) {
-    const revision = ++this.revision;
+    const revision = this.nextRevision();
     const session = await this.raw<Session>("/auth/login", "POST", {
       email: email.trim(),
       password,
@@ -196,7 +207,7 @@ export class SortexClient {
     }
   }
   async restore() {
-    const revision = ++this.revision;
+    const revision = this.nextRevision();
     this.emit({ status: "restoring", user: null });
     try {
       const tokens = await this.vault.read();
@@ -254,7 +265,7 @@ export class SortexClient {
     }
   }
   private async clear(message?: string) {
-    ++this.revision;
+    this.nextRevision();
     this.tokens = null;
     this.writes = this.writes.catch(() => {}).then(() => this.vault.clear());
     try {

@@ -22,6 +22,7 @@ import { BalanceAvailabilityService } from './balance-availability.service';
 import {
   CreateAdjustmentDto,
   CreatePayoutDto,
+  FinanceSnapshotQueryDto,
   AdminAccountQueryDto,
   AdminPayoutQueryDto,
   AdminSubscriptionQueryDto,
@@ -111,8 +112,51 @@ export class FinanceService {
   }
   async statement(user: AuthenticatedUser, q: StatementQueryDto) {
     const account = await this.accountForOrganizer(user.id);
+    return this.statementForAccount(account.id, q);
+  }
+  private organizerAccountSnapshot(id: string) {
+    return this.prisma.financialAccount.findUnique({
+      where: {
+        ownerType_ownerId_currency: {
+          ownerType: FinancialOwnerType.ORGANIZER,
+          ownerId: id,
+          currency: 'BRL',
+        },
+      },
+    });
+  }
+  async balanceSnapshot(user: AuthenticatedUser) {
+    // Unlike overview, the mobile snapshot never opens accounts or releases
+    // pending credit. Preserve cents exactly; avoid a Decimal → Number cast.
+    const account = await this.organizerAccountSnapshot(user.id);
+    return {
+      currency: 'BRL',
+      accountExists: account !== null,
+      gross: account?.lifetimeGrossRevenue.toFixed(2) ?? '0.00',
+      net: account?.lifetimeNetRevenue.toFixed(2) ?? '0.00',
+      available: account?.availableBalance.toFixed(2) ?? '0.00',
+      pending: account?.pendingBalance.toFixed(2) ?? '0.00',
+      blocked: account?.blockedBalance.toFixed(2) ?? '0.00',
+      platformFees: account?.lifetimePlatformFees.toFixed(2) ?? '0.00',
+      gatewayFees: account?.lifetimeGatewayFees.toFixed(2) ?? '0.00',
+    };
+  }
+  async statementSnapshot(user: AuthenticatedUser, q: FinanceSnapshotQueryDto) {
+    const account = await this.organizerAccountSnapshot(user.id);
+    if (!account)
+      return {
+        data: [],
+        pagination: { page: q.page, limit: q.limit, total: 0, pages: 0 },
+      };
+    return this.statementForAccount(account.id, q, true);
+  }
+  private async statementForAccount(
+    accountId: string,
+    q: FinanceSnapshotQueryDto & Partial<StatementQueryDto>,
+    snapshot = false,
+  ) {
     const where: Prisma.LedgerEntryWhereInput = {
-      accountId: account.id,
+      accountId,
       ...(q.type ? { type: q.type } : {}),
       ...(q.status ? { status: q.status } : {}),
       ...(q.direction ? { direction: q.direction } : {}),
@@ -138,14 +182,29 @@ export class FinanceService {
           campaign: { select: { title: true, slug: true } },
           payment: { select: { provider: true, method: true } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: snapshot
+          ? [{ createdAt: 'desc' }, { id: 'desc' }]
+          : { createdAt: 'desc' },
         skip: (q.page - 1) * q.limit,
         take: q.limit,
       }),
       this.prisma.ledgerEntry.count({ where }),
     ]);
     return {
-      data: data.map((v) => this.serialize(v)),
+      data: data.map((v) =>
+        snapshot
+          ? {
+              id: v.id,
+              type: v.type,
+              direction: v.direction,
+              status: v.status,
+              currency: v.currency,
+              amount: v.amount.toFixed(2),
+              createdAt: v.createdAt.toISOString(),
+              campaignTitle: v.campaign?.title ?? null,
+            }
+          : this.serialize(v),
+      ),
       pagination: {
         page: q.page,
         limit: q.limit,
