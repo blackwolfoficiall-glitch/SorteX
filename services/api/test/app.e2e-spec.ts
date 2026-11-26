@@ -31,6 +31,13 @@ describe('AppController (e2e)', () => {
     });
   });
 
+  it('aplica o limite de saúde mesmo com o middleware montado na rota curinga', async () => {
+    await request(app.getHttpServer())
+      .get('/health/live?from=qa')
+      .expect(200)
+      .expect('RateLimit-Limit', '120');
+  });
+
   afterEach(async () => {
     await app.close();
   });

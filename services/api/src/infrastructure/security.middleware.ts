@@ -1,9 +1,12 @@
 import { HttpStatus, Injectable, NestMiddleware } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 import { createHash, randomUUID } from 'node:crypto';
-type Bucket = { count: number; resetAt: number };
+import {
+  bucketSweepIntervalMs,
+  RequestRateBuckets,
+} from './request-rate-buckets';
 type RequestWithId = Request & { requestId?: string };
-const buckets = new Map<string, Bucket>();
+const buckets = new RequestRateBuckets(10_000);
 @Injectable()
 export class RequestSecurityMiddleware implements NestMiddleware {
   use(req: Request, res: Response, next: NextFunction) {
@@ -26,7 +29,14 @@ export class RequestSecurityMiddleware implements NestMiddleware {
         'Strict-Transport-Security',
         'max-age=31536000; includeSubDomains',
       );
-    const limit = this.limit(req.method, req.path),
+    // Express temporarily trims the matched path for mounted middleware.
+    // Nest mounts this middleware on a wildcard, so req.path can be "/" on
+    // every endpoint. originalUrl preserves the route as received by Express.
+    const path =
+      (req.originalUrl?.split('?', 1)[0] || req.path)
+        .replace(/\/+$/, '')
+        .toLowerCase() || '/';
+    const limit = this.limit(req.method, path),
       windowMs = Math.max(
         1000,
         Number(process.env.RATE_LIMIT_WINDOW_MS || 60000),
@@ -38,30 +48,22 @@ export class RequestSecurityMiddleware implements NestMiddleware {
         ? forwardedFor[0]
         : forwardedFor?.split(',')[0]?.trim();
       const identity = authorization?.startsWith('Bearer ')
-          ? `session:${authorization.slice(7)}`
-          : `ip:${clientIp || req.ip || 'unknown'}`,
-        key = `${req.method}:${req.path}:${this.hash(identity)}`,
-        now = Date.now(),
-        current = buckets.get(key);
-      const bucket =
-        !current || current.resetAt <= now
-          ? { count: 0, resetAt: now + windowMs }
-          : current;
-      bucket.count++;
-      buckets.set(key, bucket);
+        ? `session:${authorization.slice(7)}`
+        : `ip:${clientIp || req.ip || 'unknown'}`;
+      const key = `${req.method}:${this.hash(path)}:${this.hash(identity)}`;
+      const now = Date.now();
+      const bucket = buckets.increment(key, now, windowMs);
+      const resetAt = bucket?.resetAt ?? now + bucketSweepIntervalMs;
       res.setHeader('RateLimit-Limit', String(limit));
       res.setHeader(
         'RateLimit-Remaining',
-        String(Math.max(0, limit - bucket.count)),
+        String(bucket ? Math.max(0, limit - bucket.count) : 0),
       );
-      res.setHeader(
-        'RateLimit-Reset',
-        String(Math.ceil(bucket.resetAt / 1000)),
-      );
-      if (bucket.count > limit) {
+      res.setHeader('RateLimit-Reset', String(Math.ceil(resetAt / 1000)));
+      if (!bucket || bucket.count > limit) {
         res.setHeader(
           'Retry-After',
-          String(Math.max(1, Math.ceil((bucket.resetAt - now) / 1000))),
+          String(Math.max(1, Math.ceil((resetAt - now) / 1000))),
         );
         return void res.status(HttpStatus.TOO_MANY_REQUESTS).json({
           statusCode: 429,
@@ -72,7 +74,6 @@ export class RequestSecurityMiddleware implements NestMiddleware {
         });
       }
     }
-    this.cleanup();
     next();
   }
   private limit(method: string, path: string) {
@@ -105,10 +106,5 @@ export class RequestSecurityMiddleware implements NestMiddleware {
     return typeof v === 'string' && /^[a-zA-Z0-9_-]{8,80}$/.test(v)
       ? v
       : undefined;
-  }
-  private cleanup() {
-    if (buckets.size < 10000) return;
-    const now = Date.now();
-    for (const [k, v] of buckets) if (v.resetAt <= now) buckets.delete(k);
   }
 }
