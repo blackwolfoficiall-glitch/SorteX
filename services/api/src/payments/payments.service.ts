@@ -379,13 +379,61 @@ export class PaymentsService {
       });
     }
 
-    const trackedPayment = await this.prisma.payment.findFirst({
+    let trackedPayment = await this.prisma.payment.findFirst({
       where: {
         provider: GatewayProvider.MERCADO_PAGO,
         providerPaymentId: event.resourceId,
       },
       select: { id: true, metadata: true },
     });
+    if (!trackedPayment) {
+      const details = event.payload?.data;
+      const hint =
+        details && typeof details === 'object' && !Array.isArray(details)
+          ? (details as Record<string, unknown>)
+          : null;
+      const reference = hint?.external_reference;
+      // The signed query binds the order id, not this body field. Use a
+      // reference only to detect a local handoff, never to link or settle it.
+      if (
+        hint?.id === event.resourceId &&
+        typeof reference === 'string' &&
+        /^sortex-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(
+          reference,
+        )
+      ) {
+        const attempt = await this.prisma.payment.findUnique({
+          where: { externalReference: reference },
+          select: {
+            id: true,
+            provider: true,
+            providerPaymentId: true,
+            status: true,
+            activePurchaseKey: true,
+            metadata: true,
+          },
+        });
+        if (attempt?.provider === GatewayProvider.MERCADO_PAGO) {
+          // Checkout may have committed between the two queries.
+          if (attempt.providerPaymentId === event.resourceId) {
+            trackedPayment = { id: attempt.id, metadata: attempt.metadata };
+          } else if (
+            !attempt.providerPaymentId &&
+            attempt.activePurchaseKey &&
+            attempt.status === PaymentStatus.CREATED
+          ) {
+            const pending = await this.prisma.paymentEvent.updateMany({
+              where: { id: storedEvent.id, processed: false },
+              data: { errorMessage: 'ORDER_LINK_PENDING' },
+            });
+            if (!pending.count) return { received: true, duplicate: true };
+            throw new ServiceUnavailableException(
+              'A order ainda está sendo vinculada ao pedido.',
+            );
+          }
+        }
+      }
+    }
     if (!trackedPayment) {
       await this.prisma.$transaction(async (transaction) => {
         await transaction.paymentEvent.update({

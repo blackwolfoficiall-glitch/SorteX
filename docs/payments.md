@@ -105,6 +105,15 @@ Eventos com valor divergente, referência inválida, reserva encerrada ou
 quantidade de títulos inconsistente não aprovam a compra e ficam registrados
 para análise.
 
+Quando o webhook assinado de uma order chega enquanto uma tentativa local
+correlacionada ainda aguarda o ID do provedor, o endpoint responde HTTP 503
+e deixa o evento pendente. A referência do corpo só indica que vale tentar
+novamente; não vincula nem aprova o pagamento. Após persistir o ID da order,
+a próxima entrega com assinatura válida confirma o estado pela consulta
+normal ao provedor. O teste isolado comprova a reentrega sintética dentro
+da validade da assinatura, não o prazo ou a assinatura das tentativas
+automáticas do Mercado Pago. A janela de validação não foi alterada.
+
 ## Máquina de estados
 
 ```text

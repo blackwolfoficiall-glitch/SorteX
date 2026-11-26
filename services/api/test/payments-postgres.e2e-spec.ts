@@ -316,27 +316,71 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       },
     });
     const providerPaymentId = `native-${run}`;
+    const eventId = `native-approved-${run}`;
+    function notice(externalReference: string) {
+      const ts = String(Math.floor(Date.now() / 1000));
+      const requestId = randomUUID();
+      const signature = createHmac('sha256', secret)
+        .update(`id:${providerPaymentId};request-id:${requestId};ts:${ts};`)
+        .digest('hex');
+      return request(app.getHttpServer())
+        .post('/webhooks/payments/mercado-pago')
+        .query({ 'data.id': providerPaymentId })
+        .set('x-request-id', requestId)
+        .set('x-signature', `ts=${ts},v1=${signature}`)
+        .send({
+          id: eventId,
+          action: 'order.processed',
+          data: {
+            id: providerPaymentId,
+            external_reference: externalReference,
+          },
+        });
+    }
+    const lookup = jest.spyOn(Order.prototype, 'get');
     const sdk = jest
       .spyOn(Order.prototype, 'create')
-      .mockImplementation(async ({ body }) => ({
-        id: providerPaymentId,
-        external_reference: body.external_reference,
-        total_amount: body.total_amount,
-        status: 'action_required',
-        status_detail: 'waiting_transfer',
-        transactions: {
-          payments: [
-            {
-              payment_method: {
-                type: 'bank_transfer',
-                ticket_url:
-                  'https://www.mercadopago.com.br/sandbox/payments/1234/ticket',
-                qr_code: 'synthetic-must-not-be-exposed',
-              },
+      .mockImplementation(async ({ body }) => {
+        if (!body.external_reference)
+          throw new Error('Fixture sem referência.');
+        const lookupCount = lookup.mock.calls.length;
+        // The callback arrives while create() is still waiting for the SDK
+        // response, before providerPaymentId is persisted.
+        await notice(body.external_reference).expect(503);
+        expect(lookup).toHaveBeenCalledTimes(lookupCount);
+        const early = await prisma.paymentEvent.findUniqueOrThrow({
+          where: {
+            provider_providerEventId: {
+              provider: 'MERCADO_PAGO',
+              providerEventId: eventId,
             },
-          ],
-        },
-      }));
+          },
+        });
+        expect(early).toMatchObject({
+          processed: false,
+          paymentId: null,
+          errorMessage: 'ORDER_LINK_PENDING',
+        });
+        return {
+          id: providerPaymentId,
+          external_reference: body.external_reference,
+          total_amount: body.total_amount,
+          status: 'action_required',
+          status_detail: 'waiting_transfer',
+          transactions: {
+            payments: [
+              {
+                payment_method: {
+                  type: 'bank_transfer',
+                  ticket_url:
+                    'https://www.mercadopago.com.br/sandbox/payments/1234/ticket',
+                  qr_code: 'synthetic-must-not-be-exposed',
+                },
+              },
+            ],
+          },
+        };
+      });
     const token = await access(buyer.email);
     const secondToken = await access(anotherBuyer.email);
     const nativeUrl = '/payments/native-sandbox-pix';
@@ -411,25 +455,32 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
           // Express represents a null result as an empty successful response.
           expect(['', 'null']).toContain(text);
         });
-      jest.spyOn(Order.prototype, 'get').mockResolvedValueOnce({
+      const lookupCount = lookup.mock.calls.length;
+      lookup.mockResolvedValueOnce({
         id: providerPaymentId,
         external_reference: stored.externalReference,
         total_amount: '5.00',
         status: 'processed',
         status_detail: 'accredited',
       });
-      const ts = String(Math.floor(Date.now() / 1000));
-      const requestId = randomUUID();
-      const signature = createHmac('sha256', secret)
-        .update(`id:${providerPaymentId};request-id:${requestId};ts:${ts};`)
-        .digest('hex');
-      await request(app.getHttpServer())
-        .post('/webhooks/payments/mercado-pago')
-        .query({ 'data.id': providerPaymentId })
-        .set('x-request-id', requestId)
-        .set('x-signature', `ts=${ts},v1=${signature}`)
-        .send({ id: `native-approved-${run}`, action: 'order.updated' })
-        .expect(200);
+      await notice(stored.externalReference).expect(200, {
+        received: true,
+        duplicate: false,
+        status: 'APPROVED',
+      });
+      await notice(stored.externalReference).expect(200, {
+        received: true,
+        duplicate: true,
+      });
+      expect(lookup).toHaveBeenCalledTimes(lookupCount + 1);
+      expect(
+        await prisma.paymentEvent.findMany({
+          where: { provider: 'MERCADO_PAGO', providerEventId: eventId },
+          select: { processed: true, paymentId: true, errorMessage: true },
+        }),
+      ).toEqual([
+        { processed: true, paymentId: record.id, errorMessage: null },
+      ]);
       const [mobile, web] = await Promise.all([
         request(app.getHttpServer())
           .get(nativeUrl + '/purchase/' + purchase.id)
@@ -449,6 +500,14 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       expect(web.body.purchase.tickets).toEqual([
         { number: 2, status: 'SOLD' },
       ]);
+      expect(
+        await prisma.ledgerEntry.count({
+          where: {
+            paymentId: record.id,
+            reference: `payment:${record.id}:organizer-net`,
+          },
+        }),
+      ).toBe(1);
     } finally {
       process.env = env;
       sdk.mockRestore();
