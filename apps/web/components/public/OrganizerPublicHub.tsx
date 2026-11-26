@@ -1,5 +1,6 @@
 "use client";
 
+import { versionedCoverUrl } from "@/lib/campaigns/cover-revision";
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -28,6 +29,7 @@ type Campaign = {
   shortDescription: string | null;
   status: string;
   coverImageUrl: string | null;
+  coverImageRevision?: string | null;
   salesStartAt: string | null;
   salesEndAt: string | null;
   drawDate: string | null;
@@ -244,7 +246,7 @@ export default function OrganizerPublicHub({
                   >
                     {item.coverImageUrl ? (
                       <Image
-                        src={`/api${item.coverImageUrl}`}
+                        src={versionedCoverUrl(`/api${item.coverImageUrl}`, item.coverImageRevision)}
                         alt=""
                         width={560}
                         height={300}

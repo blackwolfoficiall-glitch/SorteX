@@ -1,3 +1,4 @@
+import { coverRevision } from '../campaigns/cover-revision';
 import { changedMunicipality } from '../locations/locations';
 import {
   BadRequestException,
@@ -315,13 +316,15 @@ export class BuyerService {
   private serializeCampaign(
     item: Prisma.CampaignGetPayload<{ select: typeof campaignSelect }>,
   ) {
+    const { coverImage, ...publicItem } = item;
     return {
-      ...item,
+      ...publicItem,
+      coverImageRevision: coverRevision(coverImage),
       numberPrice: Number(item.numberPrice),
       cashAlternative:
         item.cashAlternative === null ? null : Number(item.cashAlternative),
       // Public media is resolved by campaign ID and asset type, not storage key.
-      coverImageUrl: item.coverImage
+      coverImageUrl: coverImage
         ? `/api/public/campaign-media/${encodeURIComponent(item.id)}/cover`
         : null,
       soldPercentage: item.totalNumbers

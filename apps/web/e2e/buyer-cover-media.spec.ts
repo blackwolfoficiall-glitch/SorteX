@@ -23,7 +23,9 @@ test("comprador vê a capa publicada carregada no card do sorteio", async ({ pag
   const cardCover = page.getByRole("img", { name: campaign.title, exact: true });
   await expect(cardCover).toBeVisible();
   const src = await cardCover.getAttribute("src");
-  expect(src).toBe(`/api/public/campaign-media/${campaign.id}/cover`);
+  const cover = new URL(src!, "http://local.test");
+  expect(cover.pathname).toBe(`/api/public/campaign-media/${campaign.id}/cover`);
+  expect(cover.searchParams.get("v")).toMatch(/^[a-f0-9]{16}$/);
   const media = await page.request.get(src!);
   expect(media.ok()).toBeTruthy();
   expect(media.headers()["content-type"]).toContain("image/png");
@@ -32,18 +34,19 @@ test("comprador vê a capa publicada carregada no card do sorteio", async ({ pag
   ).toBeGreaterThan(0);
 });
 
-test("capa privada publica, troca no mesmo endereço e volta a ser privada ao pausar", async ({ page, browser, baseURL }) => {
+test("capa privada publica, atualiza no navegador e volta a ser privada ao pausar", async ({ page, browser, baseURL }) => {
   const campaign = await createSyntheticCampaign(page.request, "Capa com visibilidade por status");
   const ownedPath = `/api/campaigns/${campaign.id}/media/cover`;
   const publicPath = `/api/public/campaign-media/${campaign.id}/cover`;
   const ownedImage = page.getByRole("img", { name: campaign.title, exact: true });
   async function showsOwnerCover(status: "DRAFT" | "PAUSED", width: number) {
     await page.goto(`/dashboard/campanhas?status=${status}`);
-    await expect(ownedImage).toHaveAttribute("src", ownedPath);
+    await expect(ownedImage).toHaveAttribute("src", new RegExp(`^${ownedPath}\\?v=[a-f0-9]{16}$`));
     await expect.poll(() => ownedImage.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(width);
+    return new URL((await ownedImage.getAttribute("src"))!, "http://local.test").searchParams.get("v");
   }
 
-  await showsOwnerCover("DRAFT", 2);
+  const draftRevision = await showsOwnerCover("DRAFT", 2);
   const draft = await page.request.get(ownedPath);
   expect(draft.status()).toBe(200);
   expect(draft.headers()["cache-control"]).toContain("no-store");
@@ -51,6 +54,7 @@ test("capa privada publica, troca no mesmo endereço e volta a ser privada ao pa
 
   const guest = await browser.newContext({
     baseURL, ignoreHTTPSErrors: test.info().project.use.ignoreHTTPSErrors,
+    viewport: page.viewportSize(),
   });
   try {
     expect((await guest.request.get(publicPath)).status()).toBe(403);
@@ -59,7 +63,7 @@ test("capa privada publica, troca no mesmo endereço e volta a ser privada ao pa
     const storefront = await guest.newPage();
     await storefront.goto(`/campanha/${campaign.slug}`);
     const publicImage = storefront.getByRole("img", { name: campaign.title, exact: true });
-    await expect(publicImage).toHaveAttribute("src", publicPath);
+    await expect(publicImage).toHaveAttribute("src", `${publicPath}?v=${draftRevision}`);
     await expect.poll(() => publicImage.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(2);
     const media = await guest.request.get(publicPath);
     expect(media.status()).toBe(200);
@@ -67,7 +71,8 @@ test("capa privada publica, troca no mesmo endereço e volta a ser privada ao pa
     expect(media.headers()["cache-control"]).toContain("no-store");
     expect(await media.body()).toEqual(draftBytes);
 
-    // 3×2 differs from the original 2×2 fixture; no cache-busting changes to the src.
+    // The canonical URL still serves the new bytes. The browser gets a new
+    // version only after replacement, including engines that memoize images.
     const replacement = Buffer.from(
       "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAAEElEQVR4nGNI0bgDQQxwFgBRpAhx0roQKQAAAABJRU5ErkJggg==",
       "base64",
@@ -80,12 +85,23 @@ test("capa privada publica, troca no mesmo endereço e volta a ser privada ao pa
       },
     });
     expect(uploaded.status()).toBe(201);
-    expect(await uploaded.json()).toMatchObject({ id: campaign.id, status: "PUBLISHED" });
-    const changedMedia = storefront.waitForResponse((response) =>
-      new URL(response.url()).pathname === publicPath && response.request().resourceType() === "image",
-    );
+    const uploadedCampaign = await uploaded.json();
+    expect(uploadedCampaign).toMatchObject({ id: campaign.id, status: "PUBLISHED" });
+    expect(uploadedCampaign).not.toHaveProperty("coverImage");
+    const revision = uploadedCampaign.coverImageRevision;
+    expect(revision).toMatch(/^[a-f0-9]{16}$/);
+    expect(revision).not.toBe(draftRevision);
+    const canonical = await guest.request.get(publicPath);
+    expect(canonical.status()).toBe(200);
+    expect(canonical.headers()["cache-control"]).toContain("no-store");
+    expect(await canonical.body()).toEqual(replacement);
+    const changedMedia = storefront.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return url.pathname === publicPath && url.searchParams.get("v") === revision
+        && response.request().resourceType() === "image";
+    });
     await storefront.reload();
-    await expect(publicImage).toHaveAttribute("src", publicPath);
+    await expect(publicImage).toHaveAttribute("src", `${publicPath}?v=${revision}`);
     await expect.poll(() => publicImage.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(3);
     const reloaded = await changedMedia;
     expect(reloaded.status()).toBe(200);
@@ -101,7 +117,7 @@ test("capa privada publica, troca no mesmo endereço e volta a ser privada ao pa
     await storefront.reload();
     await expect(storefront.getByText("Campanha não encontrada.", { exact: true })).toBeVisible();
     await expect(publicImage).toHaveCount(0);
-    await showsOwnerCover("PAUSED", 3);
+    expect(await showsOwnerCover("PAUSED", 3)).toBe(revision);
     const privateMedia = await page.request.get(ownedPath);
     expect(privateMedia.status()).toBe(200);
     expect(privateMedia.headers()["cache-control"]).toContain("no-store");

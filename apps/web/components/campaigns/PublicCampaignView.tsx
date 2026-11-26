@@ -20,6 +20,7 @@ import {
 import Card from "@/components/ui/Card";
 import PurchasePanel from "@/components/purchases/PurchasePanel";
 import type { Campaign, RewardSection } from "@/lib/campaigns/types";
+import { versionedCoverUrl } from "@/lib/campaigns/cover-revision";
 import { mediaUrl } from "./CampaignDashboard";
 import { cleanTitle } from "./CampaignShare";
 import {
@@ -127,7 +128,10 @@ export default function PublicCampaignView({
       campaign
         ? [
             ...(campaign.coverImageUrl
-              ? [{ id: "cover", url: campaign.coverImageUrl }]
+              ? [{
+                  id: "cover",
+                  url: versionedCoverUrl(campaign.coverImageUrl, campaign.coverImageRevision),
+                }]
               : []),
             ...campaign.galleryImages,
           ]

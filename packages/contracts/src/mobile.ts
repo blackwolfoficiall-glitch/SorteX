@@ -54,6 +54,7 @@ export interface Campaign {
   regulation?: string | null;
   mainPrizeName?: string | null;
   coverImageUrl?: string | null;
+  coverImageRevision?: string | null;
   numberPrice: number;
   totalNumbers: number;
   soldNumbers: number;

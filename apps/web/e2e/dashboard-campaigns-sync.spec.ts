@@ -44,3 +44,20 @@ test("Minhas Campanhas recupera a lista após uma falha de rede", async ({ page 
   await expect(page.getByText("Não foi possível carregar suas campanhas.")).toBeHidden();
   await expect(page.getByRole("heading", { name: "Minhas Campanhas" })).toBeVisible();
 });
+
+test("falha temporária na consulta de aprovação não tira o organizador da tela", async ({ page }) => {
+  const profileRoute = "**/api/organizer/profile";
+  await page.route(profileRoute, (route) =>
+    route.fulfill({ status: 503, json: { message: "Indisponível para teste." } }),
+  );
+  await page.goto("/dashboard/campanhas");
+  const retry = page.getByRole("button", { name: "Tentar verificar novamente" });
+  await expect(retry).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard\/campanhas$/);
+  await expect(page.getByRole("heading", { name: "Minhas Campanhas" })).toHaveCount(0);
+
+  await page.unroute(profileRoute);
+  await retry.click();
+  await expect(page.getByRole("heading", { name: "Minhas Campanhas" })).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard\/campanhas$/);
+});

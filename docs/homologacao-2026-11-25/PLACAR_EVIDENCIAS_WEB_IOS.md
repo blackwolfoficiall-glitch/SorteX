@@ -7,7 +7,8 @@ Base: a candidata com a consulta nativa Meus prêmios no [PR #1](https://github.
 | Site: jornadas integrais **do escopo da tabela**, em ambiente local | **5/18 (27,8%)** | Não aprova o deploy, sistemas externos nem os itens parciais. |
 | App: jornadas completas verificadas **na interface React Native executada** | **0/18 (0%)** | Não significa app vazio: 12 jornadas têm alguma implementação ou contrato/teste parcial; 6 não têm fluxo nativo desta jornada. |
 | Paridade integral Web ↔ iOS | **0/18 (0%)** | Há dados e operações conciliados em HTTP/BFF, sem demonstrar fluxos completos na interface nativa. |
-| Aprovação automatizada móvel do SHA auditado | **46/46 (100% dos testes executados)** | Não é aprovação de 41 funcionalidades; inclui lógica cliente, não execução no iOS. |
+| Aprovação automatizada móvel do SHA auditado | **47/47 (100% dos testes executados)** | Não é aprovação de 41 funcionalidades; inclui lógica cliente, não execução no iOS. |
+| Aprovação automatizada Web de 26/11 (rodadas isoladas, não combinar denominadores) | **108/108 Chromium com viewport de iPhone**; **104/108 WebKit** na primeira rodada completa pós-limite; os quatro casos passaram nas rerodas pontuais após correção | Navegador com emulação não é app instalado. Reroda completa do WebKit após correções ainda pendente; faltas não são ignoradas. |
 | Aprovação automatizada Web registrada anteriormente | **93/93 Chromium, 32/32 WebKit (100% dos testes executados em cada rodada)** | Resultados históricos locais descritos em [evidências](EVIDENCIAS_HOMOLOGACAO.md); não alegam cobertura de todos os casos nem reexecução integral neste SHA. |
 | Aceite físico formal da candidata | **0/9 (0%)** | Simulador, app abrindo, navegador com viewport de iPhone e exportação JS não contam. |
 

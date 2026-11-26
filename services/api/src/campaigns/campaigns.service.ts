@@ -10,6 +10,7 @@ import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { OrganizerStorageService } from '../organizers/organizer-storage.service';
 import type { UploadedOrganizerFile } from '../organizers/types/uploaded-file.type';
 import { PrismaService } from '../prisma/prisma.service';
+import { coverRevision } from './cover-revision';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { CreateDrawRuleTemplateDto } from './dto/create-draw-rule-template.dto';
 import type { CampaignMediaTarget } from './dto/upload-campaign-media.dto';
@@ -848,6 +849,7 @@ export class CampaignsService {
       },
       campaigns: campaigns.map(({ coverImage, ...campaign }) => ({
         ...campaign,
+        coverImageRevision: coverRevision(coverImage),
         coverImageUrl: coverImage
           ? `/public/campaigns/media/${campaign.id}/cover`
           : null,
@@ -1604,6 +1606,7 @@ export class CampaignsService {
           ? null
           : Number(campaign.estimatedPrizeValue),
       grossRevenue: Number(campaign.grossRevenue),
+      coverImageRevision: coverRevision(coverImage),
       coverImageUrl: coverImage
         ? `/public/campaigns/media/${campaign.id}/cover`
         : null,

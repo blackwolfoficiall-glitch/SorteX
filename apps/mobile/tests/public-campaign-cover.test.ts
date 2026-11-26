@@ -40,3 +40,17 @@ test("rejects absolute, private, ambiguous or unexpected API and image URLs", ()
     id: "a/b", status: "PUBLISHED", coverImageUrl: "/public/campaigns/media/a/b/cover",
   }), null);
 });
+
+test("uses only a separate opaque revision for a replaced cover", () => {
+  const initialRevision = "0123456789abcdef";
+  const replacementRevision = "0123456789abcd00";
+  const source = (coverImageRevision: string) =>
+    publicCampaignCoverSource(QA_API, { ...campaign, coverImageRevision });
+  assert.equal(source(initialRevision)?.uri, QA_API + relative + "?v=" + initialRevision);
+  assert.equal(source(replacementRevision)?.uri, QA_API + relative + "?v=" + replacementRevision);
+  for (const invalid of ["//example.test", "token=secret", "x?token=y", "1234", "0123456789ABCDEF"])
+    assert.equal(source(invalid)?.uri, QA_API + relative);
+  assert.equal(publicCampaignCoverSource(QA_API, {
+    ...campaign, coverImageUrl: relative + "?v=unexpected", coverImageRevision: initialRevision,
+  }), null);
+});

@@ -148,6 +148,7 @@ export type Campaign = Required<Pick<CampaignDraft, RequiredCampaignField>> &
     status: CampaignStatus;
     isFeatured?: boolean;
     coverImageUrl: string | null;
+    coverImageRevision?: string | null;
     promotionalVideoUrl: string | null;
     mainPrizeImageUrl: string | null;
     soldNumbers: number;
