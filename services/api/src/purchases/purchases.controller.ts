@@ -4,6 +4,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { ListPurchasesDto } from './dto/list-purchases.dto';
+import { BuyerCouponQuoteDto } from './dto/buyer-coupon-quote.dto';
 import { ReserveManualDto } from './dto/reserve-manual.dto';
 import { ReserveRandomDto } from './dto/reserve-random.dto';
 import { PurchasesService } from './purchases.service';
@@ -12,6 +13,15 @@ import { PurchasesService } from './purchases.service';
 @Roles(UserRole.BUYER, UserRole.ADMIN)
 export class PurchasesController {
   constructor(private readonly purchases: PurchasesService) {}
+
+  @Post('promotion-quote')
+  @Roles(UserRole.BUYER)
+  quoteCoupon(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() body: BuyerCouponQuoteDto,
+  ) {
+    return this.purchases.quoteCoupon(user, body);
+  }
 
   @Post('reserve-random')
   reserveRandom(

@@ -72,22 +72,63 @@ export function purchaseLimits(
   };
 }
 const segment = (value: string) => encodeURIComponent(value);
-type BuyerClient = Pick<SortexClient, "request" | "publicRequest" | "snapshot">;
+type BuyerClient = Pick<
+  SortexClient,
+  "request" | "publicRequest" | "snapshot" | "activeSessionRevision"
+>;
 export type ReservationAttempt = {
   fingerprint: string;
   idempotencyKey: string;
 };
+export const normalizeCouponCode = (value: string) =>
+  value.trim().toUpperCase();
+
+function reservationFingerprint(
+  campaignId: string,
+  selection: ReservationInput,
+  code = "",
+) {
+  const canonical =
+    selection.mode === "MANUAL"
+      ? [...selection.numbers].sort((a, b) => a - b)
+      : selection.quantity;
+  return JSON.stringify([
+    campaignId,
+    selection.mode,
+    canonical,
+    normalizeCouponCode(code),
+  ]);
+}
+
+export type AppliedCoupon = {
+  code: string;
+  fingerprint: string;
+  buyerId: string;
+  sessionRevision: number;
+  subtotal: number;
+  discount: number;
+  total: number;
+};
+
+export function matchesCouponSelection(
+  coupon: AppliedCoupon | undefined,
+  campaignId: string,
+  selection: ReservationInput,
+  code: string,
+): coupon is AppliedCoupon {
+  return (
+    coupon?.fingerprint === reservationFingerprint(campaignId, selection, code)
+  );
+}
+
 export function reservationAttempt(
   campaignId: string,
   selection: ReservationInput,
   previous: ReservationAttempt | null,
   randomUUID: () => string,
+  couponCode?: string,
 ): ReservationAttempt {
-  const canonical =
-    selection.mode === "MANUAL"
-      ? [...selection.numbers].sort((a, b) => a - b)
-      : selection.quantity;
-  const fingerprint = JSON.stringify([campaignId, selection.mode, canonical]);
+  const fingerprint = reservationFingerprint(campaignId, selection, couponCode);
   if (previous?.fingerprint === fingerprint) return previous;
   return { fingerprint, idempotencyKey: randomUUID() };
 }
@@ -107,11 +148,23 @@ export class BuyerPurchases {
     )
       throw new ApiError("Entre com a conta de comprador para continuar.", 401);
   }
+  private ensureRevision(revision: number | null) {
+    this.ensureAccount();
+    if (revision === null || this.client.activeSessionRevision() !== revision)
+      throw new ApiError("A sessão mudou. Tente novamente.", 401);
+    return revision;
+  }
+
   private async scoped<T>(run: () => Promise<T>) {
-    this.ensureAccount();
-    const value = await run();
-    this.ensureAccount();
-    return value;
+    const revision = this.ensureRevision(this.client.activeSessionRevision());
+    try {
+      const value = await run();
+      this.ensureRevision(revision);
+      return value;
+    } catch (error) {
+      this.ensureRevision(revision);
+      throw error;
+    }
   }
 
   availability(slug: string) {
@@ -172,16 +225,11 @@ export class BuyerPurchases {
     };
   }
 
-  async reserve(
+  private validateSelection(
     availability: Availability,
     selection: ReservationInput,
-    idempotencyKey: string,
     reconciling = false,
   ) {
-    if (!idempotencyKey)
-      throw new ApiError(
-        "Não foi possível identificar a tentativa da reserva.",
-      );
     if (availability.selectionMode !== selection.mode)
       throw new ApiError("A campanha não aceita este tipo de seleção.");
     const { min, max } = purchaseLimits(availability, !reconciling);
@@ -209,8 +257,84 @@ export class BuyerPurchases {
       throw new ApiError(
         "Seleção contém títulos repetidos ou fora da campanha.",
       );
+    return quantity;
+  }
 
-    const common = { campaignId: availability.campaignId, idempotencyKey };
+  async quoteCoupon(
+    availability: Availability,
+    selection: ReservationInput,
+    couponCode: string,
+  ): Promise<AppliedCoupon> {
+    const revision = this.ensureRevision(this.client.activeSessionRevision());
+    const code = normalizeCouponCode(couponCode);
+    if (!code) throw new ApiError("Informe o código do cupom.");
+    const campaignId = availability.campaignId;
+    const quantity = this.validateSelection(availability, selection);
+    const result = await this.scoped(() =>
+      this.client.request<{
+        campaignId: string;
+        quantity: number;
+        subtotal: number;
+        discount: number;
+        total: number;
+      }>("/purchases/promotion-quote", "POST", {
+        campaignId,
+        quantity,
+        couponCode: code,
+      }),
+    );
+    if (
+      result?.campaignId !== campaignId ||
+      result.quantity !== quantity ||
+      result.total >= result.subtotal ||
+      result.discount >= result.subtotal ||
+      ![result.subtotal, result.discount, result.total].every(
+        (value) =>
+          typeof value === "number" && Number.isFinite(value) && value > 0,
+      )
+    )
+      throw new ApiError("A API não confirmou o desconto para esta seleção.");
+    return {
+      code,
+      fingerprint: reservationFingerprint(campaignId, selection, code),
+      buyerId: this.buyerId,
+      sessionRevision: revision,
+      subtotal: result.subtotal,
+      discount: result.discount,
+      total: result.total,
+    };
+  }
+
+  async reserve(
+    availability: Availability,
+    selection: ReservationInput,
+    idempotencyKey: string,
+    reconciling = false,
+    coupon?: AppliedCoupon,
+  ) {
+    if (!idempotencyKey)
+      throw new ApiError(
+        "Não foi possível identificar a tentativa da reserva.",
+      );
+    this.validateSelection(availability, selection, reconciling);
+    if (
+      coupon &&
+      (coupon.buyerId !== this.buyerId ||
+        coupon.sessionRevision !== this.client.activeSessionRevision() ||
+        !matchesCouponSelection(
+          coupon,
+          availability.campaignId,
+          selection,
+          coupon.code,
+        ))
+    )
+      throw new ApiError("Confirme novamente o cupom para esta seleção.");
+
+    const common = {
+      campaignId: availability.campaignId,
+      idempotencyKey,
+      ...(coupon ? { couponCode: coupon.code } : {}),
+    };
     const result = await this.scoped(() =>
       selection.mode === "MANUAL"
         ? this.client.request<BuyerOrder>("/purchases/reserve-manual", "POST", {

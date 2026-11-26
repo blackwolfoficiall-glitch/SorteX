@@ -18,6 +18,7 @@ import {
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListNumbersDto } from './dto/list-numbers.dto';
+import type { BuyerCouponQuoteDto } from './dto/buyer-coupon-quote.dto';
 import { ReservationExpirationService } from './reservation-expiration.service';
 import { CrmSyncService } from '../crm/crm-sync.service';
 import { reservationPricing } from './reservation-pricing';
@@ -48,6 +49,17 @@ const purchaseInclude = {
   tickets: { orderBy: { number: 'asc' as const } },
 } as const satisfies Prisma.PurchaseInclude;
 
+const reservableCampaignInclude = {
+  promotions: true,
+  organizer: {
+    select: {
+      organizerProfile: {
+        select: { paymentsBlocked: true, verificationStatus: true },
+      },
+    },
+  },
+} as const satisfies Prisma.CampaignInclude;
+
 type ReserveInput = {
   campaignId: string;
   quantity: number;
@@ -66,6 +78,30 @@ export class PurchasesService {
     private readonly expiration: ReservationExpirationService,
     private readonly crmSync: CrmSyncService,
   ) {}
+
+  async quoteCoupon(user: AuthenticatedUser, input: BuyerCouponQuoteDto) {
+    this.ensureBuyer(user);
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: input.campaignId, status: CampaignStatus.PUBLISHED },
+      include: reservableCampaignInclude,
+    });
+    if (!campaign) throw new NotFoundException('Campanha não encontrada.');
+    this.validateCampaign(campaign, user);
+    this.validateQuantity(campaign, input.quantity);
+    const pricing = await reservationPricing(
+      this.prisma,
+      campaign,
+      input,
+      user.id,
+    );
+    return {
+      campaignId: campaign.id,
+      quantity: input.quantity,
+      subtotal: Number(pricing.subtotal),
+      discount: Number(pricing.discount),
+      total: Number(pricing.total),
+    };
+  }
 
   reserveRandom(
     user: AuthenticatedUser,
@@ -117,19 +153,7 @@ export class PurchasesService {
             );
             const campaign = await transaction.campaign.findUnique({
               where: { id: input.campaignId },
-              include: {
-                promotions: true,
-                organizer: {
-                  select: {
-                    organizerProfile: {
-                      select: {
-                        paymentsBlocked: true,
-                        verificationStatus: true,
-                      },
-                    },
-                  },
-                },
-              },
+              include: reservableCampaignInclude,
             });
             if (!campaign)
               throw new NotFoundException('Campanha não encontrada.');

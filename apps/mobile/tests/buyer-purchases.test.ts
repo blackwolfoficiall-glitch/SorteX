@@ -4,6 +4,7 @@ import { ApiError, SortexClient, type Vault } from "../src/api/client";
 import {
   BuyerPurchases,
   isActiveReservation,
+  matchesCouponSelection,
   parseDigits,
   purchaseLimits,
   reservationAttempt,
@@ -247,5 +248,158 @@ test("resposta atrasada não atravessa logout para outra sessão", async () => {
   await assert.rejects(
     call,
     (error) => error instanceof ApiError && error.status === 401,
+  );
+});
+
+test("cotação autenticada do servidor segue a seleção e envia só o código à reserva", async () => {
+  const input = { mode: "MANUAL", numbers: [91, 0] } as const;
+  const selection = { ...input, numbers: [...input.numbers] };
+  const serverQuote = {
+    campaignId: availability.campaignId,
+    quantity: 2,
+    subtotal: 2,
+    discount: 0.35,
+    total: 1.65,
+  };
+  const calls: string[] = [];
+  const { model } = await clientFor((path, options) => {
+    calls.push(path);
+    assert.equal(
+      new Headers(options?.headers).get("authorization"),
+      "Bearer synthetic-access",
+    );
+    const body: unknown = JSON.parse(String(options?.body));
+    if (path === "/purchases/promotion-quote") {
+      assert.deepEqual(body, {
+        campaignId: "campaign-a",
+        quantity: 2,
+        couponCode: "QA35",
+      });
+      return response(serverQuote, 201);
+    }
+    assert.equal(path, "/purchases/reserve-manual");
+    assert.deepEqual(body, {
+      campaignId: "campaign-a",
+      numbers: [0, 91],
+      idempotencyKey: "with-coupon",
+      couponCode: "QA35",
+    });
+    return response(
+      { ...purchase, subtotal: 2, discount: 0.4, total: 1.6 },
+      201,
+    );
+  });
+  const quote = await model.quoteCoupon(availability, selection, " qa35 ");
+  assert.equal(quote.total, serverQuote.total);
+  assert.equal(quote.discount, serverQuote.discount);
+  assert.equal(
+    matchesCouponSelection(
+      quote,
+      "campaign-a",
+      { mode: "MANUAL", numbers: [0, 91] },
+      "QA35",
+    ),
+    true,
+  );
+  assert.equal(
+    matchesCouponSelection(
+      quote,
+      "campaign-a",
+      { mode: "MANUAL", numbers: [0, 92] },
+      "QA35",
+    ),
+    false,
+  );
+  assert.equal(
+    matchesCouponSelection(quote, "campaign-a", selection, "OTHER"),
+    false,
+  );
+  await assert.rejects(
+    model.reserve(
+      availability,
+      { mode: "MANUAL", numbers: [0, 92] },
+      "with-coupon",
+      false,
+      quote,
+    ),
+    /novamente/,
+  );
+  const attempt = reservationAttempt(
+    "campaign-a",
+    selection,
+    null,
+    () => "with-coupon",
+    quote.code,
+  );
+  const repeat = reservationAttempt(
+    "campaign-a",
+    selection,
+    attempt,
+    () => "changed",
+    " qa35 ",
+  );
+  assert.equal(repeat.idempotencyKey, "with-coupon");
+  assert.equal(
+    reservationAttempt(
+      "campaign-a",
+      selection,
+      attempt,
+      () => "changed",
+      "other",
+    ).idempotencyKey,
+    "changed",
+  );
+  const saved = await model.reserve(
+    availability,
+    selection,
+    repeat.idempotencyKey,
+    false,
+    quote,
+  );
+  assert.equal(saved.total, 1.6);
+  assert.deepEqual(calls, [
+    "/purchases/promotion-quote",
+    "/purchases/reserve-manual",
+  ]);
+});
+
+test("cupom não atravessa troca de sessão da mesma conta", async () => {
+  const { client, model } = await clientFor((path) => {
+    assert.equal(path, "/purchases/promotion-quote");
+    return response({
+      campaignId: "campaign-a",
+      quantity: 2,
+      subtotal: 2,
+      discount: 0.25,
+      total: 1.75,
+    });
+  });
+  const selection = { mode: "MANUAL", numbers: [91, 0] } as const;
+  const input = { ...selection, numbers: [...selection.numbers] };
+  const quoted = await model.quoteCoupon(availability, input, "QA25");
+  await client.login(buyer.email, "synthetic");
+  await assert.rejects(
+    model.reserve(availability, input, "same-user-new-session", false, quoted),
+    /novamente/,
+  );
+});
+
+test("cotação incorreta não autoriza o cliente a reservar com cupom", async () => {
+  const { model } = await clientFor(() =>
+    response({
+      campaignId: "other-campaign",
+      quantity: 2,
+      subtotal: 2,
+      discount: 2,
+      total: 0,
+    }),
+  );
+  await assert.rejects(
+    model.quoteCoupon(
+      availability,
+      { mode: "MANUAL", numbers: [1, 2] },
+      "ZERO",
+    ),
+    /não confirmou/,
   );
 });

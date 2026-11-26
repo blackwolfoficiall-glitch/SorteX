@@ -151,6 +151,7 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       });
       const code = `QA-${run.slice(0, 8).toUpperCase()}`;
       const base = { campaignId: campaign.id, quantity: 3, couponCode: code };
+      const totalLimit = type === 'FIXED' ? 2 : 1;
       const makePromotion = (data: object) =>
         request(server)
           .post('/promotions')
@@ -160,7 +161,7 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
         name: 'Cupom sintético',
         type: 'COUPON',
         status: 'DRAFT',
-        totalLimit: 1,
+        totalLimit,
         perBuyerLimit: 1,
         config: {
           code,
@@ -176,9 +177,20 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
           .auth(organizerToken, { type: 'bearer' });
       const quote = (input: object = base) =>
         request(server).post('/promotion-quote').send(input);
+      const [buyer, competitor] = buyers;
+      const buyerQuote = (token?: string) => {
+        const req = request(server)
+          .post('/purchases/promotion-quote')
+          .send(base);
+        return token ? req.auth(token, { type: 'bearer' }) : req;
+      };
+      await buyerQuote().expect(401);
+      await buyerQuote(organizerToken).expect(403);
+      await buyerQuote(buyer.token).expect(400);
       await quote().expect(400);
       await manage('activate').expect(201);
       await manage('pause').expect(201);
+      await buyerQuote(buyer.token).expect(400);
       await quote().expect(400);
       await manage('activate').expect(201);
 
@@ -210,7 +222,14 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       );
       expect(preview.body).toMatchObject({ ...price, promotionId });
 
-      const [buyer, competitor] = buyers;
+      await buyerQuote(buyer.token).expect(201, {
+        campaignId: campaign.id,
+        quantity: 3,
+        ...price,
+      });
+      expect(
+        await prisma.promotionUsage.count({ where: { promotionId } }),
+      ).toBe(0);
       const key = randomUUID();
       const reserve = (token: string, idempotencyKey: string) =>
         request(server)
@@ -235,7 +254,24 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       });
       if (type === 'FIXED')
         expect(requests[1].body).toMatchObject({ id: purchaseId });
-      await quote().expect(400);
+      if (type === 'FIXED') {
+        await quote().expect(201);
+        await buyerQuote(winner.token)
+          .expect(400)
+          .expect(({ body }) =>
+            expect(body).toMatchObject({
+              message: 'Você já atingiu o limite de uso deste cupom.',
+            }),
+          );
+        await buyerQuote(competitor.token).expect(201, {
+          campaignId: campaign.id,
+          quantity: 3,
+          ...price,
+        });
+      } else {
+        await quote().expect(400);
+        await buyerQuote(winner.token).expect(400);
+      }
       const reserved = await prisma.promotionUsage.findMany({
         where: { promotionId },
       });
@@ -267,7 +303,7 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
           campaignId: campaign.id,
           name: 'Cupom sintético editado',
           type,
-          totalLimit: 1,
+          totalLimit,
           perBuyerLimit: 1,
           config: {
             code,
@@ -284,7 +320,7 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
           campaignId: campaign.id,
           name: 'Cupom sintético editado',
           type: 'COUPON',
-          totalLimit: 1,
+          totalLimit,
           perBuyerLimit: 1,
           config: {
             code,

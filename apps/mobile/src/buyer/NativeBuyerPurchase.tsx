@@ -13,10 +13,13 @@ import { Button, Field, Notice, money, s, status } from "../components/ui";
 import {
   BuyerPurchases,
   isActiveReservation,
+  matchesCouponSelection,
+  normalizeCouponCode,
   parseDigits,
   purchaseLimits,
   reservationAttempt,
   titleNumber,
+  type AppliedCoupon,
   type Availability,
   type BuyerOrder,
   type NumbersPage,
@@ -45,6 +48,13 @@ function ReservationSummary({ order }: { order: BuyerOrder }) {
       <Text style={s.text}>
         {order.quantity} título(s) · {money(order.total)}
       </Text>
+      {Number.isFinite(order.subtotal) &&
+        Number.isFinite(order.discount) &&
+        order.discount > 0 && (
+          <Notice
+            message={`Subtotal: ${money(order.subtotal)} · Desconto na reserva: ${money(order.discount)}`}
+          />
+        )}
       <Notice message={orderStatus(order.status)} />
       {order.expiresAt &&
         ["RESERVED", "AWAITING_PAYMENT"].includes(order.status) && (
@@ -69,10 +79,15 @@ export function NativeBuyerReservation({
     client.subscribe,
     client.snapshot,
   );
-  if (signed !== "signedIn" || user?.role !== "BUYER") return null;
+  const revision = useSyncExternalStore(
+    client.subscribe,
+    client.activeSessionRevision,
+  );
+  if (signed !== "signedIn" || revision === null || user?.role !== "BUYER")
+    return null;
   return (
     <ReservationCard
-      key={JSON.stringify([user.id, campaign.id, campaign.slug])}
+      key={JSON.stringify([user.id, revision, campaign.id, campaign.slug])}
       {...{ client, campaign, onOrder }}
       buyerId={user.id}
     />
@@ -99,6 +114,11 @@ function ReservationCard({
   const [numbers, setNumbers] = useState<NumbersPage | null>(null);
   const [selection, setSelection] = useState<number[]>([]);
   const [quantity, setQuantity] = useState("");
+  const [couponCode, setCouponCode] = useState("");
+  const [coupon, setCoupon] = useState<AppliedCoupon>();
+  const [quoting, setQuoting] = useState(false);
+  const [couponError, setCouponError] = useState("");
+  const quoteRevision = useRef(0);
   const [searchText, setSearchText] = useState("");
   const [search, setSearch] = useState<number | undefined>();
   const [page, setPage] = useState(1);
@@ -119,6 +139,64 @@ function ReservationCard({
   const total = availability?.totalNumbers;
   const count = mode === "MANUAL" ? selection.length : parseDigits(quantity);
   const limits = availability ? purchaseLimits(availability) : null;
+  const input: ReservationInput | undefined =
+    mode === "MANUAL"
+      ? { mode: "MANUAL", numbers: selection }
+      : mode === "RANDOM" && count !== null
+        ? { mode: "RANDOM", quantity: count }
+        : undefined;
+  const typedCoupon = normalizeCouponCode(couponCode);
+  const appliedCoupon =
+    input && matchesCouponSelection(coupon, campaign.id, input, typedCoupon)
+      ? coupon
+      : undefined;
+  const canQuote = Boolean(
+    availability &&
+    input &&
+    limits &&
+    count !== null &&
+    count >= limits.min &&
+    count <= limits.max &&
+    !checking &&
+    !active,
+  );
+
+  function invalidateCoupon() {
+    quoteRevision.current++;
+    setCoupon(undefined);
+    setCouponError("");
+    setQuoting(false);
+  }
+
+  function clearCoupon() {
+    invalidateCoupon();
+    setCouponCode("");
+  }
+
+  async function applyCoupon() {
+    if (
+      !availability ||
+      !input ||
+      !typedCoupon ||
+      !canQuote ||
+      working ||
+      quoting ||
+      uncertain
+    )
+      return;
+    const request = ++quoteRevision.current;
+    setCoupon(undefined);
+    setCouponError("");
+    setQuoting(true);
+    try {
+      const preview = await api.quoteCoupon(availability, input, typedCoupon);
+      if (quoteRevision.current === request) setCoupon(preview);
+    } catch (cause) {
+      if (quoteRevision.current === request) setCouponError(errorText(cause));
+    } finally {
+      if (quoteRevision.current === request) setQuoting(false);
+    }
+  }
 
   useEffect(() => {
     let valid = true;
@@ -145,6 +223,11 @@ function ReservationCard({
             setUncertain(false);
             setSelection([]);
             setQuantity("");
+            quoteRevision.current++;
+            setCouponCode("");
+            setCoupon(undefined);
+            setCouponError("");
+            setQuoting(false);
           }
         }
       })
@@ -213,16 +296,19 @@ function ReservationCard({
   async function reserve() {
     if (
       !availability ||
+      !input ||
       busyRef.current ||
       active ||
       checking ||
-      count === null
+      quoting
     )
       return;
-    const input: ReservationInput =
-      availability.selectionMode === "MANUAL"
-        ? { mode: "MANUAL", numbers: selection }
-        : { mode: "RANDOM", quantity: count };
+    if (typedCoupon && !appliedCoupon) {
+      setCouponError(
+        "Consulte novamente o cupom ou remova o código para continuar.",
+      );
+      return;
+    }
     busyRef.current = true;
     setWorking(true);
     setError("");
@@ -232,6 +318,7 @@ function ReservationCard({
         input,
         pendingAttempt.current,
         randomUUID,
+        appliedCoupon?.code,
       );
       pendingAttempt.current = attempt;
       const saved = await api.reserve(
@@ -239,6 +326,7 @@ function ReservationCard({
         input,
         attempt.idempotencyKey,
         uncertain,
+        appliedCoupon,
       );
       lastOrder.current = saved.id;
       pendingAttempt.current = null;
@@ -247,6 +335,7 @@ function ReservationCard({
       setNow(Date.now());
       setSelection([]);
       setQuantity("");
+      clearCoupon();
       setReload((value) => value + 1);
     } catch (cause) {
       const unknown =
@@ -258,7 +347,10 @@ function ReservationCard({
           ? `${errorText(cause)} Confira a reserva ou repita a mesma tentativa; não altere as cotas até confirmar.`
           : errorText(cause),
       );
-      if (!unknown) pendingAttempt.current = null;
+      if (!unknown) {
+        pendingAttempt.current = null;
+        if (appliedCoupon) invalidateCoupon();
+      }
       if (!unknown && cause instanceof ApiError && cause.status === 409) {
         setSelection([]);
         setReload((value) => value + 1);
@@ -402,13 +494,14 @@ function ReservationCard({
                         selected && s.selected,
                         disabled && { opacity: 0.5 },
                       ]}
-                      onPress={() =>
+                      onPress={() => {
+                        invalidateCoupon();
                         setSelection((items) =>
                           selected
                             ? items.filter((item) => item !== number)
                             : [...items, number],
-                        )
-                      }
+                        );
+                      }}
                     >
                       <Text style={s.text}>{label}</Text>
                     </Pressable>
@@ -441,7 +534,10 @@ function ReservationCard({
                   secondary
                   disabled={working || uncertain}
                   title="Limpar seleção"
-                  onPress={() => setSelection([])}
+                  onPress={() => {
+                    invalidateCoupon();
+                    setSelection([]);
+                  }}
                 />
               )}
             </>
@@ -451,9 +547,56 @@ function ReservationCard({
               keyboardType="number-pad"
               editable={!working && !uncertain}
               value={quantity}
-              onChangeText={setQuantity}
+              onChangeText={(value) => {
+                if (value !== quantity) invalidateCoupon();
+                setQuantity(value);
+              }}
             />
           ) : null}
+          {mode && (
+            <View style={s.card}>
+              <Field
+                label="Código do cupom (opcional)"
+                autoCapitalize="characters"
+                autoCorrect={false}
+                editable={!working && !uncertain}
+                value={couponCode}
+                onChangeText={(value) => {
+                  if (value !== couponCode) invalidateCoupon();
+                  setCouponCode(value);
+                }}
+              />
+              <Button
+                secondary
+                title="Aplicar cupom"
+                busy={quoting}
+                disabled={!typedCoupon || !canQuote || working || uncertain}
+                onPress={() => void applyCoupon()}
+              />
+              {typedCoupon && (
+                <Button
+                  secondary
+                  title="Remover cupom"
+                  disabled={working || uncertain}
+                  onPress={clearCoupon}
+                />
+              )}
+              {appliedCoupon ? (
+                <>
+                  <Notice
+                    message={`Subtotal: ${money(appliedCoupon.subtotal)} · Desconto: ${money(appliedCoupon.discount)}`}
+                  />
+                  <Text style={s.text}>
+                    Total informado pela API: {money(appliedCoupon.total)}
+                  </Text>
+                  <Notice message="O limite e o valor serão conferidos na reserva. Nenhuma cobrança é iniciada." />
+                </>
+              ) : typedCoupon && !quoting && !couponError ? (
+                <Notice message="Consulte o desconto para esta seleção ou remova o cupom." />
+              ) : null}
+              {couponError && <Notice error message={couponError} />}
+            </View>
+          )}
           <Button
             title={
               uncertain ? "Repetir a mesma tentativa" : "Reservar sem pagar"
@@ -461,7 +604,9 @@ function ReservationCard({
             busy={working}
             disabled={
               checking ||
+              quoting ||
               count === null ||
+              Boolean(typedCoupon && !appliedCoupon) ||
               (!uncertain && (count < limits.min || count > limits.max))
             }
             onPress={() => void reserve()}
@@ -491,10 +636,15 @@ export function NativeBuyerOrder({
     client.subscribe,
     client.snapshot,
   );
-  if (signed !== "signedIn" || user?.role !== "BUYER") return null;
+  const revision = useSyncExternalStore(
+    client.subscribe,
+    client.activeSessionRevision,
+  );
+  if (signed !== "signedIn" || revision === null || user?.role !== "BUYER")
+    return null;
   return (
     <OrderCard
-      key={JSON.stringify([user.id, orderId])}
+      key={JSON.stringify([user.id, revision, orderId])}
       client={client}
       buyerId={user.id}
       orderId={orderId}
