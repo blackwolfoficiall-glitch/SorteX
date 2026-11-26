@@ -8,8 +8,9 @@ const ref = 'refs/heads/homologacao/web-ios-integrada';
 const projectId = 'lingering-mud-57461462';
 const branchId = 'br-weathered-forest-bccwn49d';
 const slug = 'sortexqa';
-const baseline = '23eccd35344aea5402fa32a7a59762e7262067d3';
-const revision = 'ba183db2dde6abff5588482e695053c53200d4dc';
+const baseline = 'ba183db2dde6abff5588482e695053c53200d4dc';
+const revision = '73e846a8dce25569a89005af1202533b8de47e76';
+const baselineDeploymentId = 2;
 const origin = 'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech';
 const projectPath = '/projects/' + projectId;
 const functionPath = projectPath + '/branches/' + branchId + '/functions/' + slug;
@@ -71,7 +72,7 @@ async function rollout({ env = process.env, request = fetch, load = readFile, sl
   const readyQa = r => r.status === 'ready' && r.database === 'up' && r.storage === 'disabled';
   if (health.status !== 'ok' || !readyQa(ready)) throw Error('QA não está saudável antes da atualização.');
   if (health.version === revision) return { id: active.id, unchanged: true };
-  if (health.version !== baseline || active.id !== 1) throw Error('A publicação de base mudou; não sobrescrever.');
+  if (health.version !== baseline || active.id !== baselineDeploymentId) throw Error('A publicação de base mudou; não sobrescrever.');
 
   const form = new FormData();
   form.set('zip', new Blob([zip], { type: 'application/zip' }), 'sortex-api.zip');

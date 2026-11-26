@@ -11,7 +11,7 @@ on:
       expected-api-sha:
         required: true
         type: string
-        default: ba183db2dde6abff5588482e695053c53200d4dc
+        default: 73e846a8dce25569a89005af1202533b8de47e76
 
 permissions:
   contents: read
@@ -44,10 +44,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --max-time 30 "$SORTEX_PARITY_API/health" |
-            node -e 'const x=JSON.parse(require("fs").readFileSync(0,"utf8")); if(x.status!=="ok"||x.version!==process.env.SORTEX_PARITY_EXPECTED_API_SHA)process.exit(1);'
-          curl --fail --silent --show-error --max-time 30 "$SORTEX_PARITY_API/health/ready" |
-            node -e 'const x=JSON.parse(require("fs").readFileSync(0,"utf8")); if(x.status!=="ready"||x.database!=="up")process.exit(1);'
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --max-time 12 "$SORTEX_PARITY_API/health" |
+              node -e 'const s=require("fs").readFileSync(0,"utf8"); if(!s)process.exit(1);const x=JSON.parse(s); if(x.status!=="ok"||x.version!==process.env.SORTEX_PARITY_EXPECTED_API_SHA)process.exit(1);' &&
+              curl --fail --silent --show-error --max-time 12 "$SORTEX_PARITY_API/health/ready" |
+              node -e 'const s=require("fs").readFileSync(0,"utf8"); if(!s)process.exit(1);const x=JSON.parse(s); if(x.status!=="ready"||x.database!=="up")process.exit(1);'; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "A revisão exata da API QA não confirmou prontidão. Sem gravar dados."
+          exit 1
       - name: Construir o Next dinâmico sem publicar o site
         working-directory: apps/web
         run: |
