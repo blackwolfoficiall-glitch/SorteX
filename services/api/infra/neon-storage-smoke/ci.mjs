@@ -13,6 +13,8 @@ const endpoint = `https://${branch}.storage.c-16.us-east-1.aws.neon.tech`;
 const region = 'us-east-1';
 const liveSha = '90851959c3d7beceb7c259249e284c08b246e4ee';
 const liveDeployment = 5;
+const oneTimeStart = Date.parse('2026-11-26T15:04:00Z');
+const oneTimeEnd = Date.parse('2026-11-26T15:25:00Z');
 const slug = 'sortexqastoragesmoke';
 const qaOrigin = `https://${branch}-sortexqa.compute.c-16.us-east-1.aws.neon.tech`;
 const smokeOrigin = `https://${branch}-${slug}.compute.c-16.us-east-1.aws.neon.tech`;
@@ -61,16 +63,23 @@ export async function smoke({
   tokenFactory = () => randomBytes(32).toString('hex'),
   idFactory = randomUUID,
 } = {}) {
+  const approvedPush =
+    env.GITHUB_EVENT_NAME === 'push' &&
+    env.GITHUB_RUN_ATTEMPT === '1' &&
+    env.SORTEX_QA_STORAGE_APPROVED_PUSH === 'yes' &&
+    clock() >= oneTimeStart &&
+    clock() < oneTimeEnd;
   guard(
     ['preflight', 'execute'].includes(mode) &&
       env.GITHUB_ACTIONS === 'true' &&
       env.GITHUB_REPOSITORY === repo &&
       env.GITHUB_REF === ref &&
-      ((mode === 'preflight' && env.GITHUB_EVENT_NAME === 'push') ||
+      (approvedPush ||
+        (mode === 'preflight' && env.GITHUB_EVENT_NAME === 'push') ||
         env.GITHUB_EVENT_NAME === 'workflow_dispatch') &&
       env.QA_ENABLE === 'yes' &&
       env.SORTEX_QA_NEON_API_KEY,
-    'Executar somente no workflow manual e protegido da QA.',
+    'Executar somente no workflow protegido da QA.',
   );
   if (mode === 'execute')
     guard(

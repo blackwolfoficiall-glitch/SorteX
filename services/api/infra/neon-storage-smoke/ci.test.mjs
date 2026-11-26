@@ -252,3 +252,45 @@ test('authorized execute only deploys separate helper, tests anon denial, verifi
     1,
   ); // anonymous only
 });
+
+test('one reviewed push is bounded by time and cannot write on replay', async () => {
+  const onPush = {
+    ...env,
+    GITHUB_EVENT_NAME: 'push',
+    GITHUB_RUN_ATTEMPT: '1',
+    SORTEX_QA_STORAGE_APPROVED_PUSH: 'yes',
+  };
+  const start = Date.parse('2026-11-26T15:04:00Z');
+  const end = Date.parse('2026-11-26T15:25:00Z');
+  for (const [settings, time] of [
+    [onPush, start - 1],
+    [onPush, end],
+    [{ ...onPush, GITHUB_RUN_ATTEMPT: '2' }, start],
+    [{ ...onPush, GITHUB_REF: 'refs/heads/main' }, start],
+  ]) {
+    const h = fixture();
+    await assert.rejects(
+      smoke({
+        ...stub,
+        mode: 'execute',
+        env: settings,
+        clock: () => time,
+        request: h.request,
+      }),
+    );
+    assert.equal(h.calls.length, 0);
+  }
+  const h = fixture();
+  assert.equal(
+    (
+      await smoke({
+        ...stub,
+        mode: 'execute',
+        env: onPush,
+        clock: () => start,
+        request: h.request,
+      })
+    ).didWrite,
+    true,
+  );
+});
