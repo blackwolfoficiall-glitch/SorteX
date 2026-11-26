@@ -16,14 +16,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      SORTEX_QA_CODE_SHA: a51eb9a3693c955b5105146631f5cc4e9666c9cc
+      SORTEX_QA_CODE_SHA: 90851959c3d7beceb7c259249e284c08b246e4ee
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          ref: a51eb9a3693c955b5105146631f5cc4e9666c9cc
+          ref: 90851959c3d7beceb7c259249e284c08b246e4ee
           path: validated-candidate
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -50,4 +50,4 @@ jobs:
     needs: update
     uses: ./.github/workflows/sortex-hosted-qa-smoke.yml
     with:
-      expected-api-sha: a51eb9a3693c955b5105146631f5cc4e9666c9cc
+      expected-api-sha: 90851959c3d7beceb7c259249e284c08b246e4ee

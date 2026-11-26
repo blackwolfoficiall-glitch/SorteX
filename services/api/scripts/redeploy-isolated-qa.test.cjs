@@ -9,7 +9,7 @@ const env = {
   GITHUB_REPOSITORY: 'blackwolfoficiall-glitch/SorteX', GITHUB_REF: 'refs/heads/homologacao/web-ios-integrada',
   SORTEX_QA_CODE_SHA: revision, QA_ENABLE: 'yes', SORTEX_QA_NEON_API_KEY: 'synthetic-only',
 };
-function harness({ previousVersion = baseline, variables = names, previousId = 3, after = names, currentId = previousId } = {}) {
+function harness({ previousVersion = baseline, variables = names, previousId = 4, after = names, currentId = previousId } = {}) {
   const posts = [];
   let calls = 0;
   const request = async (href, options) => {
@@ -19,12 +19,12 @@ function harness({ previousVersion = baseline, variables = names, previousId = 3
     assert.equal(!!options.headers?.Authorization, isAdmin);
     if (u.pathname.endsWith('/deployments')) {
       posts.push(options.body);
-      return Response.json({ deployment: { id: 4 } });
+      return Response.json({ deployment: { id: 5 } });
     }
     if (u.pathname.endsWith('/functions/sortexqa')) {
-      const active = { id: posts.length ? 4 : previousId, status: 'completed', environment: posts.length ? after : variables };
+      const active = { id: posts.length ? 5 : previousId, status: 'completed', environment: posts.length ? after : variables };
       return Response.json({ function: { slug: 'sortexqa', invocation_url: origin + '/', active_deployment: active,
-        current_deployment: { ...active, id: posts.length ? 4 : currentId } } });
+        current_deployment: { ...active, id: posts.length ? 5 : currentId } } });
     }
     if (u.pathname.endsWith('/health')) return Response.json({ status: 'ok', version: posts.length ? revision : previousVersion });
     if (u.pathname.endsWith('/health/ready')) return Response.json({ status: 'ready', database: 'up', storage: 'disabled' });
@@ -37,7 +37,7 @@ function harness({ previousVersion = baseline, variables = names, previousId = 3
 }
 test('only uploads the package and changes APP_VERSION; preserves existing configuration', async () => {
   const h = harness();
-  assert.deepEqual(await h.run(), { id: 4, unchanged: false });
+  assert.deepEqual(await h.run(), { id: 5, unchanged: false });
   assert.equal(h.posts.length, 1);
   assert.deepEqual([...h.posts[0].keys()].sort(), ['environment', 'zip']);
   assert.deepEqual(JSON.parse(h.posts[0].get('environment')), { APP_VERSION: revision });
@@ -48,15 +48,15 @@ test('wrong branch is rejected before network', async () => {
   assert.equal(h.calls(), 0);
 });
 test('rejects running deployment, mismatched base and payment configuration without uploading', async () => {
-  for (const h of [harness({ currentId: 4 }), harness({ previousId: 1 }),
+  for (const h of [harness({ currentId: 5 }), harness({ previousId: 1 }),
     harness({ variables: [...names, 'MERCADO_PAGO_ACCESS_TOKEN'] })]) {
     await assert.rejects(h.run());
     assert.equal(h.posts.length, 0);
   }
 });
 test('a completed identical version does not redeploy; key loss stops readiness acceptance', async () => {
-  const h = harness({ previousVersion: revision, previousId: 4 });
-  assert.deepEqual(await h.run(), { id: 4, unchanged: true });
+  const h = harness({ previousVersion: revision, previousId: 5 });
+  assert.deepEqual(await h.run(), { id: 5, unchanged: true });
   assert.equal(h.posts.length, 0);
   const changed = harness({ after: names.filter(x => x !== 'JWT_ACCESS_SECRET') });
   await assert.rejects(changed.run());
