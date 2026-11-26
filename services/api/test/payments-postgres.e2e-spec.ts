@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
+import type { Server } from 'node:http';
 import { Order } from 'mercadopago';
 import { hash } from 'bcrypt';
 import request from 'supertest';
@@ -38,6 +39,8 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       PAYMENT_ENV: 'sandbox',
       MERCADO_PAGO_ACCESS_TOKEN: 'local-sdk-double-no-real-credential',
       MERCADO_PAGO_WEBHOOK_SECRET_TEST: secret,
+      MERCADO_PAGO_ESTIMATED_FEE_PERCENT: '1.25',
+      FINANCE_PIX_AVAILABLE_DAYS: '1',
       MERCADO_PAGO_WEBHOOK_SECRET: '',
       MERCADO_PAGO_WEBHOOK_SECRET_PRODUCTION: '',
       INTEGRATIONS_MODE: 'sandbox',
@@ -65,6 +68,215 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       await app?.close();
     } finally {
       process.env = initialEnv;
+    }
+  });
+
+  it.each([
+    {
+      label: 'isenta somente a taxa SorteX na primeira campanha criada',
+      olderDraft: false,
+      platformFee: 0,
+      netAmount: 30.12,
+      rule: 'FIRST_CAMPAIGN_FREE',
+    },
+    {
+      label:
+        'mantém a taxa na primeira publicação após um rascunho mais antigo',
+      olderDraft: true,
+      platformFee: 0.88,
+      netAmount: 29.24,
+      rule: 'PLAN_RATE',
+    },
+  ])('$label', async ({ olderDraft, platformFee, netAmount, rule }) => {
+    const server = app.getHttpServer() as Server;
+    const run = randomUUID();
+    const password = 'synthetic-first-campaign-fee-password';
+    const [organizer, buyer] = await Promise.all(
+      (['ORGANIZER', 'BUYER'] as const).map(async (role) =>
+        prisma.user.create({
+          data: {
+            name: 'Conta sintética',
+            email: `fee-${role.toLowerCase()}-${run}@example.test`,
+            password: await hash(password, 4),
+            role,
+          },
+        }),
+      ),
+    );
+    await prisma.organizerProfile.create({
+      data: {
+        userId: organizer.id,
+        fullName: 'Organizador sintético',
+        cpf: '00000000000',
+        phone: '00000000000',
+        verificationStatus: 'VERIFIED',
+        currentPlan: 'BASIC',
+        firstCampaignFree: true,
+        platformFee: 2.9,
+      },
+    });
+    const now = Date.now();
+    // Characterization only: an older unpublished draft currently counts.
+    // This does not settle which campaign the business should waive.
+    if (olderDraft) {
+      await prisma.campaign.create({
+        data: {
+          title: 'Rascunho anterior sintético',
+          slug: `fee-draft-${run}`,
+          organizerId: organizer.id,
+          status: 'DRAFT',
+          publishedAt: null,
+          createdAt: new Date(now - 120_000),
+        },
+      });
+    }
+    const campaign = await prisma.campaign.create({
+      data: {
+        title: 'Primeira publicação sintética',
+        slug: `fee-published-${run}`,
+        organizerId: organizer.id,
+        totalNumbers: 10,
+        numberPrice: 30.5,
+        numberSelectionMode: 'MANUAL',
+        status: 'PUBLISHED',
+        createdAt: new Date(now - 60_000),
+        publishedAt: new Date(now),
+      },
+    });
+    async function login(email: string) {
+      const response = await request(server)
+        .post('/auth/login')
+        .send({ email, password })
+        .expect(201);
+      return (response.body as { accessToken: string }).accessToken;
+    }
+    const [buyerToken, organizerToken] = await Promise.all([
+      login(buyer.email),
+      login(organizer.email),
+    ]);
+    const reserve = await request(server)
+      .post('/purchases/reserve-manual')
+      .auth(buyerToken, { type: 'bearer' })
+      .send({
+        campaignId: campaign.id,
+        numbers: [1],
+        idempotencyKey: randomUUID(),
+      })
+      .expect(201);
+    const { id: purchaseId } = reserve.body as { id: string };
+    const orderId = `fee-${run}`;
+    const create = jest
+      .spyOn(Order.prototype, 'create')
+      .mockImplementation(({ body }) =>
+        Promise.resolve({
+          id: orderId,
+          external_reference: body.external_reference,
+          total_amount: body.total_amount,
+          status: 'action_required',
+          status_detail: 'waiting_transfer',
+        }),
+      );
+    const get = jest
+      .spyOn(Order.prototype, 'get')
+      .mockRejectedValue(new Error('Consulta externa bloqueada no teste.'));
+    try {
+      const pix = await request(server)
+        .post('/payments/pix')
+        .auth(buyerToken, { type: 'bearer' })
+        .send({ purchaseId, acceptedTerms: true })
+        .expect(201);
+      expect(pix.body).toMatchObject({
+        status: 'PENDING',
+        amount: 30.5,
+        platformFee,
+        gatewayFee: 0.38,
+        netAmount,
+      });
+      expect(create).toHaveBeenCalledTimes(1);
+      const payment = await prisma.payment.findUniqueOrThrow({
+        where: { id: (pix.body as { id: string }).id },
+      });
+      expect(payment.metadata).toMatchObject({
+        firstCampaignFreeApplied: !olderDraft,
+        platformFeeRule: rule,
+      });
+      expect(payment.gatewayFeeRate.toFixed(2)).toBe('1.25');
+      expect(
+        await prisma.ledgerEntry.count({ where: { paymentId: payment.id } }),
+      ).toBe(0);
+
+      get.mockResolvedValueOnce({
+        id: orderId,
+        external_reference: payment.externalReference,
+        total_amount: '30.50',
+        status: 'processed',
+        status_detail: 'accredited',
+      });
+      const notify = () => {
+        const ts = String(Math.floor(Date.now() / 1000));
+        const requestId = randomUUID();
+        const digest = createHmac('sha256', secret)
+          .update(`id:${orderId};request-id:${requestId};ts:${ts};`)
+          .digest('hex');
+        return request(server)
+          .post('/webhooks/payments/mercado-pago')
+          .query({ 'data.id': orderId })
+          .set('x-signature', `ts=${ts},v1=${digest}`)
+          .set('x-request-id', requestId)
+          .send({
+            id: `fee-approved-${run}`,
+            action: 'order.processed',
+            data: { id: orderId },
+          });
+      };
+      await notify().expect(200, {
+        received: true,
+        duplicate: false,
+        status: 'APPROVED',
+      });
+      await notify().expect(200, { received: true, duplicate: true });
+      expect(get).toHaveBeenCalledTimes(1);
+
+      const entries = await prisma.ledgerEntry.findMany({
+        where: { paymentId: payment.id },
+      });
+      expect(
+        entries
+          .map(({ type, amount }) => [type, amount.toFixed(2)])
+          .sort(([a], [b]) => a.localeCompare(b)),
+      ).toEqual([
+        ['GATEWAY_FEE', '0.38'],
+        ['GROSS_SALE', '30.50'],
+        ['ORGANIZER_NET_REVENUE', netAmount.toFixed(2)],
+        ['PLATFORM_FEE', platformFee.toFixed(2)],
+        ['PLATFORM_REVENUE', platformFee.toFixed(2)],
+      ]);
+      const credit = entries.find(
+        (entry) => entry.type === 'ORGANIZER_NET_REVENUE',
+      );
+      expect(credit).toMatchObject({ direction: 'CREDIT', status: 'PENDING' });
+      const approved = await prisma.payment.findUniqueOrThrow({
+        where: { id: payment.id },
+      });
+      expect(credit?.availableAt?.getTime()).toBe(
+        approved.approvedAt!.getTime() + 86_400_000,
+      );
+      const balance = await request(server)
+        .get('/finance/balance')
+        .auth(organizerToken, { type: 'bearer' })
+        .expect(200);
+      expect(balance.body).toMatchObject({
+        gross: 30.5,
+        net: netAmount,
+        pending: netAmount,
+        available: 0,
+        platformFees: platformFee,
+        gatewayFees: 0.38,
+        totalRequested: 0,
+      });
+    } finally {
+      create.mockRestore();
+      get.mockRestore();
     }
   });
 
