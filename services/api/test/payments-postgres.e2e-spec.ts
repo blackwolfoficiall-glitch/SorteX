@@ -280,6 +280,208 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
     }
   });
 
+  it('só libera a reserva após cancelamento confirmado e preserva a outra reserva em callbacks tardios', async () => {
+    const run = randomUUID();
+    const server = app.getHttpServer() as Server;
+    const password = 'isolated-cancel-fixture';
+    const passwordHash = await hash(password, 4);
+    const [owner, buyer, secondBuyer] = await Promise.all(
+      (['ORGANIZER', 'BUYER', 'BUYER'] as const).map((role, index) =>
+        prisma.user.create({
+          data: {
+            name: 'Conta sintética',
+            email: `cancel-${run}-${index}@example.test`,
+            password: passwordHash,
+            role,
+          },
+        }),
+      ),
+    );
+    await prisma.organizerProfile.create({
+      data: {
+        userId: owner.id,
+        fullName: 'Responsável sintético',
+        cpf: '00000000000',
+        phone: '00000000000',
+        verificationStatus: 'VERIFIED',
+      },
+    });
+    const campaign = await prisma.campaign.create({
+      data: {
+        title: 'Campanha sintética de cancelamento',
+        slug: `cancel-${run}`,
+        organizerId: owner.id,
+        totalNumbers: 10,
+        numberPrice: 5,
+        numberSelectionMode: 'MANUAL',
+        status: 'PUBLISHED',
+      },
+    });
+    const [token, secondToken] = await Promise.all(
+      [buyer, secondBuyer].map(async ({ email }) => {
+        const response = await request(server)
+          .post('/auth/login')
+          .send({ email, password })
+          .expect(201);
+        return (response.body as { accessToken: string }).accessToken;
+      }),
+    );
+    const reserve = (auth: string) =>
+      request(server)
+        .post('/purchases/reserve-manual')
+        .auth(auth, { type: 'bearer' })
+        .send({
+          campaignId: campaign.id,
+          numbers: [2],
+          idempotencyKey: randomUUID(),
+        });
+    const reservation = await reserve(token).expect(201);
+    const purchaseId = (reservation.body as { id: string }).id;
+    const orderId = `ord-cancel-${run}`;
+    const order = {
+      id: orderId,
+      total_amount: '5.00',
+      status: 'action_required',
+      status_detail: 'waiting_transfer',
+    };
+    const create = jest
+      .spyOn(Order.prototype, 'create')
+      .mockImplementation(async ({ body }) => {
+        // A second action can arrive while the buyer's first checkout still
+        // waits for the order ID. No cancellation has been confirmed yet.
+        const inFlight = await request(server)
+          .get(`/payments/purchase/${purchaseId}`)
+          .auth(token, { type: 'bearer' })
+          .expect(200);
+        const inFlightId = (inFlight.body as { id: string }).id;
+        await request(server)
+          .post(`/payments/${inFlightId}/cancel`)
+          .auth(token, { type: 'bearer' })
+          .expect(409);
+        return { ...order, external_reference: body.external_reference };
+      });
+    const gatewayCancel = jest
+      .spyOn(Order.prototype, 'cancel')
+      .mockRejectedValue(new Error('Cancelamento externo bloqueado no teste.'));
+    const get = jest
+      .spyOn(Order.prototype, 'get')
+      .mockRejectedValue(new Error('Consulta externa bloqueada no teste.'));
+    try {
+      const checkout = await request(server)
+        .post('/payments/pix')
+        .auth(token, { type: 'bearer' })
+        .send({ purchaseId, acceptedTerms: true })
+        .expect(201);
+      const paymentId = (checkout.body as { id: string }).id;
+      const payment = await prisma.payment.findUniqueOrThrow({
+        where: { id: paymentId },
+      });
+      const gatewayOrder = {
+        ...order,
+        external_reference: payment.externalReference,
+      };
+      const cancel = () =>
+        request(server)
+          .post(`/payments/${paymentId}/cancel`)
+          .auth(token, { type: 'bearer' });
+      const notify = (event: string, valid = true) => {
+        const ts = String(Math.floor(Date.now() / 1000));
+        const requestId = randomUUID();
+        const digest = createHmac(
+          'sha256',
+          valid ? secret : 'invalid-test-secret',
+        )
+          .update(`id:${orderId};request-id:${requestId};ts:${ts};`)
+          .digest('hex');
+        return request(server)
+          .post('/webhooks/payments/mercado-pago')
+          .query({ 'data.id': orderId })
+          .set('x-request-id', requestId)
+          .set('x-signature', `ts=${ts},v1=${digest}`)
+          .send({
+            id: `cancel-${run}-${event}`,
+            action: 'order.updated',
+            data: { id: orderId },
+          });
+      };
+
+      gatewayCancel.mockResolvedValueOnce(gatewayOrder);
+      await cancel().expect(409);
+      await reserve(secondToken).expect(409);
+      expect(
+        await prisma.payment.findUnique({ where: { id: paymentId } }),
+      ).toMatchObject({ status: 'PENDING', activePurchaseKey: purchaseId });
+
+      gatewayCancel.mockResolvedValueOnce({
+        ...gatewayOrder,
+        status: 'canceled',
+        status_detail: 'canceled_by_api',
+      });
+      const cancelled = await cancel().expect(201);
+      expect(cancelled.body).toMatchObject({
+        status: 'CANCELLED',
+        purchase: { status: 'CANCELLED' },
+      });
+      await cancel().expect(201, cancelled.body);
+      const reused = await reserve(secondToken).expect(201);
+      const newPurchase = (reused.body as { id: string }).id;
+
+      await notify('stale', false).expect(401);
+      expect(get).not.toHaveBeenCalled();
+      expect(
+        await prisma.paymentEvent.count({
+          where: { providerEventId: `cancel-${run}-stale` },
+        }),
+      ).toBe(0);
+      get.mockResolvedValueOnce(gatewayOrder);
+      await notify('stale').expect(200, {
+        received: true,
+        duplicate: false,
+        status: 'CANCELLED',
+      });
+      await notify('stale').expect(200, { received: true, duplicate: true });
+
+      get.mockResolvedValueOnce({
+        ...gatewayOrder,
+        total_amount: '5.01',
+        status: 'processed',
+        status_detail: 'accredited',
+      });
+      await notify('wrong-value')
+        .expect(409)
+        .expect(({ body }) =>
+          expect(body).toMatchObject({
+            message: 'Valor do webhook divergente.',
+          }),
+        );
+      get.mockResolvedValueOnce({
+        ...gatewayOrder,
+        status: 'processed',
+        status_detail: 'accredited',
+      });
+      await notify('late-approval').expect(409);
+      expect(
+        await prisma.payment.findUnique({ where: { id: paymentId } }),
+      ).toMatchObject({
+        status: 'CANCELLED',
+        activePurchaseKey: null,
+      });
+      expect(
+        await prisma.ticket.findMany({
+          where: { campaignId: campaign.id },
+          select: { number: true, status: true, purchaseId: true },
+        }),
+      ).toEqual([{ number: 2, status: 'RESERVED', purchaseId: newPurchase }]);
+      expect(await prisma.ledgerEntry.count({ where: { paymentId } })).toBe(0);
+      expect(gatewayCancel).toHaveBeenCalledTimes(2);
+      expect(get).toHaveBeenCalledTimes(3);
+    } finally {
+      create.mockRestore();
+      gatewayCancel.mockRestore();
+      get.mockRestore();
+    }
+  });
+
   it('liquida cotas uma vez e registra apenas um estorno integral no extrato', async () => {
     const run = randomUUID();
     const externalReference = `pay-${run}`;

@@ -283,31 +283,63 @@ export class PaymentsService {
       PaymentStatus.PENDING,
       PaymentStatus.PROCESSING,
     ];
+    if (current.status === PaymentStatus.CANCELLED)
+      return this.sanitize(current);
     if (!cancellableStatuses.includes(current.status)) {
       throw new BadRequestException('Este pagamento não pode ser cancelado.');
     }
-    if (current.providerPaymentId) {
-      if (this.jsonObject(current.metadata).nativeSandboxPix === true)
-        this.requireNativeSandboxPix();
-      await this.gateways
-        .get(current.provider)
-        .cancelPayment(current.providerPaymentId);
+    if (!current.providerPaymentId) {
+      // The create request may already be at the provider, even if we have
+      // not received or saved its order ID. Keep the reservation until linked.
+      throw new ConflictException(
+        'O pedido ainda está sendo vinculado. Atualize o pagamento antes de cancelar.',
+      );
+    }
+    if (this.jsonObject(current.metadata).nativeSandboxPix === true)
+      this.requireNativeSandboxPix();
+    const cancelled = await this.gateways
+      .get(current.provider)
+      .cancelPayment(current.providerPaymentId);
+    if (
+      cancelled.status !== PaymentStatus.CANCELLED ||
+      cancelled.providerPaymentId !== current.providerPaymentId ||
+      cancelled.externalReference !== current.externalReference ||
+      !current.amount.equals(cancelled.amount)
+    ) {
+      throw new ConflictException(
+        'O provedor não confirmou o cancelamento deste pagamento.',
+      );
     }
     return this.prisma.$transaction(async (transaction) => {
-      const payment = await transaction.payment.update({
-        where: { id },
+      const update = await transaction.payment.updateMany({
+        where: {
+          id,
+          status: { in: cancellableStatuses },
+          providerPaymentId: current.providerPaymentId,
+          purchase: { status: PurchaseStatus.AWAITING_PAYMENT },
+        },
         data: {
           status: PaymentStatus.CANCELLED,
           cancelledAt: new Date(),
           activePurchaseKey: null,
         },
+      });
+      if (update.count) {
+        await this.releasePurchase(
+          transaction,
+          current.purchaseId,
+          PurchaseStatus.CANCELLED,
+        );
+      }
+      const payment = await transaction.payment.findUniqueOrThrow({
+        where: { id },
         include: paymentInclude,
       });
-      await this.releasePurchase(
-        transaction,
-        current.purchaseId,
-        PurchaseStatus.CANCELLED,
-      );
+      if (payment.status !== PaymentStatus.CANCELLED) {
+        throw new ConflictException(
+          'O pagamento mudou enquanto o cancelamento era confirmado. Atualize o pedido.',
+        );
+      }
       return this.sanitize(payment);
     });
   }
@@ -891,7 +923,14 @@ export class PaymentsService {
         }
         // A confirmação nunca pode ser reaberta por uma notificação tardia.
         // O ledger permite apenas um débito de reversão por pagamento liquidado.
-        if (reversed || (localApproval && !reversal)) {
+        const closedPayment =
+          payment.status === PaymentStatus.CANCELLED ||
+          payment.status === PaymentStatus.EXPIRED;
+        if (
+          reversed ||
+          (localApproval && !reversal) ||
+          (closedPayment && gateway.status !== PaymentStatus.APPROVED)
+        ) {
           await transaction.auditLog.create({
             data: {
               entityType: 'PAYMENT',
