@@ -1,0 +1,62 @@
+name: Ativar storage privado exclusivamente na QA
+on:
+  workflow_call:
+    inputs:
+      expected-api-sha:
+        required: true
+        type: string
+      expected-api-deployment:
+        required: true
+        type: string
+      validated-code-sha:
+        required: true
+        type: string
+      validated-ci-run:
+        required: true
+        type: string
+      confirm-bucket:
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: sortex-web-ios-qa-bootstrap
+  cancel-in-progress: false
+jobs:
+  configure:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event.repository.private == false && github.run_attempt == '1'
+    environment: sortex-web-ios-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Validar pinos e proteções sem credenciais
+        env:
+          EXPECTED_API_SHA: ${{ inputs.expected-api-sha }}
+          VALIDATED_CODE_SHA: ${{ inputs.validated-code-sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for sha in "$EXPECTED_API_SHA" "$VALIDATED_CODE_SHA" b7edea01d44a86a9c3406690c65837dfeeb3a5d2; do
+            [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+            git merge-base --is-ancestor "$sha" HEAD
+          done
+          node --test services/api/scripts/activate-storage-isolated-qa.test.mjs
+      - name: Alterar somente as três flags de storage, sem publicar novo código
+        env:
+          QA_ENABLE: ${{ vars.SORTEX_QA_BOOTSTRAP }}
+          SORTEX_QA_NEON_API_KEY: ${{ secrets.SORTEX_QA_NEON_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_API_SHA: ${{ inputs.expected-api-sha }}
+          EXPECTED_API_DEPLOYMENT: ${{ inputs.expected-api-deployment }}
+          VALIDATED_CODE_SHA: ${{ inputs.validated-code-sha }}
+          VALIDATED_CI_RUN: ${{ inputs.validated-ci-run }}
+          CONFIRM_STORAGE_BUCKET: ${{ inputs.confirm-bucket }}
+        run: node services/api/scripts/activate-storage-isolated-qa.mjs
