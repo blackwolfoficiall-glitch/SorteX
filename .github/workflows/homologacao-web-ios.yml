@@ -127,6 +127,38 @@ jobs:
           export JWT_REFRESH_SECRET="$(openssl rand -hex 40)"
           export ORGANIZER_UPLOAD_DIR="$RUNNER_TEMP/sortex-storage"
           mkdir -p "$ORGANIZER_UPLOAD_DIR"
+          export SORTEX_PUBLISHED_OWNER_EMAIL="sortex-published-owner-$(openssl rand -hex 6)@example.test"
+          export SORTEX_PUBLISHED_OTHER_EMAIL="sortex-published-other-$(openssl rand -hex 6)@example.test"
+          export SORTEX_PUBLISHED_OWNER_PASSWORD="$(openssl rand -hex 30)"
+          export SORTEX_PUBLISHED_OTHER_PASSWORD="$(openssl rand -hex 30)"
+          (
+            cd services/api
+            node <<'JS'
+          const { PrismaClient } = require('@prisma/client');
+          const { PrismaPg } = require('@prisma/adapter-pg');
+          const { hash } = require('bcrypt');
+          const url = new URL(process.env.DATABASE_URL);
+          if (url.protocol !== 'postgresql:' || url.hostname !== '127.0.0.1' ||
+              url.port !== '5432' || url.username !== 'sortex_ci' ||
+              url.pathname !== '/sortex_homologacao_local' || url.search || url.hash) {
+            throw new Error('O cenário de publicação exige o banco descartável local.');
+          }
+          const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url.href }) });
+          (async () => {
+            for (const [actor, cpf, status] of [
+              ['OWNER', '00000000000', 'VERIFIED'], ['OTHER', '00000000001', 'PENDING'],
+            ]) {
+              const email = process.env[`SORTEX_PUBLISHED_${actor}_EMAIL`];
+              const password = process.env[`SORTEX_PUBLISHED_${actor}_PASSWORD`];
+              await prisma.user.create({ data: {
+                name: 'Organizador sintético', email, password: await hash(password, 10), role: 'ORGANIZER',
+                organizerProfile: { create: { fullName: 'Organizador sintético', cpf, phone: '71999990000', verificationStatus: status } },
+              } });
+            }
+          })().catch(() => { console.error('Falhou a criação das identidades sintéticas.'); process.exitCode = 1; })
+            .finally(() => prisma.$disconnect());
+          JS
+          )
           (
             cd services/api
             exec env NODE_ENV=development APP_ENV=staging STORAGE_DRIVER=filesystem PORT=3338 \
@@ -156,3 +188,4 @@ jobs:
           wait_ready "$SORTEX_PARITY_WEB/api" "$web_pid" "Site"
           cd apps/mobile
           node --import tsx scripts/test-web-ios-parity.ts
+          node --import tsx scripts/test-published-campaign-parity.ts
