@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { draftFields, draftPayload, emptyOrganizerDraft, isEditableOrganizerCampaign, saveOrganizerCampaign } from "../src/domain/organizer-draft";
+import { draftFields, draftPayload, emptyOrganizerDraft, isEditableOrganizerCampaign,
+  listOrganizerDrawTemplates, mayChooseOrganizerDrawTemplate, saveOrganizerCampaign, saveOrganizerDraft } from "../src/domain/organizer-draft";
 
 test("organizer draft converts pt-BR monetary values and preserves editable fields", () => {
   const fields = draftFields({ id: "local-draft", status: "DRAFT", title: "Prêmio sintético", numberPrice: 0.12, totalNumbers: 100 });
@@ -16,6 +17,97 @@ test("organizer draft refuses invalid inputs locally, while the API remains auth
   assert.throws(() => draftPayload({ ...emptyOrganizerDraft, title: "Teste", totalNumbers: "10000001" }), /cotas/);
 });
 
+test("only title is needed while saving initial partial drafts", async () => {
+  const requestBodies: unknown[] = [];
+  const api = { request: async <T>(_path: string, _method?: string, body?: unknown) => {
+    requestBodies.push(body);
+    return { id: "draft", title: "Campanha sintética", status: "DRAFT" } as T;
+  } };
+  const initial = await saveOrganizerDraft(api, { ...emptyOrganizerDraft, title: "Campanha sintética" });
+  await saveOrganizerDraft(api, { ...draftFields(initial), regulation: " Regulamento sintético " }, initial);
+  assert.deepEqual(requestBodies, [
+    { title: "Campanha sintética", description: "", mainPrizeName: "" },
+    { regulation: "Regulamento sintético" },
+  ]);
+});
+
+test("native editor composes Federal publication fields with local sale time but a clock-independent draw date", () => {
+  const oldTimeZone = process.env.TZ;
+  try {
+    process.env.TZ = "America/Bahia";
+    const fields = {
+      ...emptyOrganizerDraft, title: "Campanha de exemplo", regulation: " Regulamento de teste ",
+      mainPrizeName: "Prêmio sintético", mainPrizeDescription: " Descrição do prêmio ",
+      estimatedPrizeValue: "1234,55", numberPrice: "0,12", totalNumbers: "500",
+      minimumPurchase: "2", drawDate: "29/02/2028", drawTime: "18:15",
+      salesStartDate: "01/02/2028", salesStartTime: "23:50", drawRuleTemplateId: "template-federal",
+    };
+    const payload = draftPayload(fields);
+    assert.deepEqual(payload, {
+      title: "Campanha de exemplo", description: "", regulation: "Regulamento de teste",
+      mainPrizeName: "Prêmio sintético", mainPrizeDescription: "Descrição do prêmio",
+      estimatedPrizeValue: 1234.55, numberPrice: 0.12, totalNumbers: 500,
+      minimumPurchase: 2, drawDate: "2028-02-29", drawTime: "18:15",
+      salesStartAt: "2028-02-02T02:50:00.000Z", drawBasis: "LOTERIA_FEDERAL",
+      drawRuleTemplateId: "template-federal",
+    });
+    const record = { ...payload, id: "draft", title: fields.title, status: "DRAFT", drawDate: "2028-02-29T00:00:00.000Z",
+      salesStartAt: "2028-02-02T02:50:15.123Z" };
+    const loaded = draftFields(record);
+    assert.equal(loaded.drawDate, fields.drawDate);
+    assert.equal(loaded.drawTime, fields.drawTime);
+    assert.equal(loaded.salesStartDate, fields.salesStartDate);
+    assert.equal(loaded.salesStartTime, fields.salesStartTime);
+    assert.deepEqual(draftPayload({ ...loaded, title: "Revisão" }, record), { title: "Revisão" });
+    assert.deepEqual(draftPayload({ ...loaded, regulation: "" }, record), { regulation: "" });
+    assert.throws(() => draftPayload({ ...loaded, drawDate: "" }, record), /substituir a data/);
+
+    // Sales time skipped by a daylight-saving transition does not silently move an hour.
+    process.env.TZ = "America/New_York";
+    assert.throws(() => draftPayload({ ...fields, salesStartDate: "10/03/2024", salesStartTime: "02:30" }), /não existe no fuso/);
+  } finally {
+    if (oldTimeZone === undefined) delete process.env.TZ;
+    else process.env.TZ = oldTimeZone;
+  }
+});
+
+test("optional publication fields reject invalid dates, times, amounts and quantities", () => {
+  const draft = { ...emptyOrganizerDraft, title: "Teste sintético" };
+  for (const invalid of ["29/02/2026", "31/04/2028", "2028-04-02", "01/13/2028", "00/01/2028"])
+    assert.throws(() => draftPayload({ ...draft, drawDate: invalid }), /data de sorteio/);
+  for (const invalid of ["7:30", "24:00", "12:60"])
+    assert.throws(() => draftPayload({ ...draft, drawTime: invalid }), /horário de sorteio/);
+  assert.throws(() => draftPayload({ ...draft, salesStartDate: "15/01/2028" }), /horário de início/);
+  assert.throws(() => draftPayload({ ...draft, salesStartTime: "09:00" }), /data de início/);
+  for (const invalid of ["0,015", "-1", "1e9", "1000000000000,00"])
+    assert.throws(() => draftPayload({ ...draft, estimatedPrizeValue: invalid }), /valor estimado/);
+  assert.throws(() => draftPayload({ ...draft, totalNumbers: "8", minimumPurchase: "9" }), /compra mínima não pode/);
+});
+
+test("drafts without new Federal selections do not send or replace an existing rule", () => {
+  for (const protectedRule of [
+    { drawBasis: "CUSTOM", customDrawRule: { digits: [] } },
+    { drawBasis: "MANUAL_RESULT" },
+    { drawBasis: "LOTERIA_FEDERAL", customDrawRule: { digits: [] } },
+  ]) {
+    const record = { id: "r", status: "DRAFT", title: "Campanha", ...protectedRule };
+    const fields = draftFields(record);
+    assert.equal(mayChooseOrganizerDrawTemplate(record), false);
+    assert.deepEqual(draftPayload({ ...fields, mainPrizeName: "Outro prêmio" }, record), { mainPrizeName: "Outro prêmio" });
+    assert.throws(() => draftPayload({ ...fields, drawRuleTemplateId: "federal" }, record), /regra existente/);
+  }
+});
+
+test("published rule-picker choices use the authenticated API and validate the list body", async () => {
+  const request = async <T>(path: string, method?: string) => {
+    assert.equal(path, "/draw-rule-templates");
+    assert.equal(method, undefined);
+    return [null, { id: "", name: "Incompleto" }, { id: "a", name: "Modelo", description: "Descrição", ruleDefinition: {} }] as T;
+  };
+  assert.deepEqual(await listOrganizerDrawTemplates({ request }), [{ id: "a", name: "Modelo", description: "Descrição" }]);
+  await assert.rejects(listOrganizerDrawTemplates({ request: async <T>() => ({ malformed: true }) as T }), /confirmar os modelos/);
+});
+
 test("published and paused organizer campaigns send only changed title and description", async () => {
   const calls: Array<{ path: string; method?: string; body: unknown }> = [];
   const api = {
@@ -27,7 +119,8 @@ test("published and paused organizer campaigns send only changed title and descr
   const campaign = { id: "campaign/public-copy", status: "PUBLISHED", title: "Título inicial",
     description: "Descrição inicial", mainPrizeName: "Prêmio original", totalNumbers: 250, numberPrice: 0.12 };
   await saveOrganizerCampaign(api, { ...draftFields(campaign), description: " Descrição editada ",
-    shortDescription: " Resumo editado ", numberPrice: "70,00", totalNumbers: "900", mainPrizeName: "Não sobrescrever" }, campaign);
+    shortDescription: " Resumo editado ", numberPrice: "70,00", totalNumbers: "900", mainPrizeName: "Não sobrescrever",
+    regulation: "Não alterar", drawDate: "Data inválida ignorada no modo texto", drawRuleTemplateId: "Não mudar" }, campaign);
   const paused = { ...campaign, status: "PAUSED" };
   await saveOrganizerCampaign(api, { ...draftFields(paused), title: " Título editado " }, paused);
   await saveOrganizerCampaign(api, draftFields(campaign), campaign);

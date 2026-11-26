@@ -3,7 +3,7 @@ import { randomBytes, randomInt } from "node:crypto";
 import { ApiError, SortexClient, type Vault } from "../src/api/client";
 import { QA_API, validateApiUrl } from "../src/api/config";
 import { verifyHostedReadiness } from "./hosted-smoke-preflight";
-import { draftFields, saveOrganizerDraft, type OrganizerDraftRecord } from "../src/domain/organizer-draft";
+import { draftFields, emptyOrganizerDraft, saveOrganizerDraft, type OrganizerDraftRecord } from "../src/domain/organizer-draft";
 
 type Identity = { id: string; role: string; adminPermissions?: string[] };
 type Profile = { id: string; userId: string };
@@ -164,6 +164,7 @@ async function main() {
     (error) => error instanceof ApiError && [403, 404].includes(error.status));
   assert.equal((await reqA<Campaign>(`/campaigns/${draft.id}`, 200)).title, nextTitle);
   const nativeDraft = await saveOrganizerDraft(mB, {
+    ...emptyOrganizerDraft,
     title: `Rascunho criado no cliente móvel ${run}`, description: "Sintético",
     mainPrizeName: "Prêmio sintético", numberPrice: "0,12", totalNumbers: "500",
   });

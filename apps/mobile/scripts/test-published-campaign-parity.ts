@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { createHash, randomBytes } from "node:crypto";
+import { createRequire } from "node:module";
 import { ApiError, SortexClient, type Vault } from "../src/api/client";
 import { validateApiUrl } from "../src/api/config";
-import { draftFields, saveOrganizerCampaign, type OrganizerDraftRecord } from "../src/domain/organizer-draft";
+import { draftFields, emptyOrganizerDraft, listOrganizerDrawTemplates, saveOrganizerCampaign, type OrganizerDraftRecord } from "../src/domain/organizer-draft";
+import { uploadOrganizerDraftCover } from "../src/domain/organizer-draft-cover";
+import { runOrganizerLifecycle, type OrganizerCampaignState } from "../src/domain/organizer-campaign-lifecycle";
 
 // Run only with a fresh local PostgreSQL/Next/Nest stack. The fixture accounts
 // must already exist: a verified organizer and a different organizer.
@@ -28,7 +31,11 @@ function mobile(origin: string) {
   return { client, token: () => tokens?.accessToken };
 }
 
-type Campaign = OrganizerDraftRecord & { slug: string; regulation?: string; coverImageUrl?: string | null };
+type Campaign = OrganizerDraftRecord & OrganizerCampaignState & {
+  slug: string;
+  coverImageUrl?: string | null;
+  publishedRuleSnapshot?: unknown;
+};
 
 async function main() {
   const api = loopback("SORTEX_PARITY_API"), web = loopback("SORTEX_PARITY_WEB");
@@ -91,14 +98,39 @@ async function main() {
 
   const run = randomBytes(6).toString("hex");
   const title = `Campanha sintética ${run}`, regulation = "Regulamento original. Apenas teste, sem dinheiro real.";
-  const original = await request<Campaign>("/campaigns", 201, "POST", {
-    title, regulation, mainPrizeName: "Prêmio sintético",
-    mainPrizeDescription: "Descrição do prêmio de teste", estimatedPrizeValue: 10,
-    totalNumbers: 100, numberPrice: 0.12, minimumPurchase: 1,
-    drawBasis: "MANUAL_RESULT", drawTime: "18:00",
-    drawDate: new Date(Date.now() + 604_800_000).toISOString(),
-    salesStartAt: new Date(Date.now() - 60_000).toISOString(),
+  const prize = `Prêmio de teste ${run}`, prizeDescription = `Descrição sintética do prêmio ${run}`;
+  const draft = await saveOrganizerCampaign(app, { ...emptyOrganizerDraft, title });
+  assert.equal(draft.status, "DRAFT");
+  assert.equal(draft.organizerId, user.id);
+  const rule = (await listOrganizerDrawTemplates(app)).find(({ id }) => id === "system-last-5-first");
+  assert.ok(rule, "O catálogo autenticado precisa oferecer um modelo da Loteria Federal.");
+  const expectedRule = (await app.request<Array<{ id: string; ruleDefinition: unknown }>>("/draw-rule-templates"))
+    .find((item) => item.id === rule.id)?.ruleDefinition;
+  assert.ok(expectedRule);
+  await assert.rejects(runOrganizerLifecycle(app, user.id, draft, "publish"),
+    (error) => error instanceof ApiError && error.status === 400);
+  const schedule = draftFields({
+    ...draft, drawDate: new Date(Date.now() + 604_800_000).toISOString(),
+    drawTime: "18:00", salesStartAt: new Date(Date.now() - 60_000).toISOString(),
   });
+  const original = await saveOrganizerCampaign(app, {
+    ...schedule, regulation, mainPrizeName: prize,
+    mainPrizeDescription: prizeDescription, estimatedPrizeValue: "10,50",
+    totalNumbers: "100000", numberPrice: "0,12", minimumPurchase: "2",
+    drawRuleTemplateId: rule.id,
+  }, draft) as Campaign;
+  assert.equal(original.id, draft.id);
+  assert.equal(original.regulation, regulation);
+  assert.equal(original.mainPrizeDescription, prizeDescription);
+  assert.equal(original.estimatedPrizeValue, 10.50);
+  assert.equal(original.minimumPurchase, 2);
+  assert.equal(original.drawTime, "18:00");
+  assert.equal(original.drawRuleTemplateId, rule.id);
+  assert.equal(original.drawBasis, "LOTERIA_FEDERAL");
+  const roundTrip = draftFields(original);
+  assert.equal(roundTrip.drawDate, schedule.drawDate);
+  assert.equal(roundTrip.salesStartDate, schedule.salesStartDate);
+  assert.equal(roundTrip.salesStartTime, schedule.salesStartTime);
   const path = `/campaigns/${original.id}`, publicPath = `/public/campaigns/${original.slug}`;
   // Two locally generated RGB PNGs with valid PNG checksums (2×2 and 3×2).
   const coverBytes = Buffer.from(
@@ -114,7 +146,16 @@ async function main() {
     cover.set("files", new Blob([new Uint8Array(bytes)], { type: "image/png" }), name);
     return request<Campaign>(`${path}/images`, 201, "POST", cover);
   }
-  await uploadCover(coverBytes, "original-sintetica.png");
+  const revision = app.activeSessionRevision();
+  assert.notEqual(revision, null);
+  const covered = await uploadOrganizerDraftCover(app, user.id, revision!, original, (expected) => {
+    const form = new FormData();
+    form.set("target", "COVER");
+    form.set("expectedDraftCoverRevision", expected);
+    // The Node runner substitutes a local Blob for React Native's file URI only.
+    form.set("files", new Blob([new Uint8Array(coverBytes)], { type: "image/png" }), "capa.png");
+    return form;
+  });
 
   const ownedMedia = `${path}/media/cover`;
   const publicMedia = `/public/campaigns/media/${original.id}/cover`;
@@ -154,13 +195,57 @@ async function main() {
   await exactCover("DRAFT dono direto", direct(ownedMedia, ownerToken));
   await exactCover("DRAFT dono Next", webOwner(ownedMedia));
 
-  const published = await request<Campaign>(`${path}/publish`, 201, "POST");
+  const pendingDraft = await saveOrganizerCampaign(other, { ...emptyOrganizerDraft, title: `Rascunho pendente ${run}` });
+  await assert.rejects(runOrganizerLifecycle(other, pendingDraft.organizerId!, pendingDraft, "publish"),
+    (error) => error instanceof ApiError && error.status === 403);
+  await assert.rejects(runOrganizerLifecycle(other, pendingDraft.organizerId!, covered, "publish"),
+    (error) => error instanceof ApiError && error.status === 403);
+  await runOrganizerLifecycle(app, user.id, covered, "publish");
+  const published = await app.request<Campaign>(path);
   assert.equal(published.status, "PUBLISHED");
-  assert.equal((await app.request<Campaign>(path)).id, published.id);
+  assert.equal(published.id, original.id);
+  assert.deepEqual(published.publishedRuleSnapshot, expectedRule);
+  await assert.rejects(app.request(path, "PATCH", { drawRuleTemplateId: "different-rule" }),
+    (error) => error instanceof ApiError && [400, 409].includes(error.status));
   const mobilePublicCampaign = await app.publicRequest<Campaign>(publicPath);
   const webPublicCampaign = await request<Campaign>(publicPath, 200);
   assert.equal(mobilePublicCampaign.coverImageUrl, publicMedia);
   assert.equal(webPublicCampaign.coverImageUrl, publicMedia);
+  for (const campaign of [mobilePublicCampaign, webPublicCampaign]) {
+    assert.equal(campaign.id, original.id);
+    assert.equal(campaign.title, title);
+    assert.equal(campaign.mainPrizeName, prize);
+    assert.equal(campaign.mainPrizeDescription, prizeDescription);
+  }
+  const webBrowserRender = process.env.SORTEX_PARITY_WEB_RENDER === "yes";
+  if (webBrowserRender) {
+    const requireWeb = createRequire(new URL("../../web/package.json", import.meta.url));
+    const { chromium, devices, webkit } = requireWeb("@playwright/test");
+    for (const [name, engine] of [["chromium", chromium], ["webkit", webkit]] as const) {
+      const chromiumPath = process.env.SORTEX_PARITY_CHROMIUM_EXECUTABLE;
+      const browser = await engine.launch(name === "chromium" && chromiumPath ? { executablePath: chromiumPath } : {});
+      try {
+        const context = await browser.newContext({
+          ...devices[name === "webkit" ? "iPhone 13" : "Desktop Chrome"], serviceWorkers: "block",
+        });
+        await context.route("**/*", (route: { request(): { url(): string }; continue(): Promise<void>; abort(): Promise<void> }) =>
+          new URL(route.request().url()).origin === web ? route.continue() : route.abort());
+        const page = await context.newPage();
+        const [received] = await Promise.all([
+          page.waitForResponse((response: { url(): string }) => new URL(response.url()).pathname === `/api${publicPath}`, { timeout: 20_000 }),
+          page.goto(`${web}/campanha/${original.slug}`),
+        ]);
+        await page.getByRole("heading", { name: title, exact: true }).waitFor({ timeout: 20_000 });
+        const payload = await received.json();
+        assert.equal(payload.id, original.id);
+        await page.locator("summary").filter({ hasText: "Descrição e regulamento" }).click();
+        await page.getByText(prizeDescription, { exact: true }).waitFor({ timeout: 20_000 });
+        await page.getByText(regulation, { exact: true }).waitFor({ timeout: 20_000 });
+      } finally {
+        await browser.close();
+      }
+    }
+  }
   await exactCover("PUBLISHED público direto (URL informada ao aplicativo)", direct(mobilePublicCampaign.coverImageUrl));
   await exactCover("PUBLISHED público Next", webAnonymous(webPublicMedia));
   await denied("PUBLISHED privado outro organizador direto", direct(ownedMedia, otherToken), 403);
@@ -223,6 +308,8 @@ async function main() {
   console.log(JSON.stringify({
     type: "local-http-published-campaign-parity-not-ios-acceptance", revision: apiHealth.version,
     campaignId: original.id, slug: original.slug, publishedDescriptionOnWebAndMobile: true,
+    nativePayloadDraftThenPublish: true, nativeCoverAccepted: true, federalRuleSnapshotMatches: true,
+    publishedRuleChangeDenied: true, pendingPublisherDenied: true, webBrowserRender,
     pausedTitleOnWeb: true, otherOrganizerDenied: true, finishedEditDenied: true,
     cover: {
       sha256: createHash("sha256").update(coverBytes).digest("hex"),

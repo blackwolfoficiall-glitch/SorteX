@@ -16,7 +16,7 @@ const labels: Record<
   publish: {
     label: "Publicar campanha",
     warning:
-      "A campanha ficará disponível para consulta pública se atender aos requisitos. Se faltarem regulamento, imagem ou dados do sorteio, complete no site.",
+      "A campanha ficará disponível para consulta pública se atender aos requisitos. Se faltarem regulamento, imagem ou dados do sorteio, complete em Editar rascunho. Consulte o site para ajustar regras personalizadas.",
   },
   pause: {
     label: "Pausar campanha",
