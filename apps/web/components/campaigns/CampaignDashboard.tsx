@@ -1,5 +1,6 @@
 "use client";
 
+import { campaignPublicationNotice, publicationError } from "@/lib/campaigns/publication";
 import { versionedCoverUrl } from "@/lib/campaigns/cover-revision";
 import Image from "next/image";
 import Link from "next/link";
@@ -83,6 +84,7 @@ export default function CampaignDashboard() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
+  const [actionError, setActionError] = useState<{ id: string; message: string; publication: boolean }>();
   const requestSequence = useRef(0);
 
   const load = useCallback(async () => {
@@ -143,14 +145,19 @@ export default function CampaignDashboard() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const visibleCampaigns = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  async function run(id: string, operation: () => Promise<unknown>) {
+  async function run(id: string, operation: () => Promise<unknown>, publication = false) {
+    if (busyId) return;
     setBusyId(id);
-    setError("");
+    setActionError(undefined);
     try {
       await operation();
       await load();
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Não foi possível concluir a ação.");
+      setActionError({
+        id,
+        publication,
+        message: publication ? publicationError(cause) : cause instanceof Error ? cause.message : "Não foi possível concluir a ação.",
+      });
     } finally {
       setBusyId("");
     }
@@ -197,7 +204,7 @@ export default function CampaignDashboard() {
           <Card className="mt-6 p-12 text-center"><Ticket className="mx-auto text-violet-500" size={44} /><h2 className="mt-4 text-xl font-black">Nenhuma campanha encontrada</h2><p className="mt-2 text-zinc-500">Ajuste os filtros ou crie uma nova campanha.</p></Card>
         ) : (
           <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
-            {visibleCampaigns.map((campaign) => <CampaignCard key={campaign.id} campaign={campaign} busy={busyId === campaign.id} run={run} remove={remove} />)}
+            {visibleCampaigns.map((campaign) => <CampaignCard key={campaign.id} campaign={campaign} busy={Boolean(busyId)} actionError={actionError?.id === campaign.id ? actionError : undefined} refresh={() => { setActionError(undefined); void load(); }} run={run} remove={remove} />)}
           </div>
         )}
 
@@ -213,12 +220,26 @@ export default function CampaignDashboard() {
   );
 }
 
-function CampaignCard({ campaign, busy, run, remove }: { campaign: Campaign; busy: boolean; run: (id: string, operation: () => Promise<unknown>) => Promise<void>; remove: (campaign: Campaign) => void }) {
+function CampaignCard({ campaign, busy, actionError, refresh, run, remove }: {
+  campaign: Campaign;
+  busy: boolean;
+  actionError?: { message: string; publication: boolean };
+  refresh: () => void;
+  run: (id: string, operation: () => Promise<unknown>, publication?: boolean) => Promise<void>;
+  remove: (campaign: Campaign) => void;
+}) {
   const percent = soldPercent(campaign);
   const isDraft = ["DRAFT", "PENDING_REVIEW"].includes(campaign.status);
   const canPublish = isDraft || campaign.status === "PAUSED";
   const canPause = campaign.status === "PUBLISHED";
   const canFinish = ["PUBLISHED", "PAUSED"].includes(campaign.status);
+  const publishNotice = canPublish ? campaignPublicationNotice(campaign) : undefined;
+  const editable = isDraft || campaign.status === "PUBLISHED" || campaign.status === "PAUSED";
+  function finish() {
+    if (window.confirm("Encerrar esta campanha? O link público ficará indisponível e esta ação não pode ser desfeita aqui.")) {
+      void run(campaign.id, () => finishCampaign(campaign.id));
+    }
+  }
   return (
     <Card className="relative min-w-0 transition-shadow hover:shadow-lg">
       <div className="relative aspect-[16/9] overflow-hidden rounded-t-3xl bg-gradient-to-br from-violet-100 to-purple-50">
@@ -231,7 +252,25 @@ function CampaignCard({ campaign, busy, run, remove }: { campaign: Campaign; bus
           <p className="mt-4 flex items-center gap-2 text-xs text-zinc-500"><CalendarDays size={15} /> {campaign.drawDate ? new Date(campaign.drawDate).toLocaleDateString("pt-BR") : "Sorteio não definido"}</p>
           {campaign.instantPrizes.length>0&&<div className="mt-4 rounded-2xl border border-violet-100 bg-violet-50/60 p-3"><p className="flex items-center gap-2 text-xs font-black uppercase tracking-wide text-violet-700"><Gift size={15}/> Cotas premiadas</p><div className="mt-3 grid grid-cols-3 gap-2"><Info label="Total" value={String(campaign.instantPrizes.length)}/><Info label="Encontradas" value={String(campaign.instantPrizes.filter(prize=>["FOUND","DELIVERED"].includes(prize.status)).length)}/><Info label="Disponíveis" value={String(campaign.instantPrizes.filter(prize=>prize.status==="AVAILABLE").length)}/></div></div>}
           {campaign.status==="PUBLISHED"&&<div className="mt-5 min-w-0 rounded-2xl border bg-zinc-50 p-3"><p className="mb-2 text-xs font-black uppercase tracking-wide text-zinc-600">Link da campanha</p><CampaignPublicLink compact slug={campaign.slug} editHref={`/dashboard/campanhas/${campaign.id}/editar`}/></div>}
-          {isDraft?<div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap"><Link href={`/dashboard/campanhas/${campaign.id}/editar`}><Button className="w-full" size="sm"><Edit3 size={15}/> Editar</Button></Link><Button size="sm" variant="ghost" disabled={busy} onClick={()=>void run(campaign.id,()=>duplicateCampaign(campaign.id))}><Copy size={15}/> Duplicar</Button><Button size="sm" variant="ghost" disabled={busy} onClick={()=>void run(campaign.id,()=>publishCampaign(campaign.id))}><Rocket size={15}/> Publicar</Button><Button size="sm" variant="ghost" disabled={busy} onClick={()=>remove(campaign)}><Trash2 size={15}/> Excluir</Button></div>:<div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">{campaign.status==="PUBLISHED"&&isValidCampaignSlug(campaign.slug)&&<Link href={`/campanha/${campaign.slug}`} target="_blank"><Button className="w-full" size="sm"><ExternalLink size={15}/> Abrir campanha</Button></Link>}{campaign.status==="PUBLISHED"&&!isValidCampaignSlug(campaign.slug)&&<Link href={`/dashboard/campanhas/${campaign.id}/editar`}><Button className="w-full" size="sm" variant="outline">Corrigir link</Button></Link>}<Link href={`/dashboard/campanhas/${campaign.id}/editar`}><Button className="w-full" size="sm" variant="outline"><Edit3 size={15}/> Editar</Button></Link><Button size="sm" variant="ghost" disabled={busy} onClick={()=>void run(campaign.id,()=>duplicateCampaign(campaign.id))}><Copy size={15}/> Duplicar</Button>{campaign.status==="PUBLISHED"&&<CampaignShare compact label="Compartilhar" title={campaign.title} slug={campaign.slug}/>} {canPause&&<Button size="sm" variant="ghost" disabled={busy} onClick={()=>void run(campaign.id,()=>pauseCampaign(campaign.id))}><PauseCircle size={15}/> Pausar</Button>}{canFinish&&<Button size="sm" variant="outline" disabled={busy} onClick={()=>void run(campaign.id,()=>finishCampaign(campaign.id))}><CheckCircle2 size={15}/> Encerrar</Button>}{canPublish&&<Button size="sm" variant="ghost" disabled={busy} onClick={()=>void run(campaign.id,()=>publishCampaign(campaign.id))}><Rocket size={15}/> Publicar</Button>}</div>}
+          {publishNotice && <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-900">{publishNotice}</p>}
+          {actionError && <div role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+            <p>{actionError.message}</p>
+            <div className="mt-2 flex flex-wrap gap-3">
+              {actionError.publication && editable && <Link className="font-bold underline" href={`/dashboard/campanhas/${campaign.id}/editar`}>Revisar dados da campanha</Link>}
+              <button type="button" className="font-bold underline" onClick={refresh}>Atualizar situação</button>
+            </div>
+          </div>}
+          <div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+            {campaign.status === "PUBLISHED" && isValidCampaignSlug(campaign.slug) && <Link href={`/campanha/${campaign.slug}`} target="_blank"><Button className="w-full" size="sm"><ExternalLink size={15}/> Abrir campanha</Button></Link>}
+            {campaign.status === "PUBLISHED" && !isValidCampaignSlug(campaign.slug) && <Link href={`/dashboard/campanhas/${campaign.id}/editar`}><Button className="w-full" size="sm" variant="outline">Corrigir link</Button></Link>}
+            {editable && <Link href={`/dashboard/campanhas/${campaign.id}/editar`}><Button className="w-full" size="sm" variant={isDraft ? undefined : "outline"}><Edit3 size={15}/> Editar</Button></Link>}
+            <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(campaign.id, () => duplicateCampaign(campaign.id))}><Copy size={15}/> Duplicar</Button>
+            {campaign.status === "PUBLISHED" && <CampaignShare compact label="Compartilhar" title={campaign.title} slug={campaign.slug}/>}
+            {canPause && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(campaign.id, () => pauseCampaign(campaign.id))}><PauseCircle size={15}/> Pausar</Button>}
+            {canFinish && <Button size="sm" variant="ghost" disabled={busy} onClick={finish}><CheckCircle2 size={15}/> Encerrar</Button>}
+            {canPublish && !publishNotice && <Button size="sm" variant="ghost" disabled={busy} onClick={() => void run(campaign.id, () => publishCampaign(campaign.id), true)}><Rocket size={15}/> {campaign.status === "PAUSED" ? "Reativar" : "Publicar"}</Button>}
+            {campaign.status === "DRAFT" && <Button size="sm" variant="ghost" disabled={busy} onClick={() => remove(campaign)}><Trash2 size={15}/> Excluir</Button>}
+          </div>
         </div>
     </Card>
   );

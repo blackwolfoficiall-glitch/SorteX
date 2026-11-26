@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -7,6 +8,7 @@ import {
 import { CampaignStatus, DrawBasis, Prisma, UserRole } from '@prisma/client';
 import { randomInt } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { DrawRuleEngineService } from '../draws/draw-rule-engine.service';
 import { OrganizerStorageService } from '../organizers/organizer-storage.service';
 import type { UploadedOrganizerFile } from '../organizers/types/uploaded-file.type';
 import { PrismaService } from '../prisma/prisma.service';
@@ -243,6 +245,7 @@ export class CampaignsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: OrganizerStorageService,
+    private readonly drawRuleEngine: DrawRuleEngineService,
   ) {}
 
   async create(user: AuthenticatedUser, data: CreateCampaignDto) {
@@ -453,6 +456,11 @@ export class CampaignsService {
         'Seu cadastro precisa estar aprovado para publicar campanhas.',
       );
     }
+    if (current.publicationBlocked) {
+      throw new ForbiddenException(
+        'A publicação desta campanha está bloqueada.',
+      );
+    }
     if (
       current.status !== CampaignStatus.DRAFT &&
       current.status !== CampaignStatus.PENDING_REVIEW &&
@@ -462,6 +470,8 @@ export class CampaignsService {
         'Somente campanhas em rascunho ou pausadas podem ser publicadas.',
       );
     }
+    const reactivating = current.status === CampaignStatus.PAUSED;
+    if (reactivating) this.requireOriginalPublication(current);
     const missing = this.publishChecklist(current);
     if (missing.length) {
       throw new BadRequestException(
@@ -469,17 +479,38 @@ export class CampaignsService {
       );
     }
 
-    const campaign = await this.prisma.campaign.update({
-      where: { id },
-      data: {
-        status: CampaignStatus.PUBLISHED,
-        publishedAt: new Date(),
-        publishedRuleSnapshot: (current.drawRuleTemplate?.ruleDefinition ??
-          current.customDrawRule) as Prisma.InputJsonValue,
-      },
-      include: campaignInclude,
-    });
-    return this.serialize(campaign);
+    try {
+      const campaign = await this.prisma.campaign.update({
+        where: {
+          id,
+          status: current.status,
+          publicationBlocked: false,
+          ...(reactivating ? { publishedAt: current.publishedAt } : {}),
+        },
+        data: {
+          status: CampaignStatus.PUBLISHED,
+          ...(reactivating
+            ? {}
+            : {
+                publishedAt: new Date(),
+                publishedRuleSnapshot: (current.drawRuleTemplate
+                  ?.ruleDefinition ??
+                  current.customDrawRule) as Prisma.InputJsonValue,
+              }),
+        },
+        include: campaignInclude,
+      });
+      return this.serialize(campaign);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      )
+        throw new ConflictException(
+          'A situação da campanha mudou. Atualize antes de tentar novamente.',
+        );
+      throw error;
+    }
   }
 
   async pause(id: string, user: AuthenticatedUser) {
@@ -1252,10 +1283,36 @@ export class CampaignsService {
     }
   }
 
+  private requireOriginalPublication(campaign: CampaignPayload) {
+    if (
+      !campaign.publishedAt ||
+      !Number.isFinite(campaign.publishedAt.getTime())
+    )
+      throw new ConflictException(
+        'A data da publicação original não está disponível. Solicite revisão antes de reativar.',
+      );
+    if (
+      campaign.drawBasis === DrawBasis.MANUAL_RESULT &&
+      campaign.publishedRuleSnapshot === null
+    )
+      return;
+    try {
+      this.drawRuleEngine.validatePublishedSnapshot(
+        campaign.publishedRuleSnapshot,
+      );
+    } catch {
+      throw new ConflictException(
+        'A regra da publicação original está ausente ou inválida. Solicite revisão antes de reativar.',
+      );
+    }
+  }
+
   private publishChecklist(campaign: CampaignPayload) {
     const hasRule =
       campaign.drawBasis === DrawBasis.MANUAL_RESULT ||
-      Boolean(campaign.drawRuleTemplateId || campaign.customDrawRule);
+      (campaign.status === CampaignStatus.PAUSED
+        ? Boolean(campaign.publishedRuleSnapshot)
+        : Boolean(campaign.drawRuleTemplateId || campaign.customDrawRule));
     return [
       ['título', campaign.title],
       ['regulamento', campaign.regulation],

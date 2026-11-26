@@ -1,5 +1,6 @@
 "use client";
 
+import { campaignPublicationNotice, publicationError } from "@/lib/campaigns/publication";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -233,6 +234,7 @@ export default function CampaignWizard({
     [form.instantPrizes],
   );
   const platformFee = campaign?.organizer.platformFee ?? planFee;
+  const publishNotice = campaign ? campaignPublicationNotice(campaign) : undefined;
   const isPublished = campaign?.status === "PUBLISHED" || campaign?.status === "PAUSED";
 
   function set<K extends keyof CampaignDraft>(key: K, value: CampaignDraft[K]) {
@@ -392,7 +394,7 @@ export default function CampaignWizard({
 
   async function saveDraft() {
     const saved = await persist(false);
-    if (saved) router.push(`/dashboard/campanhas?status=${isPublished?"PUBLISHED":"DRAFT"}`);
+    if (saved) router.push(`/dashboard/campanhas?status=${saved.status === "PENDING_REVIEW" ? "DRAFT" : saved.status}`);
   }
 
   async function confirmPriceReduction(createPromotion: boolean) {
@@ -504,6 +506,7 @@ export default function CampaignWizard({
   }
 
   async function publish() {
+    if (publishNotice) return;
     const saved = await persist(false);
     if (!saved) return;
     setSaving(true);
@@ -513,7 +516,7 @@ export default function CampaignWizard({
       router.push(`/dashboard/campanhas/${published.id}/publicada`);
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Não foi possível publicar.",
+        publicationError(cause),
       );
     } finally {
       setSaving(false);
@@ -1532,7 +1535,7 @@ export default function CampaignWizard({
                 >
                   <Save size={17} /> {isPublished?"Salvar alterações":"Salvar rascunho"}
                 </Button>
-                {!isPublished&&<Button onClick={publish} disabled={saving}><Rocket size={17} /> Publicar campanha</Button>}
+                {!isPublished && (publishNotice ? <p className="text-sm text-amber-800">{publishNotice}</p> : <Button onClick={publish} disabled={saving}><Rocket size={17} /> Publicar campanha</Button>)}
               </div>
             </div>
           </Step>

@@ -7,6 +7,7 @@ import Card from "@/components/ui/Card";
 import ReservationCountdown from "@/components/purchases/ReservationCountdown";
 import { getMyPurchases } from "@/lib/purchases/client";
 import type { Purchase, PurchaseStatus } from "@/lib/purchases/types";
+import { purchaseStatusLabels } from "@/lib/purchases/status";
 
 const tabs: Array<{ label: string; status?: PurchaseStatus }> = [
   { label: "Todas" },
@@ -16,38 +17,43 @@ const tabs: Array<{ label: string; status?: PurchaseStatus }> = [
   { label: "Expiradas", status: "EXPIRED" },
   { label: "Canceladas", status: "CANCELLED" },
 ];
-const labels: Record<PurchaseStatus, string> = {
-  PENDING: "Pendente",
-  RESERVED: "Reservada",
-  AWAITING_PAYMENT: "Aguardando pagamento",
-  PAID: "Paga",
-  EXPIRED: "Expirada",
-  CANCELLED: "Cancelada",
-  REFUNDED: "Estornada",
-};
+type Selection = { status?: PurchaseStatus };
+type ListResult =
+  | { selection: Selection; items: Purchase[] }
+  | { selection: Selection; error: string };
 
 export default function MeusNumerosPage() {
-  const [status, setStatus] = useState<PurchaseStatus>();
-  const [items, setItems] = useState<Purchase[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [selection, setSelection] = useState<Selection>({});
+  const [result, setResult] = useState<ListResult>();
+  const status = selection.status;
+  const current = result?.selection === selection ? result : undefined;
   useEffect(() => {
-    getMyPurchases(status)
-      .then(setItems)
-      .catch((cause) =>
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Falha ao carregar suas compras.",
-        ),
-      )
-      .finally(() => setLoading(false));
-  }, [status]);
+    let active = true;
+    getMyPurchases(selection.status)
+      .then((items) => {
+        if (active) setResult({ selection, items });
+      })
+      .catch((cause) => {
+        if (active)
+          setResult({
+            selection,
+            error:
+              cause instanceof Error
+                ? cause.message
+                : "Falha ao carregar suas compras.",
+          });
+      });
+    return () => {
+      active = false;
+    };
+  }, [selection]);
+
   function selectStatus(next?: PurchaseStatus) {
-    setLoading(true);
-    setError("");
-    setStatus(next);
+    setSelection((previous) =>
+      previous.status === next ? previous : { status: next },
+    );
   }
+
   return (
     <main className="mx-auto max-w-5xl p-5 md:py-10">
       <p className="text-sm font-bold uppercase tracking-wider text-violet-700">
@@ -58,6 +64,8 @@ export default function MeusNumerosPage() {
         {tabs.map((tab) => (
           <button
             key={tab.label}
+            type="button"
+            aria-pressed={status === tab.status}
             onClick={() => selectStatus(tab.status)}
             className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold ${status === tab.status ? "bg-violet-700 text-white" : "bg-white text-zinc-600"}`}
           >
@@ -65,30 +73,36 @@ export default function MeusNumerosPage() {
           </button>
         ))}
       </div>
-      {error && (
-        <p className="mt-5 rounded-2xl bg-red-50 p-4 text-red-700">{error}</p>
-      )}
-      {loading ? (
-        <div className="flex h-52 items-center justify-center">
-          <LoaderCircle className="animate-spin text-violet-700" />
+      {!current ? (
+        <div role="status" className="flex h-52 items-center justify-center">
+          <LoaderCircle aria-hidden className="animate-spin text-violet-700" />
+          <span className="sr-only">Carregando compras...</span>
         </div>
-      ) : items.length === 0 ? (
+      ) : "error" in current ? (
+        <div className="mt-5 rounded-2xl bg-red-50 p-4 text-red-700">
+          <p role="alert">{current.error}</p>
+          <button
+            type="button"
+            onClick={() => setSelection((previous) => ({ ...previous }))}
+            className="mt-2 text-sm font-bold text-red-700"
+          >
+            Tentar novamente
+          </button>
+        </div>
+      ) : current.items.length === 0 ? (
         <Card className="mt-6 p-10 text-center">
           <Ticket className="mx-auto text-violet-400" size={42} />
           <h2 className="mt-4 font-black">Nenhuma compra nesta categoria</h2>
         </Card>
       ) : (
         <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {items.map((purchase) => (
-            <Link
-              key={purchase.id}
-              href={`/comprador/compras/${purchase.id}`}
-            >
+          {current.items.map((purchase) => (
+            <Link key={purchase.id} href={`/comprador/compras/${purchase.id}`}>
               <Card className="h-full p-5 transition hover:-translate-y-0.5 hover:shadow-md">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700">
-                      {labels[purchase.status]}
+                      {purchaseStatusLabels[purchase.status]}
                     </span>
                     <h2 className="mt-3 text-lg font-black">
                       {purchase.campaign.title}

@@ -64,11 +64,11 @@ export function reserveManual(input: {
 }
 
 export function getPurchase(id: string) {
-  return request<Purchase>(`/api/purchases/${id}`);
+  return request<Purchase>(`/api/purchases/${id}`, { cache: "no-store" });
 }
 export function getMyPurchases(status?: PurchaseStatus) {
   const query = status ? `?status=${status}` : "";
-  return request<Purchase[]>(`/api/purchases/my${query}`);
+  return request<Purchase[]>(`/api/purchases/my${query}`, { cache: "no-store" });
 }
 export function cancelPurchase(id: string) {
   return request<Purchase>(`/api/purchases/${id}/cancel`, { method: "POST" });

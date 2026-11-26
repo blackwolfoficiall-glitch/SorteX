@@ -109,14 +109,27 @@ export default function PublicCampaignView({
   useEffect(() => {
     if (!slug || previewCampaign) return;
     let active = true;
-    const timer = window.setInterval(() => {
-      if (document.hidden) return;
-      fetch(`/api/public/campaigns/${slug}`, { cache: "no-store" })
-        .then(async (response) => (response.ok ? response.json() : null))
-        .then((payload) => {
-          if (active && payload) setCampaign(payload as Campaign);
-        })
-        .catch(() => undefined);
+    let inFlight = false;
+    const timer = window.setInterval(async () => {
+      if (document.hidden || inFlight) return;
+      inFlight = true;
+      try {
+        const response = await fetch(`/api/public/campaigns/${slug}`, { cache: "no-store" });
+        if (response.status === 404 && active) {
+          setCampaign(null);
+          setError("Campanha não encontrada.");
+        } else if (response.ok) {
+          const payload = await response.json() as Campaign;
+          if (active) {
+            setCampaign(payload);
+            setError("");
+          }
+        }
+      } catch {
+        // A temporary outage does not prove that the campaign was withdrawn.
+      } finally {
+        inFlight = false;
+      }
     }, 15000);
     return () => {
       active = false;

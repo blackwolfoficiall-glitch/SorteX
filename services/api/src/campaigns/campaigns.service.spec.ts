@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,11 +12,13 @@ import {
   CampaignStatus,
   DrawBasis,
   NumberSelectionMode,
+  Prisma,
   UserRole,
   UserStatus,
   VerificationStatus,
 } from '@prisma/client';
 import { Readable } from 'node:stream';
+import { DrawRuleEngineService } from '../draws/draw-rule-engine.service';
 import { OrganizerStorageService } from '../organizers/organizer-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CampaignsService } from './campaigns.service';
@@ -72,6 +75,8 @@ function campaign(overrides: Record<string, unknown> = {}) {
     reservedNumbers: 0,
     grossRevenue: 0,
     publishedAt: null,
+    publishedRuleSnapshot: null,
+    publicationBlocked: false,
     createdAt: new Date(),
     updatedAt: new Date(),
     organizer: {
@@ -172,6 +177,7 @@ describe('CampaignsService', () => {
     const module = await Test.createTestingModule({
       providers: [
         CampaignsService,
+        DrawRuleEngineService,
         { provide: PrismaService, useValue: prisma },
         {
           provide: OrganizerStorageService,
@@ -437,6 +443,140 @@ describe('CampaignsService', () => {
     );
     expect(prisma.campaign.update).not.toHaveBeenCalled();
   });
+
+  it.each([CampaignStatus.DRAFT, CampaignStatus.PAUSED])(
+    'não publica campanha do próprio organizador quando a administração bloqueou (%s)',
+    async (status) => {
+      prisma.campaign.findUnique.mockResolvedValue(
+        campaign({ status, publicationBlocked: true }),
+      );
+      await expect(service.publish('campaign-1', organizer)).rejects.toThrow(
+        'A publicação desta campanha está bloqueada.',
+      );
+      expect(prisma.campaign.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('não altera a publicação quando um bloqueio ou transição ocorre depois da leitura', async () => {
+    prisma.campaign.findUnique.mockResolvedValue(campaign());
+    prisma.campaign.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Status changed', {
+        code: 'P2025',
+        clientVersion: 'test',
+      }),
+    );
+    await expect(
+      service.publish('campaign-1', organizer),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.campaign.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'campaign-1',
+          status: CampaignStatus.DRAFT,
+          publicationBlocked: false,
+        },
+      }),
+    );
+  });
+
+  it('reativa sem regravar a data nem substituir a regra original pelo template atual', async () => {
+    const publishedAt = new Date('2026-01-03T10:00:00.000Z');
+    const publishedRuleSnapshot = {
+      digits: [{ prize: 3, position: 4, order: 0 }],
+    };
+    const paused = campaign({
+      status: CampaignStatus.PAUSED,
+      publishedAt,
+      publishedRuleSnapshot,
+      drawRuleTemplate: {
+        ...campaign().drawRuleTemplate,
+        ruleDefinition: {
+          digits: [{ prize: 1, position: 0, order: 0 }],
+        },
+      },
+    });
+    prisma.campaign.findUnique.mockResolvedValue(paused);
+    prisma.campaign.update.mockResolvedValue({
+      ...paused,
+      status: CampaignStatus.PUBLISHED,
+    });
+    await expect(
+      service.publish('campaign-1', organizer),
+    ).resolves.toMatchObject({
+      status: CampaignStatus.PUBLISHED,
+      publishedAt,
+      publishedRuleSnapshot,
+    });
+    expect(prisma.campaign.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'campaign-1',
+          status: CampaignStatus.PAUSED,
+          publicationBlocked: false,
+          publishedAt,
+        },
+        data: { status: CampaignStatus.PUBLISHED },
+      }),
+    );
+  });
+
+  it('preserva snapshot nulo legítimo de campanha manual e a data original', async () => {
+    const paused = campaign({
+      status: CampaignStatus.PAUSED,
+      drawBasis: DrawBasis.MANUAL_RESULT,
+      publishedAt: new Date('2026-01-03T10:00:00.000Z'),
+      publishedRuleSnapshot: null,
+      drawRuleTemplateId: null,
+      drawRuleTemplate: null,
+    });
+    prisma.campaign.findUnique.mockResolvedValue(paused);
+    prisma.campaign.update.mockResolvedValue({
+      ...paused,
+      status: CampaignStatus.PUBLISHED,
+    });
+    await expect(
+      service.publish('campaign-1', organizer),
+    ).resolves.toMatchObject({
+      status: CampaignStatus.PUBLISHED,
+      publishedAt: paused.publishedAt,
+      publishedRuleSnapshot: null,
+    });
+    expect(prisma.campaign.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: CampaignStatus.PUBLISHED },
+      }),
+    );
+  });
+
+  it.each([
+    {
+      publishedAt: null,
+      publishedRuleSnapshot: { digits: [{ prize: 3, position: 4, order: 0 }] },
+    },
+    {
+      publishedAt: new Date('2026-01-03T10:00:00.000Z'),
+      publishedRuleSnapshot: null,
+    },
+    {
+      publishedAt: new Date('2026-01-03T10:00:00.000Z'),
+      publishedRuleSnapshot: {},
+    },
+    {
+      publishedAt: new Date('2026-01-03T10:00:00.000Z'),
+      publishedRuleSnapshot: { digits: [{ prize: 6, position: 4, order: 0 }] },
+    },
+  ])(
+    'não reconstitui metadados ausentes ou ilegíveis ao reativar (%o)',
+    async (metadata) => {
+      prisma.campaign.findUnique.mockResolvedValue(
+        campaign({ status: CampaignStatus.PAUSED, ...metadata }),
+      );
+      await expect(
+        service.publish('campaign-1', organizer),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.campaign.update).not.toHaveBeenCalled();
+    },
+  );
 
   it('pausa uma campanha publicada do próprio organizador', async () => {
     prisma.campaign.findUnique.mockResolvedValue(

@@ -33,6 +33,8 @@ import { LocationPicker } from "./src/components/LocationPicker";
 import { NativeOrganizerDraft } from "./src/components/NativeOrganizerDraft";
 import { NativeOrganizerFinance } from "./src/organizer/NativeOrganizerFinance";
 import { organizerFinanceSession } from "./src/organizer/finance";
+import { NativeOrganizerCampaignLifecycle } from "./src/components/NativeOrganizerCampaignLifecycle";
+import type { OrganizerCampaignState } from "./src/domain/organizer-campaign-lifecycle";
 import { NativeBuyerPrizes } from "./src/buyer/NativeBuyerPrizes";
 import { NativeBuyerDrawResults } from "./src/buyer/NativeBuyerDrawResults";
 import { NativePublicDrawProof } from "./src/components/NativePublicDrawProof";
@@ -126,6 +128,7 @@ function Login({ navigation }: any) {
       </View>
       <Field
         label="E-mail"
+        testID="sortex-login-email"
         value={email}
         onChangeText={setEmail}
         keyboardType="email-address"
@@ -134,6 +137,7 @@ function Login({ navigation }: any) {
       />
       <Field
         label="Senha"
+        testID="sortex-login-password"
         value={password}
         onChangeText={setPassword}
         secureTextEntry
@@ -600,7 +604,7 @@ function CampaignDetail({ route, navigation }: any) {
     organizer = auth.user?.role === "ORGANIZER";
   const item = route.params.item as Campaign;
   const focused = useIsFocused();
-  const state = useData<Campaign>(
+  const state = useData<Campaign & OrganizerCampaignState>(
     !focused ? null : organizer
       ? `/campaigns/${encodeURIComponent(item.id)}`
       : `/public/campaigns/${encodeURIComponent(item.slug)}`,
@@ -638,6 +642,15 @@ function CampaignDetail({ route, navigation }: any) {
         {organizer && isEditableOrganizerCampaign(state.data?.status) && (
           <Button secondary title={state.data?.status === "DRAFT" ? "Editar rascunho" : "Editar campanha"}
             onPress={() => navigation.navigate("OrganizerDraft", { campaignId: item.id })} />
+        )}
+        {organizer && focused && auth.user && state.data?.id === item.id && (
+          <NativeOrganizerCampaignLifecycle
+            key={`${auth.user.id}:${item.id}`}
+            client={client}
+            accountId={auth.user.id}
+            campaign={state.data}
+            onRefresh={state.retry}
+          />
         )}
         {organizer ? (
           <Button
