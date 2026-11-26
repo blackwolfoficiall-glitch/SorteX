@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomInt } from "node:crypto";
 import { ApiError, SortexClient, type Vault } from "../src/api/client";
-import { validateApiUrl } from "../src/api/config";
+import { QA_API, validateApiUrl } from "../src/api/config";
 import { draftFields, saveOrganizerDraft, type OrganizerDraftRecord } from "../src/domain/organizer-draft";
 
 type Identity = { id: string; role: string; adminPermissions?: string[] };
@@ -20,7 +20,15 @@ function loopback(name: string): string {
 }
 
 const web = loopback("SORTEX_PARITY_WEB");
-const api = validateApiUrl(loopback("SORTEX_PARITY_API"), true);
+const hostedQa = process.env.SORTEX_PARITY_MODE === "hosted-qa-synthetic";
+const hostedRevision = process.env.SORTEX_PARITY_EXPECTED_API_SHA ?? "";
+if (hostedQa) {
+  assert.equal(process.env.GITHUB_REPOSITORY, "blackwolfoficiall-glitch/SorteX");
+  assert.equal(process.env.GITHUB_REF, "refs/heads/homologacao/web-ios-integrada");
+  assert.equal(process.env.SORTEX_PARITY_API, QA_API);
+  assert.match(hostedRevision, /^[a-f0-9]{40}$/);
+}
+const api = hostedQa ? validateApiUrl(QA_API) : validateApiUrl(loopback("SORTEX_PARITY_API"), true);
 const run = randomBytes(5).toString("hex");
 const password = randomBytes(20).toString("hex") + "Aa!0";
 
@@ -90,8 +98,13 @@ async function main() {
     reqA<{ database: string; storage: string }>("/health/ready", 200),
   ]);
   assert.equal(webHealth.version, appHealth.version);
-  assert.equal(webHealth.environment, "development", "O teste só escreve em uma API local de desenvolvimento.");
-  assert.equal(appHealth.environment, "development");
+  if (hostedQa) {
+    assert.equal(webHealth.version, hostedRevision, "A API QA não está na revisão esperada.");
+    assert.equal(appHealth.environment, "production");
+  } else {
+    assert.equal(webHealth.environment, "development", "O teste só escreve em uma API local de desenvolvimento.");
+    assert.equal(appHealth.environment, "development");
+  }
   assert.equal(ready.database, "up");
   const organizerA = registration("orga", "ORGANIZER");
   const organizerB = registration("orgb", "ORGANIZER");
@@ -149,7 +162,7 @@ async function main() {
   assert.notEqual(mA.snapshot().status, "signedIn");
   await mB.logout();
   console.log(JSON.stringify({
-    type: "local-real-http-protocol-not-ios-acceptance",
+    type: hostedQa ? "hosted-neon-with-local-next-not-ios-acceptance" : "local-real-http-protocol-not-ios-acceptance",
     timestamp: new Date().toISOString(), apiVersion: appHealth.version,
     database: ready.database, storage: ready.storage,
     webToMobile: a, mobileToWeb: b, draftCampaignId: draft.id, nativeDraftCampaignId: nativeDraft.id,

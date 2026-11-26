@@ -1,0 +1,74 @@
+name: SorteX QA hospedado (HTTP sintético)
+
+on:
+  push:
+    branches: [homologacao/web-ios-integrada]
+    paths:
+      - .github/workflows/sortex-hosted-qa-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: sortex-hosted-qa-smoke
+  cancel-in-progress: false
+
+jobs:
+  core:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada'
+    runs-on: ubuntu-latest
+    environment: sortex-web-ios-qa
+    timeout-minutes: 12
+    env:
+      SORTEX_PARITY_API: https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech
+      SORTEX_PARITY_WEB: http://127.0.0.1:4408
+      SORTEX_PARITY_MODE: hosted-qa-synthetic
+      SORTEX_PARITY_EXPECTED_API_SHA: 23eccd35344aea5402fa32a7a59762e7262067d3
+      SORTEX_HOMOLOGATION_API_URL: https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech
+      NEXT_TELEMETRY_DISABLED: "1"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Confirmar a API isolada antes de escrever dados sintéticos
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 "$SORTEX_PARITY_API/health" |
+            node -e 'const x=JSON.parse(require("fs").readFileSync(0,"utf8")); if(x.status!=="ok"||x.version!==process.env.SORTEX_PARITY_EXPECTED_API_SHA)process.exit(1);'
+          curl --fail --silent --show-error --max-time 30 "$SORTEX_PARITY_API/health/ready" |
+            node -e 'const x=JSON.parse(require("fs").readFileSync(0,"utf8")); if(x.status!=="ready"||x.database!=="up")process.exit(1);'
+      - name: Construir o Next dinâmico sem publicar o site
+        working-directory: apps/web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Preparar cliente HTTP do app (não é build nativo)
+        working-directory: apps/mobile
+        run: npm ci --no-audit --no-fund
+      - name: Testar cadastro, sessão, campanhas e isolamento no Neon QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd apps/web && exec node_modules/.bin/next start --hostname 127.0.0.1 --port 4408) >"$RUNNER_TEMP/sortex-qa-next.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in {1..30}; do
+            kill -0 "$pid" 2>/dev/null || break
+            if curl -fsS --max-time 8 "$SORTEX_PARITY_WEB/api/health/ready" >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo "A prévia local do Next não confirmou a API QA."
+            exit 1
+          fi
+          cd apps/mobile
+          node --import tsx scripts/test-web-ios-parity.ts
