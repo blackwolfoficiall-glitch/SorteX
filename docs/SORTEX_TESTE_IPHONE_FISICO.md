@@ -42,7 +42,8 @@ Substitua `IDENTIFIER_DO_IPHONE` pelo valor mostrado no Xcode, sem colchetes. O 
 1. Registre o hash do Git, versão iOS, hora e resultado da compilação. Não inclua UDID, credenciais ou dados pessoais em prints.
 2. Feche o app, desconecte o cabo e abra pelo ícone, sem Metro. Registre o que abriu. Em seguida verifique login e restauração da sessão com conta sintética quando houver rede. A abertura off-line da interface não implica login off-line.
 3. Quando web e iOS apontarem para a mesma API QA, use a **mesma conta sintética** nas duas interfaces e confronte perfil e uma campanha de teste. Não valide compra ou Pix neste build inicial. Não confunda navegação no iPhone com homologação financeira.
-4. Registre erros de assinatura, inicialização, rede ou sessão separadamente. O binário de simulador e a exportação de JS não instalam nem comprovam execução em iPhone físico. O build mantém Apple/Google e capacidades não configuradas fora desse caminho de aceitação.
+4. Já autenticado com contas sintéticas, abra **Campanhas** como comprador e **Pedidos** como organizador. Confirme que o resultado paginado (inclusive vazio) abre sem erro; se houver dados suficientes, avance uma página e volte. A captura da abertura no simulador não cobre essas telas.
+5. Registre erros de assinatura, inicialização, rede ou sessão separadamente. O binário de simulador e a exportação de JS não instalam nem comprovam execução em iPhone físico. O build mantém Apple/Google e capacidades não configuradas fora desse caminho de aceitação.
 
 ## 4. Checkout sandbox (perfil separado, somente após habilitação verificada)
 

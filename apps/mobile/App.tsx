@@ -570,7 +570,7 @@ function Campaigns({ navigation }: any) {
                 title="Página anterior"
                 onPress={() => setPage(page - 1)}
               />
-            )}{" "}
+            )}
             {page < state.data.pages && (
               <Button
                 secondary
@@ -705,7 +705,7 @@ function Orders({ navigation, route }: any) {
                 title="Pedidos anteriores"
                 onPress={() => setPage(page - 1)}
               />
-            )}{" "}
+            )}
             {page < state.data.pages && (
               <Button
                 secondary
