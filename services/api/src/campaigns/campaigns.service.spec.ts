@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
   CampaignCategory,
@@ -8,8 +12,10 @@ import {
   DrawBasis,
   NumberSelectionMode,
   UserRole,
+  UserStatus,
   VerificationStatus,
 } from '@prisma/client';
+import { Readable } from 'node:stream';
 import { OrganizerStorageService } from '../organizers/organizer-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CampaignsService } from './campaigns.service';
@@ -101,6 +107,18 @@ function campaign(overrides: Record<string, unknown> = {}) {
 describe('CampaignsService', () => {
   let service: CampaignsService;
   let prisma: any;
+  const storage = {
+    save: jest.fn(),
+    resolve: jest.fn(),
+    open: jest.fn(),
+    mimeType: jest.fn(),
+  };
+  const owner = {
+    ...organizer,
+    status: UserStatus.ACTIVE,
+    adminPermissions: [],
+    adminTeamRole: null,
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -157,15 +175,56 @@ describe('CampaignsService', () => {
         { provide: PrismaService, useValue: prisma },
         {
           provide: OrganizerStorageService,
-          useValue: {
-            save: jest.fn(),
-            resolve: jest.fn(),
-            mimeType: jest.fn(),
-          },
+          useValue: storage,
         },
       ],
     }).compile();
     service = module.get(CampaignsService);
+  });
+
+  it.each([
+    CampaignStatus.DRAFT,
+    CampaignStatus.PAUSED,
+    CampaignStatus.FINISHED,
+  ])(
+    'does not show %s cover on the public route even with an owner identity',
+    async (status) => {
+      prisma.campaign.findFirst.mockResolvedValue(campaign({ status }));
+      await expect(
+        service.getMediaFile('campaign-1', 'cover', undefined, owner, 'public'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    },
+  );
+
+  it('keeps the nominal private route restricted when the cover is public', async () => {
+    prisma.campaign.findFirst.mockResolvedValue(
+      campaign({ status: CampaignStatus.PUBLISHED }),
+    );
+    await expect(
+      service.getMediaFile(
+        'campaign-1',
+        'cover',
+        undefined,
+        { ...owner, id: 'other-organizer' },
+        'owner',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('previews an unreferenced milestone image only through the owner route', async () => {
+    const name = '11111111-1111-1111-1111-111111111111.png';
+    const stream = Readable.from([]);
+    storage.open.mockResolvedValueOnce(stream);
+    storage.mimeType.mockReturnValueOnce('image/png');
+    prisma.campaign.findFirst.mockResolvedValue(
+      campaign({ status: CampaignStatus.PUBLISHED, milestonePrizes: [] }),
+    );
+    await expect(
+      service.getMediaFile('campaign-1', 'milestone', name, owner, 'public'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.getMediaFile('campaign-1', 'milestone', name, owner, 'owner'),
+    ).resolves.toEqual({ stream, mimeType: 'image/png' });
   });
 
   it('cria campanha em rascunho com slug único', async () => {

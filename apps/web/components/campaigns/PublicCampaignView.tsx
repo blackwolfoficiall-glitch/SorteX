@@ -357,6 +357,7 @@ export default function PublicCampaignView({
                 src={mediaUrl(selected.url)}
                 alt={cleanTitle(campaign.title)}
                 fill
+                unoptimized
                 priority={selectedImage === 0}
                 sizes="(max-width: 640px) 100vw, (max-width: 1536px) 96vw, 1500px"
                 className="object-cover [object-position:var(--hero-mobile-position)] [transform:scale(var(--hero-mobile-zoom))] [transform-origin:var(--hero-mobile-position)] transition-[opacity,transform] duration-500 motion-reduce:transition-none sm:[object-position:var(--hero-desktop-position)] sm:[transform:scale(var(--hero-desktop-zoom))] sm:[transform-origin:var(--hero-desktop-position)]"
@@ -544,6 +545,7 @@ export default function PublicCampaignView({
                             src={mediaUrl(prize.imageUrl)}
                             alt={prize.description}
                             fill
+                            unoptimized
                             sizes="(max-width: 1024px) 18vw, 270px"
                             className="object-contain"
                           />
@@ -1234,6 +1236,7 @@ function MilestoneImage({
         src={mediaUrl(imageUrl)}
         alt={`Imagem do prêmio ${title}`}
         fill
+        unoptimized
         sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
         className="object-cover [object-position:var(--milestone-mobile-position)] [transform:scale(var(--milestone-mobile-zoom))] [transform-origin:var(--milestone-mobile-position)] sm:[object-position:var(--milestone-desktop-position)] sm:[transform:scale(var(--milestone-desktop-zoom))] sm:[transform-origin:var(--milestone-desktop-position)]"
         onError={() => setFailed(true)}

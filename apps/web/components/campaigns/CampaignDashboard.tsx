@@ -221,7 +221,7 @@ function CampaignCard({ campaign, busy, run, remove }: { campaign: Campaign; bus
   return (
     <Card className="relative transition-shadow hover:shadow-lg">
       <div className="relative aspect-[16/9] overflow-hidden rounded-t-3xl bg-gradient-to-br from-violet-100 to-purple-50">
-        {campaign.coverImageUrl ? <Image src={mediaUrl(campaign.coverImageUrl)} alt={campaign.title} fill sizes="(max-width: 768px) 100vw, 50vw" className="object-cover" /> : <Ticket className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-violet-300" size={52} />}
+        {campaign.coverImageUrl ? <Image src={ownedMediaUrl(campaign.coverImageUrl)} alt={campaign.title} fill unoptimized className="object-cover" /> : <Ticket className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-violet-300" size={52} />}
       </div>
       <div className="min-w-0 p-5">
           <div className="min-w-0"><span className={`rounded-full px-3 py-1 text-xs font-bold ${statusStyle[campaign.status]}`}>{statusLabel[campaign.status]}</span><h2 className="mt-3 truncate text-xl font-black">{cleanTitle(campaign.title)}</h2></div>
@@ -241,3 +241,7 @@ function soldPercent(campaign: Campaign) { return campaign.totalNumbers ? Math.m
 function dateValue(value?: string) { return value ? +new Date(value) : Number.MAX_SAFE_INTEGER; }
 function money(value = 0) { return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }); }
 export function mediaUrl(path: string | null) { return path?.replace("/public/campaigns/media/", "/api/public/campaign-media/") || ""; }
+
+export function ownedMediaUrl(path: string) {
+  return path.replace(/^\/public\/campaigns\/media\/([^/]+)\//, "/api/campaigns/$1/media/");
+}

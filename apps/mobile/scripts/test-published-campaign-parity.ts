@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { ApiError, SortexClient, type Vault } from "../src/api/client";
 import { validateApiUrl } from "../src/api/config";
 import { draftFields, saveOrganizerCampaign, type OrganizerDraftRecord } from "../src/domain/organizer-draft";
@@ -20,39 +20,57 @@ function actor(emailVariable: string, passwordVariable: string) {
 }
 function mobile(origin: string) {
   let tokens: Awaited<ReturnType<Vault["read"]>> = null;
-  return new SortexClient(validateApiUrl(origin, true), {
+  const client = new SortexClient(validateApiUrl(origin, true), {
     read: async () => tokens,
     write: async (next) => { tokens = next; },
     clear: async () => { tokens = null; },
   });
+  return { client, token: () => tokens?.accessToken };
 }
 
-type Campaign = OrganizerDraftRecord & { slug: string; regulation?: string };
+type Campaign = OrganizerDraftRecord & { slug: string; regulation?: string; coverImageUrl?: string | null };
 
 async function main() {
-  const app = mobile(loopback("SORTEX_PARITY_API")), other = mobile(loopback("SORTEX_PARITY_API"));
-  const web = loopback("SORTEX_PARITY_WEB"), cookies = new Map<string, string>();
+  const api = loopback("SORTEX_PARITY_API"), web = loopback("SORTEX_PARITY_WEB");
+  const mobileOwner = mobile(api), mobileOther = mobile(api);
+  const app = mobileOwner.client, other = mobileOther.client;
   const owner = actor("SORTEX_PUBLISHED_OWNER_EMAIL", "SORTEX_PUBLISHED_OWNER_PASSWORD");
   const nonOwner = actor("SORTEX_PUBLISHED_OTHER_EMAIL", "SORTEX_PUBLISHED_OTHER_PASSWORD");
   assert.notEqual(nonOwner.email, owner.email);
 
+  function webSession() {
+    const cookies = new Map<string, string>();
+    return async (path: string, method = "GET", data?: object) => {
+      const headers = new Headers();
+      let body: FormData | string | undefined;
+      if (data instanceof FormData) body = data;
+      else if (data) {
+        headers.set("Content-Type", "application/json");
+        body = JSON.stringify(data);
+      }
+      if (cookies.size)
+        headers.set("Cookie", [...cookies.entries()].map(([k, v]) => `${k}=${v}`).join("; "));
+      const response = await fetch(`${web}/api${path}`, {
+        method, headers, body, redirect: "error", signal: AbortSignal.timeout(20_000),
+      });
+      for (const cookie of response.headers.getSetCookie())
+        cookies.set(cookie.slice(0, cookie.indexOf("=")), cookie.slice(cookie.indexOf("=") + 1).split(";")[0] ?? "");
+      return response;
+    };
+  }
+
+  const webOwner = webSession(), webOther = webSession(), webAnonymous = webSession();
   async function request<T>(path: string, expected: number, method = "GET", data?: object) {
-    const headers = new Headers();
-    let body: FormData | string | undefined;
-    if (data instanceof FormData) body = data;
-    else if (data) {
-      headers.set("Content-Type", "application/json");
-      body = JSON.stringify(data);
-    }
-    if (cookies.size)
-      headers.set("Cookie", [...cookies.entries()].map(([k, v]) => `${k}=${v}`).join("; "));
-    const response = await fetch(`${web}/api${path}`, {
-      method, headers, body, redirect: "error", signal: AbortSignal.timeout(20_000),
-    });
+    const response = await webOwner(path, method, data);
     assert.equal(response.status, expected, `${method} ${path}`);
-    for (const cookie of response.headers.getSetCookie())
-      cookies.set(cookie.slice(0, cookie.indexOf("=")), cookie.slice(cookie.indexOf("=") + 1).split(";")[0] ?? "");
     return await response.json() as T;
+  }
+
+  function direct(path: string, token?: string) {
+    return fetch(api + path, {
+      redirect: "error", signal: AbortSignal.timeout(20_000),
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
   }
 
   const apiHealth = await app.publicRequest<{ version: string; environment: string }>("/health");
@@ -60,8 +78,11 @@ async function main() {
   const webHealth = await request<typeof apiHealth>("/health", 200);
   assert.equal(webHealth.version, apiHealth.version);
   assert.equal(webHealth.environment, apiHealth.environment);
-  assert.equal((await request<{ database: string }>("/health/ready", 200)).database, "up");
+  const ready = await request<{ database: string; storage: string }>("/health/ready", 200);
+  assert.equal(ready.database, "up");
+  assert.equal(ready.storage, "up");
   await request("/auth/login", 200, "POST", owner);
+  assert.equal((await webOther("/auth/login", "POST", nonOwner)).status, 200);
   await app.login(owner.email, owner.password);
   await other.login(nonOwner.email, nonOwner.password);
   const user = await request<{ id: string }>("/auth/me", 200);
@@ -79,15 +100,63 @@ async function main() {
     salesStartAt: new Date(Date.now() - 60_000).toISOString(),
   });
   const path = `/campaigns/${original.id}`, publicPath = `/public/campaigns/${original.slug}`;
+  const coverBytes = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zt9sAAAAASUVORK5CYII=", "base64",
+  );
   const cover = new FormData();
   cover.set("target", "COVER");
-  cover.set("files", new Blob([Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVssAAAAASUVORK5CYII=", "base64",
-  )], { type: "image/png" }), "synthetic.png");
+  cover.set("files", new Blob([coverBytes], { type: "image/png" }), "synthetic.png");
   await request(`${path}/images`, 201, "POST", cover);
+
+  const ownedMedia = `${path}/media/cover`;
+  const publicMedia = `/public/campaigns/media/${original.id}/cover`;
+  const webPublicMedia = `/public/campaign-media/${original.id}/cover`;
+  const ownerToken = mobileOwner.token(), otherToken = mobileOther.token();
+  assert.ok(ownerToken && otherToken);
+  assert.equal((await request<Campaign>(path, 200)).coverImageUrl, publicMedia);
+  const failures: string[] = [];
+  const noStore = (response: Response) =>
+    /(^|,\s*)no-store(,|$)/i.test(response.headers.get("cache-control") ?? "");
+  async function denied(check: string, response: Promise<Response>, expected: number, checkCache = false) {
+    const result = await response;
+    if (result.status !== expected || result.headers.get("content-type")?.startsWith("image/")) {
+      failures.push(`${check}: esperava HTTP ${expected} sem imagem, recebeu HTTP ${result.status}`);
+    }
+    if (checkCache && !noStore(result)) failures.push(`${check}: recusa sem no-store`);
+    await result.body?.cancel();
+  }
+  async function exactCover(check: string, response: Promise<Response>) {
+    const result = await response;
+    assert.equal(result.status, 200, check);
+    assert.match(result.headers.get("content-type") ?? "", /^image\/png(?:;|$)/i, check);
+    assert.deepEqual(Buffer.from(await result.arrayBuffer()), coverBytes, check);
+    if (!noStore(result)) failures.push(`${check}: resposta cacheável (${result.headers.get("cache-control") ?? ""})`);
+  }
+  async function publicDenied(status: string) {
+    await denied(`${status} público direto`, direct(publicMedia), 403, true);
+    await denied(`${status} público com sessão do dono`, direct(publicMedia, ownerToken), 403, true);
+    await denied(`${status} público Next`, webAnonymous(webPublicMedia), 403, true);
+  }
+
+  await publicDenied("DRAFT");
+  await denied("DRAFT privado anônimo direto", direct(ownedMedia), 401);
+  await denied("DRAFT privado anônimo Next", webAnonymous(ownedMedia), 401);
+  await denied("DRAFT privado outro organizador direto", direct(ownedMedia, otherToken), 403);
+  await denied("DRAFT privado outro organizador Next", webOther(ownedMedia), 403);
+  await exactCover("DRAFT dono direto", direct(ownedMedia, ownerToken));
+  await exactCover("DRAFT dono Next", webOwner(ownedMedia));
+
   const published = await request<Campaign>(`${path}/publish`, 201, "POST");
   assert.equal(published.status, "PUBLISHED");
   assert.equal((await app.request<Campaign>(path)).id, published.id);
+  const mobilePublicCampaign = await app.publicRequest<Campaign>(publicPath);
+  const webPublicCampaign = await request<Campaign>(publicPath, 200);
+  assert.equal(mobilePublicCampaign.coverImageUrl, publicMedia);
+  assert.equal(webPublicCampaign.coverImageUrl, publicMedia);
+  await exactCover("PUBLISHED público direto (URL informada ao aplicativo)", direct(mobilePublicCampaign.coverImageUrl));
+  await exactCover("PUBLISHED público Next", webAnonymous(webPublicMedia));
+  await denied("PUBLISHED privado outro organizador direto", direct(ownedMedia, otherToken), 403);
+  await denied("PUBLISHED privado outro organizador Next", webOther(ownedMedia), 403);
 
   const initial = await app.request<Campaign>(path);
   const description = `Descrição sintética atualizada ${run}`;
@@ -114,15 +183,27 @@ async function main() {
   await request(`${path}/pause`, 201, "POST");
   const paused = await app.request<Campaign>(path);
   assert.equal(paused.status, "PAUSED");
+  await publicDenied("PAUSED");
+  await exactCover("PAUSED dono Next", webOwner(ownedMedia));
   await saveOrganizerCampaign(app, { ...draftFields(paused), title: `Título revisto ${run}` }, paused);
   assert.equal((await request<Campaign>(path, 200)).title, `Título revisto ${run}`);
   await request(`${path}/finish`, 201, "POST");
+  await publicDenied("FINISHED");
+  await exactCover("FINISHED dono direto", direct(ownedMedia, ownerToken));
   await assert.rejects(saveOrganizerCampaign(app, { ...draftFields(paused), title: "Não reabrir" }, paused),
     (error) => error instanceof ApiError && error.status === 400);
+  assert.deepEqual(failures, [], "Política de acesso/cache da capa");
   console.log(JSON.stringify({
     type: "local-http-published-campaign-parity-not-ios-acceptance", revision: apiHealth.version,
     campaignId: original.id, slug: original.slug, publishedDescriptionOnWebAndMobile: true,
     pausedTitleOnWeb: true, otherOrganizerDenied: true, finishedEditDenied: true,
+    cover: {
+      sha256: createHash("sha256").update(coverBytes).digest("hex"),
+      bytes: coverBytes.length, contentType: "image/png", storage: ready.storage,
+      draftPrivate: true, publishedPublic: true, publishedOwnerRouteIsolated: true,
+      pausedAndFinishedPublicDenied: true, storedBytesRetainedForOwner: true,
+      responsesNotCacheable: true,
+    },
   }));
 }
 

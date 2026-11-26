@@ -31,3 +31,52 @@ test("comprador vê a capa publicada carregada no card do sorteio", async ({ pag
     cardCover.evaluate((image: HTMLImageElement) => image.naturalWidth),
   ).toBeGreaterThan(0);
 });
+
+test("capa privada aparece para o dono, torna-se pública e deixa de ser pública ao pausar", async ({ page, browser, baseURL }) => {
+  const campaign = await createSyntheticCampaign(page.request, "Capa com visibilidade por status");
+  const ownedPath = `/api/campaigns/${campaign.id}/media/cover`;
+  const publicPath = `/api/public/campaign-media/${campaign.id}/cover`;
+  const ownedImage = page.getByRole("img", { name: campaign.title, exact: true });
+  async function showsOwnerCover(status: "DRAFT" | "PAUSED") {
+    await page.goto(`/dashboard/campanhas?status=${status}`);
+    await expect(ownedImage).toHaveAttribute("src", ownedPath);
+    await expect.poll(() => ownedImage.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+  }
+
+  await showsOwnerCover("DRAFT");
+  const draft = await page.request.get(ownedPath);
+  expect(draft.status()).toBe(200);
+  expect(draft.headers()["cache-control"]).toContain("no-store");
+  const draftBytes = await draft.body();
+
+  const guest = await browser.newContext({
+    baseURL, ignoreHTTPSErrors: test.info().project.use.ignoreHTTPSErrors,
+  });
+  try {
+    expect((await guest.request.get(publicPath)).status()).toBe(403);
+    const published = await page.request.post(`/api/campaigns/${campaign.id}/publish`);
+    expect(published.status()).toBe(201);
+    const storefront = await guest.newPage();
+    await storefront.goto(`/campanha/${campaign.slug}`);
+    const publicImage = storefront.getByRole("img", { name: campaign.title, exact: true });
+    await expect(publicImage).toHaveAttribute("src", publicPath);
+    await expect.poll(() => publicImage.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+    const media = await guest.request.get(publicPath);
+    expect(media.status()).toBe(200);
+    expect(media.headers()["content-type"]).toContain("image/png");
+    expect(media.headers()["cache-control"]).toContain("no-store");
+    expect(await media.body()).toEqual(draftBytes);
+
+    const paused = await page.request.post(`/api/campaigns/${campaign.id}/pause`);
+    expect(paused.status()).toBe(201);
+    const gone = await guest.request.get(publicPath);
+    expect(gone.status()).toBe(403);
+    expect(gone.headers()["cache-control"]).toContain("no-store");
+    await storefront.reload();
+    await expect(storefront.getByText("Campanha não encontrada.", { exact: true })).toBeVisible();
+    await expect(publicImage).toHaveCount(0);
+    await showsOwnerCover("PAUSED");
+  } finally {
+    await guest.close();
+  }
+});

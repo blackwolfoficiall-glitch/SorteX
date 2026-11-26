@@ -907,8 +907,9 @@ export class CampaignsService {
     campaignId: string,
     kind:
       'cover' | 'video' | 'main-prize' | 'gallery' | 'instant' | 'milestone',
-    mediaId?: string,
-    user?: AuthenticatedUser,
+    mediaId: string | undefined,
+    user: AuthenticatedUser | undefined,
+    audience: 'public' | 'owner',
   ) {
     const campaign = await this.prisma.campaign.findFirst({
       where: { id: campaignId },
@@ -922,10 +923,12 @@ export class CampaignsService {
       },
     });
     if (!campaign) throw new NotFoundException('Campanha não encontrada.');
+    const hasPrivateAccess =
+      campaign.organizerId === user?.id || user?.role === UserRole.ADMIN;
     if (
-      campaign.status !== CampaignStatus.PUBLISHED &&
-      campaign.organizerId !== user?.id &&
-      user?.role !== UserRole.ADMIN
+      audience === 'public'
+        ? campaign.status !== CampaignStatus.PUBLISHED
+        : !hasPrivateAccess
     ) {
       throw new ForbiddenException('Você não pode acessar esta mídia.');
     }
@@ -957,8 +960,7 @@ export class CampaignsService {
       const isReferenced = campaign.milestonePrizes.some(
         (milestone) => milestone.imageUrl === imageUrl,
       );
-      const canPreview =
-        campaign.organizerId === user?.id || user?.role === UserRole.ADMIN;
+      const canPreview = audience === 'owner' && hasPrivateAccess;
       if (!isReferenced && !canPreview)
         throw new NotFoundException('Mídia não encontrada.');
       storageKey = `campaigns/${campaignId}/${mediaId}`;

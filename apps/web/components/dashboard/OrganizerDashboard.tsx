@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { getMyCampaigns } from "@/lib/campaigns/client";
 import type { Campaign } from "@/lib/campaigns/types";
-import { mediaUrl } from "@/components/campaigns/CampaignDashboard";
+import { ownedMediaUrl } from "@/components/campaigns/CampaignDashboard";
 import { getCurrentUser } from "@/lib/auth/client";
 import {
   getPersonalization,
@@ -554,7 +554,7 @@ function CampaignRow({
     <div className="grid gap-4 rounded-2xl border p-4 sm:grid-cols-[72px_1fr_auto] sm:items-center">
       {campaign.coverImageUrl ? (
         <Image
-          src={mediaUrl(campaign.coverImageUrl)}
+          src={ownedMediaUrl(campaign.coverImageUrl)}
           alt={campaign.title}
           width={64}
           height={64}
