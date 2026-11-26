@@ -18,6 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import CrmNav from "@/components/crm/CrmNav";
+import AutomationShortcutLink from "@/components/crm/AutomationShortcutLink";
 import { dashboard, type CrmDashboard } from "@/lib/crm/client";
 import { getPersonalization } from "@/lib/organizer-platform/client";
 
@@ -286,7 +287,7 @@ export default function Crm() {
             {opportunities.length ? (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {opportunities.slice(0, 4).map((item) => (
-                  <Link
+                  <AutomationShortcutLink
                     key={item.title}
                     href={item.href}
                     className="group rounded-2xl bg-zinc-50 p-4 transition hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-200"
@@ -304,7 +305,7 @@ export default function Crm() {
                       {item.action}
                       <ArrowRight size={14} />
                     </span>
-                  </Link>
+                  </AutomationShortcutLink>
                 ))}
               </div>
             ) : (
@@ -360,12 +361,12 @@ export default function Crm() {
               >
                 Criar comunicação
               </Link>
-              <Link
+              <AutomationShortcutLink
                 href="/dashboard/crm/automacoes?template=abandoned"
                 className="rounded-xl border border-violet-300 px-4 py-2 text-sm font-black"
               >
                 Criar automação
-              </Link>
+              </AutomationShortcutLink>
             </div>
           </article>
         </section>
@@ -601,7 +602,7 @@ function ActionLine({
   href: string;
 }) {
   return (
-    <Link
+    <AutomationShortcutLink
       href={href}
       className="flex items-center justify-between border-b py-3 text-sm last:border-0 hover:text-violet-700"
     >
@@ -610,7 +611,7 @@ function ActionLine({
         {value}
         <ArrowRight size={14} />
       </span>
-    </Link>
+    </AutomationShortcutLink>
   );
 }
 function SmallLink({
@@ -621,12 +622,12 @@ function SmallLink({
   children: React.ReactNode;
 }) {
   return (
-    <Link
+    <AutomationShortcutLink
       href={href}
       className="rounded-xl border px-3 py-2 text-xs font-black text-violet-700 hover:bg-violet-50"
     >
       {children}
-    </Link>
+    </AutomationShortcutLink>
   );
 }
 function Mini({
@@ -657,7 +658,7 @@ function Next({
   detail: string;
 }) {
   return (
-    <Link
+    <AutomationShortcutLink
       href={href}
       className="flex items-center justify-between gap-3 rounded-xl bg-zinc-50 p-3 text-sm transition hover:bg-violet-50"
     >
@@ -666,7 +667,7 @@ function Next({
         <small className="text-zinc-500">{detail}</small>
       </span>
       <ArrowRight className="text-violet-700" size={16} />
-    </Link>
+    </AutomationShortcutLink>
   );
 }
 function titleCase(value: string) {
