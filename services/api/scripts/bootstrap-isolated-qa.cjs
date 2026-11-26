@@ -11,7 +11,9 @@ const target = {
   api: 'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech',
 };
 
-async function main() {
+async function main(mode = 'deploy', request = fetch) {
+  if (mode !== 'deploy' && mode !== 'preflight')
+    throw new Error('Modo de bootstrap QA inválido.');
   const key = process.env.SORTEX_QA_NEON_API_KEY;
   const revision = process.env.GITHUB_SHA;
   if (!key || !/^[0-9a-f]{40}$/.test(revision ?? ''))
@@ -23,7 +25,7 @@ async function main() {
   const functions = `${branch}/functions`;
   const instance = `${functions}/${target.slug}`;
   async function api(route, options = {}) {
-    const response = await fetch(`https://console.neon.tech/api/v2${route}`, {
+    const response = await request(`https://console.neon.tech/api/v2${route}`, {
       ...options,
       headers: { Authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(60000),
@@ -53,6 +55,10 @@ async function main() {
     throw new Error(
       'Bootstrap aceita apenas branch QA sem funções existentes.',
     );
+  if (mode === 'preflight') {
+    console.log('Projeto, branch, banco e ausência de função QA comprovados.');
+    return;
+  }
 
   const env = {
     NODE_ENV: 'production',
@@ -132,9 +138,18 @@ async function main() {
   throw new Error('A API isolada não confirmou prontidão e revisão no prazo.');
 }
 
-main().catch((error) => {
-  console.error(
-    error instanceof Error ? error.message : 'Falha no bootstrap QA.',
-  );
-  process.exitCode = 1;
-});
+if (require.main === module)
+  main(
+    process.argv.length === 2
+      ? 'deploy'
+      : process.argv.length === 3 && process.argv[2] === '--preflight'
+        ? 'preflight'
+        : null,
+  ).catch((error) => {
+    console.error(
+      error instanceof Error ? error.message : 'Falha no bootstrap QA.',
+    );
+    process.exitCode = 1;
+  });
+
+module.exports = { main };

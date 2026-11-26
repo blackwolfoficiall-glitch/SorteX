@@ -42,7 +42,11 @@ jobs:
             exit 1
           fi
       - run: npm ci --include=dev --no-audit --no-fund
-      - run: node --test scripts/migrate-isolated-qa.test.cjs
+      - run: node --test scripts/migrate-isolated-qa.test.cjs scripts/bootstrap-isolated-qa.test.cjs
+      - name: Validar projeto Neon QA antes de qualquer migração
+        env:
+          SORTEX_QA_NEON_API_KEY: ${{ secrets.SORTEX_QA_NEON_API_KEY }}
+        run: node scripts/bootstrap-isolated-qa.cjs --preflight
       - run: npx --no-install prisma generate && npm run build:neon
         env:
           DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_build
