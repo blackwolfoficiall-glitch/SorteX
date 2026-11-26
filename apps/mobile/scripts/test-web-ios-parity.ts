@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomBytes, randomInt } from "node:crypto";
 import { ApiError, SortexClient, type Vault } from "../src/api/client";
 import { QA_API, validateApiUrl } from "../src/api/config";
+import { verifyHostedReadiness } from "./hosted-smoke-preflight";
 import { draftFields, saveOrganizerDraft, type OrganizerDraftRecord } from "../src/domain/organizer-draft";
 
 type Identity = { id: string; role: string; adminPermissions?: string[] };
@@ -92,11 +93,14 @@ function browserSession() {
 async function main() {
   const reqA = browserSession(), reqB = browserSession();
   const mA = mobileClient(), mB = mobileClient();
-  const [webHealth, appHealth, ready] = await Promise.all([
+  const sample = () => Promise.all([
     reqA<{ version: string; environment: string }>("/health", 200),
     mA.publicRequest<{ version: string; environment: string }>("/health"),
     reqA<{ database: string; storage: string }>("/health/ready", 200),
-  ]);
+  ] as const);
+  const [webHealth, appHealth, ready] = hostedQa
+    ? await verifyHostedReadiness(hostedRevision, sample)
+    : await sample();
   assert.equal(webHealth.version, appHealth.version);
   if (hostedQa) {
     assert.equal(webHealth.version, hostedRevision, "A API QA não está na revisão esperada.");
