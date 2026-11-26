@@ -66,6 +66,19 @@ campanha/reserva sintética nesta etapa. Não escaneie nenhum QR Code e não
 faça Pix por um banco. Registre o perfil instalado com o SHA e volte ao
 perfil Core ao encerrar o teste.
 
+### Reserva sem iniciar pagamento
+
+Se o iPhone e uma campanha sintética publicada na QA estiverem disponíveis antes das credenciais Mercado Pago Teste, use o perfil opcional `reservations-sandbox` em vez de fazer dois builds no mesmo dia. Ele deixa o Pix desligado. Se credenciais e aparelho estiverem disponíveis juntos, use o perfil Checkout Sandbox e faça primeiro uma reserva sem abrir o pagamento.
+
+```sh
+node .github/mobile/iphone.mjs release --device IDENTIFIER_DO_IPHONE --profile reservations-sandbox
+```
+
+- No início da primeira prévia privada, use dois compradores sintéticos. Reserve pelo iPhone com um deles, sem criar cobrança, e confirme que o outro não consegue reservar a mesma cota no site enquanto ela está retida. Anote o número, os IDs sintéticos e o vencimento retornado pelo servidor; a reserva normal usa 15 minutos por padrão. Depois do vencimento, reserve **a mesma cota** com o segundo comprador no site. Verifique que o primeiro não ganhou título nem lançamento financeiro.
+- No Checkout Sandbox, não reaproveite essa reserva. Use um pedido separado para aprovação e reentrega do webhook; e outro para testar pagamento pendente até vencer. Iniciar pagamento estende a retenção por pelo menos 30 minutos. Não use uma cobrança com aprovação automática para medir a expiração de cobrança pendente.
+- A prévia com PIN dura 30 minutos. Para o teste pendente, anote o vencimento real e abra outra [prévia privada](homologacao-2026-11-25/PREVIA_PRIVADA_MAC.md) perto dele, mantendo os mesmos SHAs Web/API e o mesmo banco QA. O link muda e o login web precisa ser refeito; o iPhone permanece na mesma API. Nunca antecipe o relógio ou libere a cota manualmente para produzir evidência.
+- Não há movimentação real. Este teste de reserva não comprova Pix, recebimento do webhook, conciliação ou emissão de títulos.
+
 ## Expo Go é opcional para prévia, não atende a este roteiro
 
 A [listagem brasileira da App Store](https://apps.apple.com/br/app/expo-go/id982107779) mostra que o Expo Go **58.0.5** acrescentou suporte ao SDK 58; instalações antigas, como 57.0.9, não atendem esta versão. Mesmo atualizado, Expo Go depende de Metro e não substitui o aplicativo SorteX com identidade nativa própria. Não se requer Expo Go, conta Expo, EAS Build, TestFlight ou plano pago para o caminho acima.

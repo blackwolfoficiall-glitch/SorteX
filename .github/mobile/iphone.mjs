@@ -9,16 +9,17 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const app = path.join(root, 'apps/mobile');
 const phase1Api = 'https://sortex-fase1-review.netlify.app/.netlify/functions/sortex-api';
 const qaApi = 'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech';
-const usage = 'Uso: node .github/mobile/iphone.mjs check | go [--tunnel|--lan] | xcode | prepare-release | release --device <UDID> [--profile checkout-sandbox]';
+const usage = 'Uso: node .github/mobile/iphone.mjs check | go [--tunnel|--lan] | xcode | prepare-release | release --device <UDID> [--profile reservations-sandbox|checkout-sandbox]';
 const qaBranch = 'homologacao/web-ios-integrada';
+const optionalProfiles = ['reservations-sandbox', 'checkout-sandbox'];
 const releaseEnvKeys = /\b(?:EXPO_PUBLIC_\w+|EXPO_NO_DOTENV|SKIP_BUNDLING|FORCE_BUNDLING)\b/;
 export function parseMode(args) {
   const [mode = 'go', flag, value, ...rest] = args;
   if (mode === 'release' && flag === '--device' &&
       /^(?:[a-f0-9]{8}-[a-f0-9]{16}|[a-f0-9]{40})$/i.test(value ?? '')) {
     if (rest.length === 0) return { mode, udid: value };
-    if (rest.length === 2 && rest[0] === '--profile' && rest[1] === 'checkout-sandbox')
-      return { mode, udid: value, profile: 'checkout-sandbox' };
+    if (rest.length === 2 && rest[0] === '--profile' && optionalProfiles.includes(rest[1]))
+      return { mode, udid: value, profile: rest[1] };
     fail(usage);
   }
   if (rest.length) fail(usage);
@@ -29,15 +30,14 @@ export function parseMode(args) {
   fail(usage);
 }
 export function qaReleaseBuildEnv(profile = 'core') {
-  if (!['core', 'checkout-sandbox'].includes(profile)) fail('Perfil Release QA inválido.');
-  const checkout = profile === 'checkout-sandbox' ? '1' : '0';
+  if (profile !== 'core' && !optionalProfiles.includes(profile)) fail('Perfil Release QA inválido.');
   return {
     EXPO_PUBLIC_API_URL: qaApi,
     EXPO_NO_DOTENV: '1',
     EXPO_NO_TELEMETRY: '1',
     EXPO_PUBLIC_ALLOW_LOCAL_API: '0',
-    EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS: checkout,
-    EXPO_PUBLIC_ENABLE_NATIVE_SANDBOX_PIX: checkout,
+    EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS: profile === 'core' ? '0' : '1',
+    EXPO_PUBLIC_ENABLE_NATIVE_SANDBOX_PIX: profile === 'checkout-sandbox' ? '1' : '0',
   };
 }
 export function assertQaRelease(branch, dirty, env = process.env) {
@@ -201,7 +201,12 @@ async function main() {
     let devices;
     try { devices = JSON.parse(detected.stdout); } catch { fail('Lista de dispositivos inválida no Xcode. Confira a seleção e o cabo.'); }
     ensureDevice(devices, udid);
-    console.log(profile === 'checkout-sandbox' ? 'Perfil Checkout Sandbox: somente QA isolada. Não escaneie nem pague Pix.' : 'Perfil Core: reservas e Pix de teste desativados.');
+    const description = {
+      core: 'Perfil Core: reservas e Pix de teste desativados.',
+      'reservations-sandbox': 'Perfil Reservas Sandbox: somente cotas sintéticas na QA; Pix desativado.',
+      'checkout-sandbox': 'Perfil Checkout Sandbox: somente QA isolada. Não escaneie nem pague Pix.',
+    };
+    console.log(description[profile ?? 'core']);
     console.log('Release QA assinada para desenvolvimento, com JavaScript embutido. Nenhuma distribuição ou cobrança.');
     run('npx', ['--no-install', 'expo', 'run:ios', '--scheme', 'SorteXTeste', '--configuration', 'Release', '--no-bundler', '--no-install', '--device', udid]);
     console.log('Confirme no aparelho a abertura pelo ícone com o Mac desconectado, sem iniciar Metro.');

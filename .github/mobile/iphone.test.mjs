@@ -30,20 +30,26 @@ test('Release does not accept a legacy branch, dirty source or a different API',
   assert.throws(() => assertQaRelease('homologacao/web-ios-integrada', false, { SKIP_BUNDLING: '1' }), /empacotamento/);
 });
 
-test('only the explicit checkout profile enables sandbox reservations and Pix', () => {
+test('release profiles keep plain QA reservations separate from Pix', () => {
   assert.deepEqual(parseMode(['release', '--device', udid, '--profile', 'checkout-sandbox']), {
     mode: 'release', udid, profile: 'checkout-sandbox',
+  });
+  assert.deepEqual(parseMode(['release', '--device', udid, '--profile', 'reservations-sandbox']), {
+    mode: 'release', udid, profile: 'reservations-sandbox',
   });
   for (const args of [
     ['release', '--device', udid, '--profile', 'production'],
     ['release', '--device', udid, '--profile', 'checkout-sandbox', '--lan'],
     ['prepare-release', '--profile', 'checkout-sandbox'],
+    ['prepare-release', '--profile', 'reservations-sandbox'],
+    ['release', '--device', udid, '--profile', 'reservations-sandbox', '--lan'],
     ['go', '--profile', 'checkout-sandbox'],
   ])
     assert.throws(() => parseMode(args), /Uso:/);
   const core = qaReleaseBuildEnv();
   const checkout = qaReleaseBuildEnv('checkout-sandbox');
-  for (const env of [core, checkout]) {
+  const reservations = qaReleaseBuildEnv('reservations-sandbox');
+  for (const env of [core, reservations, checkout]) {
     assert.equal(env.EXPO_PUBLIC_API_URL, qa);
     assert.equal(env.EXPO_PUBLIC_ALLOW_LOCAL_API, '0');
     assert.equal(env.EXPO_NO_DOTENV, '1');
@@ -52,6 +58,8 @@ test('only the explicit checkout profile enables sandbox reservations and Pix', 
     assert.equal(core[key], '0');
     assert.equal(checkout[key], '1');
   }
+  assert.equal(reservations.EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS, '1');
+  assert.equal(reservations.EXPO_PUBLIC_ENABLE_NATIVE_SANDBOX_PIX, '0');
   assert.throws(() => qaReleaseBuildEnv('production'), /Perfil Release QA inválido/);
 });
 
