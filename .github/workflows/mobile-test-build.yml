@@ -63,7 +63,8 @@ jobs:
   ios-simulator:
     if: (github.ref == 'refs/heads/feat/mobile-expo' || github.ref == 'refs/heads/homologacao/web-ios-integrada') && github.event.repository.private == false
     runs-on: macos-latest
-    timeout-minutes: 40
+    # Cold Xcode build and simulator launch can take nearly 40 minutes.
+    timeout-minutes: 50
     defaults:
       run:
         working-directory: apps/mobile
@@ -101,6 +102,10 @@ jobs:
           grep -aFq -- "$EXPO_PUBLIC_API_URL" "$app_path/main.jsbundle"
           echo 'Native Release contains a JavaScript bundle and its allowed test API string; this does not validate live routing.'
           shasum -a 256 "$app_path/main.jsbundle"
+      - name: Package simulator binary for the legacy branch only
+        if: github.ref == 'refs/heads/feat/mobile-expo'
+        run: |
+          app_path="$(xcrun simctl get_app_container "$SORTEX_SIMULATOR_ID" br.com.sortex.development app)"
           ditto -c -k --sequesterRsrc --keepParent "$app_path" /tmp/sortex-ios-simulator.zip
           test "$(stat -f %z /tmp/sortex-ios-simulator.zip)" -lt 100000000
       - uses: actions/upload-artifact@v4

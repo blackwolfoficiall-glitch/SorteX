@@ -16,4 +16,4 @@ Por trás do PIN, cookies web ficam no host temporário; espere um novo login se
 
 [Como funciona a autenticação do Quick Tunnel](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/#restrict-access-by-email) · [Release confirmado do cloudflared](https://github.com/cloudflare/cloudflared/releases/tag/2026.11.2)
 
-Validação já executada sem rede: `node --check sortex-pin-preview.mjs` e `node --test sortex-pin-preview.test.mjs` (5 testes). O script impediu a execução no Linux. Não foi executado no Mac e nenhum endereço de túnel foi criado.
+Validação já executada sem rede: `node --check sortex-pin-preview.mjs` e `node --test sortex-pin-preview.test.mjs` (10 testes, incluindo atraso da API e rejeição de réplicas sem a revisão esperada). O script impediu a execução no Linux. Não foi executado no Mac e nenhum endereço de túnel foi criado.
