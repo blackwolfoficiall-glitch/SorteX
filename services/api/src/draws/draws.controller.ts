@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -218,9 +219,10 @@ export class DrawsController {
   ) {
     return this.roulette.organizerStatus(id, user.id);
   }
-  @Get('public/winners/verify/:code') @Public() verify(
-    @Param('code') code: string,
-  ) {
+  @Get('public/winners/verify/:code')
+  @Public()
+  @Header('Cache-Control', 'no-store')
+  verify(@Param('code') code: string) {
     return this.draws.publicVerification(code);
   }
 }

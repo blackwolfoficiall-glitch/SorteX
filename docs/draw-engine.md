@@ -59,7 +59,7 @@ não assinatura digital, blockchain ou comprovação de autenticidade da fonte.
 
 ## Privacidade
 
-A verificação pública nunca retorna CPF, telefone, e-mail, documentos ou comprovantes sensíveis. Depoimentos e mídia aparecem apenas com autorização pública do ganhador.
+A verificação pública nunca retorna CPF, telefone, e-mail, documentos ou comprovantes sensíveis. Depoimentos e mídia aparecem apenas com autorização pública do ganhador. Ao invalidar uma apuração, o código deixa de exibir prova pública; a apuração, o ganhador e o motivo da invalidação permanecem auditáveis internamente. O endpoint não permite cache da prova.
 
 ## Integração futura
 

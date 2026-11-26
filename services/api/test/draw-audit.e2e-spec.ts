@@ -48,7 +48,7 @@ isolated('Federal audit proof via HTTP and isolated PostgreSQL', () => {
     await db?.$disconnect();
   });
 
-  it('rehashes the persisted snapshots, refuses an inconsistent proof, and confirms when intact', async () => {
+  it('replays the proof, confirms when intact, and revokes anonymous readback on invalidation', async () => {
     const password = `Synthetic!${run}`;
     const hashed = await bcrypt.hash(password, 10);
     const organizer = await db.user.create({
@@ -188,9 +188,52 @@ isolated('Federal audit proof via HTTP and isolated PostgreSQL', () => {
       .get(
         `/public/winners/verify/${confirmation.body.winner.publicVerificationCode}`,
       )
-      .expect(200);
+      .expect(200)
+      .expect('Cache-Control', 'no-store');
     expect(publicProof.body.draw.auditHash).toBe(draw.auditHash);
     expect(publicProof.body.draw).not.toHaveProperty('auditHashVersion');
     expect(publicProof.body.winningNumber).toBe('00091');
+
+    const auditor = await db.user.create({
+      data: {
+        name: 'Auditor Sintético',
+        email: `${run}-auditor@example.test`,
+        password: hashed,
+        role: 'ADMIN',
+        adminTeamRole: 'SUPERADMIN',
+      },
+    });
+    const adminLogin = await request(app.getHttpServer())
+      .post('/auth/admin-login')
+      .send({ email: auditor.email, password })
+      .expect(201);
+    const invalidation = await request(app.getHttpServer())
+      .post(`/admin/campaign-draws/${draw.id}/invalidate`)
+      .auth(String(adminLogin.body.accessToken), { type: 'bearer' })
+      .send({ reason: 'Invalidação do cenário sintético de homologação' })
+      .expect(201);
+    expect(invalidation.body.status).toBe('INVALIDATED');
+    const repeated = await request(app.getHttpServer())
+      .post(`/admin/campaign-draws/${draw.id}/invalidate`)
+      .auth(String(adminLogin.body.accessToken), { type: 'bearer' })
+      .send({ reason: 'Não substitui a justificativa original' })
+      .expect(201);
+    expect(repeated.body.notes).toBe(invalidation.body.notes);
+    const revoked = await request(app.getHttpServer())
+      .get(
+        `/public/winners/verify/${confirmation.body.winner.publicVerificationCode}`,
+      )
+      .expect(404)
+      .expect('Cache-Control', 'no-store');
+    expect(revoked.body).not.toHaveProperty('winningNumber');
+    expect(revoked.body).not.toHaveProperty('draw');
+    expect(await db.winner.count({ where: { campaignId: campaign.id } })).toBe(
+      1,
+    );
+    expect(
+      await db.auditLog.count({
+        where: { entityId: draw.id, action: 'INVALIDATED' },
+      }),
+    ).toBe(1);
   }, 15_000);
 });

@@ -369,14 +369,21 @@ export class DrawsService {
           publicCity: ticket.buyer.city,
         },
       });
-      const confirmed = await tx.campaignDraw.update({
-        where: { id: draw.id },
+      const transition = await tx.campaignDraw.updateMany({
+        where: { id: draw.id, status: CampaignDrawStatus.PENDING_CONFIRMATION },
         data: {
           status: CampaignDrawStatus.CONFIRMED,
           confirmedByUserId: user.id,
           confirmedAt: new Date(),
           notes: notes ?? draw.notes,
         },
+      });
+      if (transition.count !== 1)
+        throw new ConflictException(
+          'A apuração mudou durante a confirmação. Atualize antes de tentar novamente.',
+        );
+      const confirmed = await tx.campaignDraw.findUniqueOrThrow({
+        where: { id: draw.id },
       });
       await tx.campaign.update({
         where: { id },
@@ -563,16 +570,33 @@ export class DrawsService {
     });
   }
   async invalidateDraw(id: string, user: AuthenticatedUser, reason: string) {
-    const current = await this.prisma.campaignDraw.findUnique({
-      where: { id },
+    const justification = reason?.trim();
+    if (!justification)
+      throw new BadRequestException('Justificativa obrigatória.');
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.campaignDraw.findUnique({ where: { id } });
+      if (!current) throw new NotFoundException('Apuração não encontrada.');
+      if (current.status === CampaignDrawStatus.INVALIDATED) return current;
+      const changed = await tx.campaignDraw.updateMany({
+        where: { id, status: current.status },
+        data: { status: CampaignDrawStatus.INVALIDATED, notes: justification },
+      });
+      if (changed.count !== 1)
+        throw new ConflictException(
+          'A apuração mudou durante a invalidação. Atualize antes de tentar novamente.',
+        );
+      const next = await tx.campaignDraw.findUniqueOrThrow({ where: { id } });
+      await this.audit(
+        'CampaignDraw',
+        id,
+        'INVALIDATED',
+        user,
+        current,
+        next,
+        tx,
+      );
+      return next;
     });
-    if (!current) throw new NotFoundException();
-    const next = await this.prisma.campaignDraw.update({
-      where: { id },
-      data: { status: CampaignDrawStatus.INVALIDATED, notes: reason },
-    });
-    await this.audit('CampaignDraw', id, 'INVALIDATED', user, current, next);
-    return next;
   }
 
   listOrganizerWinners(user: AuthenticatedUser) {
@@ -662,7 +686,10 @@ export class DrawsService {
         campaignDraw: { include: { lotteryDraw: true } },
       },
     });
-    if (!winner) throw new NotFoundException('Código de verificação inválido.');
+    if (winner?.campaignDraw.status !== CampaignDrawStatus.CONFIRMED)
+      throw new NotFoundException(
+        'Não há prova de ganhador válida para este código.',
+      );
     return {
       verificationCode: winner.publicVerificationCode,
       status: winner.status,
