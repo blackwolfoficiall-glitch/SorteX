@@ -56,3 +56,10 @@ de smoke permanece intocada e seu token efêmero não é reutilizado.
 Referências: [deploy só de configuração](https://neon.com/docs/compute/functions/deploy#deploy-with-the-api),
 [semântica de merge/remoção dos overrides](https://neon.com/docs/compute/functions/environment-variables),
 [evidência pelo GitHub Actions](https://docs.github.com/en/rest/actions/workflow-runs#get-a-workflow-run).
+
+## Evidências de 26/11/2026
+
+- A atualização de código preservou os uploads desativados no [deploy 6](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45847861349).
+- A primeira chamada com workflow reutilizável não recebeu o segredo do ambiente e parou antes de chamar o Neon. A chamada direta obteve o deploy 7 e fez o [rollback das três flags para o deploy 8](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45848884023) após as leituras iniciais de prontidão.
+- O [deploy 9 confirmou a ativação](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45849233750). A primeira instância ainda respondeu `disabled`; aguardamos duas leituras consecutivas `up`. O teste HTTP seguinte confirmou capa sintética no BFF e no backend, mesmos bytes, sem cache, e negação a anônimo e outra organização. Nenhum rascunho foi publicado.
+- O gatilho pontual foi retirado. Não execute novamente o publicador antigo que presume `storage: disabled`; a ativação não trocou credenciais, habilitou pagamentos ou alterou produção. Ainda não há evidência de restauração, uploads de documentos na nuvem ou aceite físico.
