@@ -22,6 +22,8 @@ import type { BuyerCouponQuoteDto } from './dto/buyer-coupon-quote.dto';
 import { ReservationExpirationService } from './reservation-expiration.service';
 import { CrmSyncService } from '../crm/crm-sync.service';
 import { reservationPricing } from './reservation-pricing';
+import { releaseUnusedCouponCapacity } from './coupon-release';
+import { serializableReservationTransition } from './reservation-transaction';
 
 const activeStatuses: PurchaseStatus[] = [
   PurchaseStatus.RESERVED,
@@ -321,38 +323,53 @@ export class PurchasesService {
 
   async cancel(id: string, user: AuthenticatedUser) {
     this.ensureBuyer(user);
-    const result = await this.prisma.$transaction(async (transaction) => {
-      await this.expiration.expireDueInTransaction(transaction);
-      const purchase = await transaction.purchase.findFirst({
-        where: { id, buyerId: user.id },
-        include: purchaseInclude,
-      });
-      if (!purchase) throw new NotFoundException('Compra não encontrada.');
-      if (!activeStatuses.includes(purchase.status)) {
-        throw new BadRequestException('Esta reserva não pode ser cancelada.');
-      }
-      const released = await transaction.ticket.deleteMany({
-        where: { purchaseId: id, status: TicketStatus.RESERVED },
-      });
-      const campaign = await transaction.campaign.findUnique({
-        where: { id: purchase.campaignId },
-        select: { reservedNumbers: true },
-      });
-      await transaction.campaign.update({
-        where: { id: purchase.campaignId },
-        data: {
-          reservedNumbers: Math.max(
-            0,
-            (campaign?.reservedNumbers ?? 0) - released.count,
-          ),
-        },
-      });
-      return transaction.purchase.update({
-        where: { id },
-        data: { status: PurchaseStatus.CANCELLED, cancelledAt: new Date() },
-        include: purchaseInclude,
-      });
-    });
+    const result = await serializableReservationTransition(
+      this.prisma,
+      async (transaction) => {
+        await this.expiration.expireDueInTransaction(transaction);
+        const purchase = await transaction.purchase.findFirst({
+          where: { id, buyerId: user.id },
+          include: purchaseInclude,
+        });
+        if (!purchase) throw new NotFoundException('Compra não encontrada.');
+        if (!activeStatuses.includes(purchase.status)) {
+          throw new BadRequestException('Esta reserva não pode ser cancelada.');
+        }
+        // Even a rejected/local terminal row is not proof that the provider
+        // cannot still report a successful payment on this purchase.
+        const attempt = await transaction.payment.findFirst({
+          where: { purchaseId: id },
+          select: { id: true },
+        });
+        if (attempt)
+          throw new ConflictException(
+            'Há uma tentativa de pagamento vinculada. Confira o pagamento antes de cancelar a reserva.',
+          );
+        const released = await transaction.ticket.deleteMany({
+          where: { purchaseId: id, status: TicketStatus.RESERVED },
+        });
+        const campaign = await transaction.campaign.findUnique({
+          where: { id: purchase.campaignId },
+          select: { reservedNumbers: true },
+        });
+        await transaction.campaign.update({
+          where: { id: purchase.campaignId },
+          data: {
+            reservedNumbers: Math.max(
+              0,
+              (campaign?.reservedNumbers ?? 0) - released.count,
+            ),
+          },
+        });
+        const cancelled = await transaction.purchase.update({
+          where: { id },
+          data: { status: PurchaseStatus.CANCELLED, cancelledAt: new Date() },
+          include: purchaseInclude,
+        });
+        await releaseUnusedCouponCapacity(transaction, [id]);
+        return cancelled;
+      },
+    );
     return this.serialize(result);
   }
 

@@ -8,6 +8,7 @@ import { CrmSyncService } from '../crm/crm-sync.service';
 describe('ReservationExpirationService', () => {
   it('expira compras, remove reservas e corrige o contador da campanha', async () => {
     const prisma: any = {
+      promotionUsage: { findMany: jest.fn().mockResolvedValue([]) },
       purchase: {
         findMany: jest.fn().mockResolvedValue([
           {
@@ -78,6 +79,7 @@ describe('ReservationExpirationService', () => {
 
   it('notifica uma única vez quando a reserva expirada continha cota premiada', async () => {
     const prisma: any = {
+      promotionUsage: { findMany: jest.fn().mockResolvedValue([]) },
       purchase: {
         findMany: jest.fn().mockResolvedValue([
           {

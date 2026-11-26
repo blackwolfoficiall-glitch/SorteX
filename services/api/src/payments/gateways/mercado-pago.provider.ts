@@ -338,15 +338,22 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
     const reconciliationIssue =
       orderReconciliation ||
       this.reconciliationIssue(payment?.status, payment?.status_detail);
+    const orderClosure = reconciliationIssue
+      ? undefined
+      : this.confirmedOrderClosure(response);
     const status = reconciliationIssue
       ? PaymentStatus.PROCESSING
-      : this.normalizeStatus(rawStatus, rawDetail);
+      : (orderClosure ?? this.normalizeStatus(rawStatus, rawDetail));
     return {
       providerPaymentId: response.id,
       externalReference: response.external_reference || '',
       status,
       method,
-      amount: String(payment?.amount || response.total_amount || '0'),
+      amount: String(
+        orderClosure
+          ? (response.total_amount ?? '0')
+          : payment?.amount || response.total_amount || '0',
+      ),
       expiresAt: payment?.date_of_expiration
         ? new Date(payment.date_of_expiration)
         : undefined,
@@ -362,7 +369,29 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
       failureReason: status === PaymentStatus.REJECTED ? rawDetail : undefined,
       rawStatus: `${rawStatus || ''}:${rawDetail || ''}`,
       reconciliationIssue,
+      ...(orderClosure ? { orderClosure } : {}),
     };
+  }
+
+  private confirmedOrderClosure(response: Awaited<ReturnType<Order['get']>>) {
+    const status = response.status?.toLowerCase();
+    const detail = response.status_detail?.toLowerCase();
+    if (
+      response.transactions?.payments?.some(
+        ({ status }) =>
+          !['canceled', 'cancelled', 'expired', 'failed', 'rejected'].includes(
+            status?.toLowerCase() ?? '',
+          ),
+      )
+    )
+      return undefined;
+    if (detail === 'expired' && (status === 'canceled' || status === 'failed'))
+      return PaymentStatus.EXPIRED;
+    if (
+      status === 'canceled' &&
+      (detail === 'canceled' || detail === 'canceled_by_api')
+    )
+      return PaymentStatus.CANCELLED;
   }
 
   private mapMethod(type?: string) {

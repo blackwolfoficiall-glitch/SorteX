@@ -810,6 +810,223 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
     }
   });
 
+  it.each(['cancel', 'expiry', 'mixed'] as const)(
+    'trata capacidade do cupom apenas em encerramento local seguro: %s',
+    async (scenario) => {
+      const server = app.getHttpServer() as Server;
+      const run = randomUUID();
+      const owner = await organizerFixture(
+        `coupon-terminal-${run}@example.test`,
+      );
+      await prisma.organizerProfile.create({
+        data: {
+          userId: owner.id,
+          fullName: 'Organizador sintético',
+          cpf: '00000000000',
+          phone: '00000000000',
+          verificationStatus: 'VERIFIED',
+        },
+      });
+      const campaign = await prisma.campaign.create({
+        data: {
+          organizerId: owner.id,
+          slug: `coupon-terminal-${run}`,
+          title: 'Campanha sintética de fechamento',
+          status: 'PUBLISHED',
+          numberPrice: 5,
+          totalNumbers: 10,
+          numberSelectionMode: 'MANUAL',
+        },
+      });
+      const code = `TERMINAL-${run}`.toUpperCase();
+      const promo = await prisma.campaignPromotion.create({
+        data: {
+          campaignId: campaign.id,
+          name: 'Cupom sintético de fechamento',
+          numberQuantity: 1,
+          packagePrice: 0,
+          type: 'COUPON',
+          status: 'ACTIVE',
+          totalLimit: 1,
+          coupons: {
+            create: {
+              organizerId: owner.id,
+              code,
+              name: 'Cupom',
+              discountType: 'FIXED',
+              discountValue: 1,
+              totalLimit: 1,
+              perBuyerLimit: 1,
+            },
+          },
+        },
+        include: { coupons: true },
+      });
+      const [coupon] = promo.coupons;
+      const [buyer, other] = buyers;
+      const reserve = (token: string) =>
+        request(server)
+          .post('/purchases/reserve-manual')
+          .auth(token, { type: 'bearer' })
+          .send({
+            campaignId: campaign.id,
+            numbers: [1],
+            couponCode: code,
+            idempotencyKey: randomUUID(),
+          });
+      const original = await reserve(buyer.token).expect(201);
+      const purchaseId = (original.body as { id: string }).id;
+      const cancel = () =>
+        request(server)
+          .post(`/purchases/${purchaseId}/cancel`)
+          .auth(buyer.token, { type: 'bearer' });
+      const expire = () =>
+        request(server).get(`/public/campaigns/${campaign.slug}/availability`);
+      const due = new Date(Date.now() - 30_000);
+      if (scenario === 'mixed') {
+        const createAttempt = (label: string, status: 'REJECTED' | 'PENDING') =>
+          prisma.payment.create({
+            data: {
+              campaignId: campaign.id,
+              buyerId: buyer.id,
+              organizerId: owner.id,
+              purchaseId,
+              externalReference: `coupon-${label}-${run}`,
+              provider: 'MERCADO_PAGO',
+              providerPaymentId: `ord-${label}-${run}`,
+              method: 'PIX',
+              status,
+              amount: 4,
+              netAmount: 4,
+              expiresAt: due,
+              activePurchaseKey: status === 'PENDING' ? purchaseId : null,
+            },
+          });
+        const earlier = await createAttempt('earlier-rejected', 'REJECTED');
+        await prisma.purchase.update({
+          where: { id: purchaseId },
+          data: { expiresAt: due },
+        });
+        await expire().expect(200);
+        await cancel().expect(409);
+        // The clock may not close even a single locally rejected charge.
+        expect(
+          await prisma.purchase.findUnique({ where: { id: purchaseId } }),
+        ).toMatchObject({ status: 'AWAITING_PAYMENT' });
+        const current = await createAttempt('current', 'PENDING');
+        const providerId = current.providerPaymentId!;
+        const get = jest.spyOn(Order.prototype, 'get').mockResolvedValueOnce({
+          id: providerId,
+          external_reference: current.externalReference,
+          total_amount: '4.00',
+          status: 'canceled',
+          status_detail: 'expired',
+        });
+        const upstreamCancel = jest
+          .spyOn(Order.prototype, 'cancel')
+          .mockRejectedValue(new Error('Operação externa bloqueada no teste.'));
+        try {
+          await request(server)
+            .post(`/payments/${current.id}/cancel`)
+            .auth(buyer.token, { type: 'bearer' })
+            .expect(409);
+          expect(upstreamCancel).not.toHaveBeenCalled();
+          const ts = String(Math.floor(Date.now() / 1000));
+          const requestId = randomUUID();
+          const signature = createHmac('sha256', secret)
+            .update(`id:${providerId};request-id:${requestId};ts:${ts};`)
+            .digest('hex');
+          await request(server)
+            .post('/webhooks/payments/mercado-pago')
+            .query({ 'data.id': providerId })
+            .set('x-request-id', requestId)
+            .set('x-signature', `ts=${ts},v1=${signature}`)
+            .send({
+              id: `event-${run}`,
+              action: 'order.canceled',
+              data: { id: providerId },
+            })
+            .expect(409)
+            .expect(({ body }) =>
+              expect(body).toMatchObject({
+                message:
+                  'Há outras tentativas de pagamento. A reserva continua retida para conciliação.',
+              }),
+            );
+          expect(get).toHaveBeenCalledTimes(1);
+          expect(
+            await prisma.payment.findMany({
+              where: { purchaseId },
+              select: { id: true, status: true },
+            }),
+          ).toEqual(
+            expect.arrayContaining([
+              { id: earlier.id, status: 'REJECTED' },
+              { id: current.id, status: 'PENDING' },
+            ]),
+          );
+          await reserve(other.token).expect(400);
+          expect(
+            await prisma.promotionUsage.findFirst({ where: { purchaseId } }),
+          ).toMatchObject({ status: 'RESERVED' });
+          expect(
+            await prisma.promotionCoupon.findUnique({
+              where: { id: coupon.id },
+            }),
+          ).toMatchObject({ usageCount: 1 });
+          expect(
+            await prisma.ticket.count({
+              where: { purchaseId, status: 'RESERVED' },
+            }),
+          ).toBe(1);
+          expect(
+            await prisma.ledgerEntry.count({ where: { purchaseId } }),
+          ).toBe(0);
+        } finally {
+          get.mockRestore();
+          upstreamCancel.mockRestore();
+        }
+        return;
+      }
+
+      if (scenario === 'cancel') {
+        const batch = await Promise.all([cancel(), cancel()]);
+        expect(batch.map(({ status }) => status).sort()).toEqual([201, 400]);
+      } else {
+        await prisma.$transaction([
+          prisma.purchase.update({
+            where: { id: purchaseId },
+            data: { expiresAt: due },
+          }),
+          prisma.ticket.updateMany({
+            where: { purchaseId },
+            data: { reservedUntil: due },
+          }),
+        ]);
+        await Promise.all([expire().expect(200), expire().expect(200)]);
+      }
+      expect(await prisma.payment.count({ where: { purchaseId } })).toBe(0);
+      expect(await prisma.ticket.count({ where: { purchaseId } })).toBe(0);
+      expect(
+        await prisma.promotionUsage.findFirst({ where: { purchaseId } }),
+      ).toMatchObject({ status: 'CANCELLED' });
+      const releasedCounter = await prisma.campaignPromotion.findUniqueOrThrow({
+        where: { id: promo.id },
+      });
+      expect(releasedCounter.usageCount).toBe(0);
+      expect(releasedCounter.grantedDiscount.toFixed(2)).toBe('0.00');
+      expect(
+        await prisma.promotionCoupon.findUnique({ where: { id: coupon.id } }),
+      ).toMatchObject({ usageCount: 0 });
+      const next = await reserve(other.token).expect(201);
+      expect(next.body).toMatchObject({ total: 4, discount: 1 });
+      expect(
+        await prisma.promotionCoupon.findUnique({ where: { id: coupon.id } }),
+      ).toMatchObject({ usageCount: 1 });
+    },
+    15_000,
+  );
+
   it.each(['approval', 'expiry', 'cancellation'] as const)(
     'reconcilia cancelamento, expiração e aprovação concorrentes: %s vence',
     async (winner) => {
@@ -841,7 +1058,32 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
           status: 'PUBLISHED',
         },
       });
-      const reserve = (auth: string) =>
+      const code = `RACE-${run}`.toUpperCase();
+      const promotion = await prisma.campaignPromotion.create({
+        data: {
+          campaignId: campaign.id,
+          name: 'Cupom sintético de corrida',
+          numberQuantity: 1,
+          packagePrice: 0,
+          type: 'COUPON',
+          status: 'ACTIVE',
+          totalLimit: 1,
+          coupons: {
+            create: {
+              organizerId: owner.id,
+              code,
+              name: 'Cupom de corrida',
+              discountType: 'FIXED',
+              discountValue: 1,
+              totalLimit: 1,
+              perBuyerLimit: 1,
+            },
+          },
+        },
+        include: { coupons: true },
+      });
+      const coupon = promotion.coupons[0];
+      const reserve = (auth: string, withCoupon = false) =>
         request(server)
           .post('/purchases/reserve-manual')
           .auth(auth, { type: 'bearer' })
@@ -849,13 +1091,14 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
             campaignId: campaign.id,
             numbers: [2],
             idempotencyKey: randomUUID(),
+            couponCode: withCoupon ? code : undefined,
           });
-      const reservation = await reserve(token).expect(201);
+      const reservation = await reserve(token, true).expect(201);
       const purchaseId = (reservation.body as { id: string }).id;
       const orderId = `ord-race-${run}`;
       const providerOrder = {
         id: orderId,
-        total_amount: '5.00',
+        total_amount: '4.00',
         status: 'action_required',
         status_detail: 'waiting_transfer',
       };
@@ -977,6 +1220,43 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
             expect(body).toMatchObject({ reservedNumbers: 1, soldNumbers: 0 }),
           );
         await reserve(competitorToken).expect(409);
+        await request(server)
+          .post(`/purchases/${purchaseId}/cancel`)
+          .auth(token, { type: 'bearer' })
+          .expect(409);
+        get.mockResolvedValueOnce({
+          ...pendingOrder,
+          transactions: {
+            payments: [
+              { status: 'canceled', status_detail: 'canceled_by_api' },
+            ],
+          },
+        });
+        await notify('ambiguous').expect(409);
+        get.mockResolvedValueOnce({
+          ...pendingOrder,
+          total_amount: '4.01',
+          status: 'canceled',
+          status_detail: 'expired',
+          transactions: {
+            payments: [
+              { amount: '4.00', status: 'canceled', status_detail: 'expired' },
+            ],
+          },
+        });
+        await notify('wrong-total')
+          .expect(409)
+          .expect(({ body }) =>
+            expect(body).toMatchObject({
+              message: 'Valor do webhook divergente.',
+            }),
+          );
+        expect(
+          await prisma.payment.findUnique({ where: { id: paymentId } }),
+        ).toMatchObject({ status: 'PENDING' });
+        expect(
+          await prisma.promotionUsage.findFirst({ where: { purchaseId } }),
+        ).toMatchObject({ status: 'RESERVED' });
 
         get.mockImplementationOnce(async () => {
           firstApprovalStarted.resolve();
@@ -1017,7 +1297,7 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
           if (winner === 'expiry') {
             get.mockResolvedValueOnce({
               ...pendingOrder,
-              status: 'expired',
+              status: 'failed',
               status_detail: 'expired',
             });
             await notify('expiry').expect(200, {
@@ -1034,7 +1314,7 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
               purchase: { status: 'CANCELLED' },
             });
           }
-          const successor = await reserve(competitorToken).expect(201);
+          const successor = await reserve(competitorToken, true).expect(201);
           successorId = (successor.body as { id: string }).id;
           releaseApprovals.resolve();
           expect((await first).status).toBe(409);
@@ -1053,7 +1333,7 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
         }
 
         expect(cancel).toHaveBeenCalledTimes(1);
-        expect(get).toHaveBeenCalledTimes(winner === 'expiry' ? 3 : 2);
+        expect(get).toHaveBeenCalledTimes(winner === 'expiry' ? 5 : 4);
         const snapshot = await prisma.payment.findUniqueOrThrow({
           where: { id: paymentId },
           include: { purchase: true, campaign: true, ledgerEntries: true },
@@ -1071,20 +1351,38 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
           (entry) => entry.type === 'ORGANIZER_NET_REVENUE',
         );
         const events = await prisma.paymentEvent.findMany({
-          where: { providerEventId: { startsWith: `race-${run}-` } },
+          where: {
+            providerEventId: {
+              startsWith: `race-${run}-`,
+              notIn: [`race-${run}-ambiguous`, `race-${run}-wrong-total`],
+            },
+          },
           select: {
             processed: true,
             providerEventId: true,
             errorMessage: true,
           },
         });
+        const usages = await prisma.promotionUsage.findMany({
+          where: { promotionId: promotion.id },
+          select: { purchaseId: true, status: true },
+        });
+        expect(
+          await prisma.promotionCoupon.findUnique({ where: { id: coupon.id } }),
+        ).toMatchObject({ usageCount: 1 });
+        const aggregate = await prisma.campaignPromotion.findUniqueOrThrow({
+          where: { id: promotion.id },
+        });
+        expect(aggregate.usageCount).toBe(1);
+        expect(aggregate.grantedDiscount.toFixed(2)).toBe('1.00');
         if (winner === 'approval') {
+          expect(usages).toEqual([{ purchaseId, status: 'APPROVED' }]);
           expect(snapshot).toMatchObject({
             status: 'APPROVED',
             purchase: { status: 'PAID' },
             campaign: { reservedNumbers: 0, soldNumbers: 1 },
           });
-          expect(snapshot.campaign.grossRevenue.toFixed(2)).toBe('5.00');
+          expect(snapshot.campaign.grossRevenue.toFixed(2)).toBe('4.00');
           expect(tickets).toEqual([
             {
               number: 2,
@@ -1106,6 +1404,14 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
           ]);
         } else {
           const terminal = winner === 'expiry' ? 'EXPIRED' : 'CANCELLED';
+          expect(usages).toHaveLength(2);
+          expect(usages).toEqual(
+            expect.arrayContaining([
+              { purchaseId, status: 'CANCELLED' },
+              { purchaseId: successorId, status: 'RESERVED' },
+            ]),
+          );
+
           expect(snapshot).toMatchObject({
             status: terminal,
             activePurchaseKey: null,

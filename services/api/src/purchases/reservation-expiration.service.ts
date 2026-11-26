@@ -2,13 +2,14 @@ import { Injectable } from '@nestjs/common';
 import {
   InstantPrizeStatus,
   NotificationCategory,
-  PaymentStatus,
   Prisma,
   PurchaseStatus,
   TicketStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CrmSyncService } from '../crm/crm-sync.service';
+import { releaseUnusedCouponCapacity } from './coupon-release';
+import { serializableReservationTransition } from './reservation-transaction';
 
 type Transaction = Prisma.TransactionClient;
 
@@ -20,7 +21,7 @@ export class ReservationExpirationService {
   ) {}
 
   async expireDue(campaignId?: string) {
-    return this.prisma.$transaction((transaction) =>
+    return serializableReservationTransition(this.prisma, (transaction) =>
       this.expireDueInTransaction(transaction, campaignId),
     );
   }
@@ -37,18 +38,9 @@ export class ReservationExpirationService {
           in: [PurchaseStatus.RESERVED, PurchaseStatus.AWAITING_PAYMENT],
         },
         expiresAt: { lte: now },
-        payments: {
-          none: {
-            status: {
-              in: [
-                PaymentStatus.CREATED,
-                PaymentStatus.PENDING,
-                PaymentStatus.PROCESSING,
-                PaymentStatus.APPROVED,
-              ],
-            },
-          },
-        },
+        // A due clock only proves closure before any payment attempt existed.
+        // Once sent, even a locally rejected row must be reconciled at the provider.
+        payments: { none: {} },
       },
       select: {
         id: true,
@@ -108,6 +100,7 @@ export class ReservationExpirationService {
       where: { id: { in: ids } },
       data: { status: PurchaseStatus.EXPIRED },
     });
+    await releaseUnusedCouponCapacity(transaction, ids);
     for (const purchase of purchases) {
       await this.crmSync.syncExpiredReservation(transaction, purchase.id);
     }

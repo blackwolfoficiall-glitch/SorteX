@@ -127,7 +127,12 @@ describe('PurchasesService', () => {
         update: jest.fn(),
       },
       campaignPromotion: { findMany: jest.fn(), update: jest.fn() },
-      promotionUsage: { create: jest.fn(), count: jest.fn() },
+      promotionUsage: {
+        create: jest.fn(),
+        count: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      payment: { findFirst: jest.fn() },
       promotionCoupon: { findFirst: jest.fn(), update: jest.fn() },
       purchase: {
         findUnique: jest.fn(),

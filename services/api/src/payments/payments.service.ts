@@ -32,6 +32,10 @@ import { FinancialLedgerService } from '../finance/financial-ledger.service';
 import { AffiliateCommissionService } from '../affiliates/affiliate-commission.service';
 import { CrmSyncService } from '../crm/crm-sync.service';
 import { CampaignMilestonesService } from '../campaigns/campaign-milestones.service';
+import {
+  releaseUnusedCouponCapacity,
+  type ClosedProviderAttempt,
+} from '../purchases/coupon-release';
 
 import {
   nativeSandboxPixEnabled,
@@ -211,6 +215,10 @@ export class PaymentsService {
     const gatewayPayment = await this.gateways
       .get(payment.provider)
       .getPaymentStatus(payment.providerPaymentId);
+    if (gatewayPayment.providerPaymentId !== payment.providerPaymentId)
+      throw new ConflictException(
+        'Identificador da ordem do provedor divergente.',
+      );
     const fingerprint = createHash('sha256')
       .update(
         `${payment.id}:${gatewayPayment.status}:${gatewayPayment.rawStatus || ''}`,
@@ -299,6 +307,7 @@ export class PaymentsService {
         'O pedido ainda está sendo vinculado. Atualize o pagamento antes de cancelar.',
       );
     }
+    await this.requireSinglePaymentAttempt(this.prisma, current);
     if (this.jsonObject(current.metadata).nativeSandboxPix === true)
       this.requireNativeSandboxPix();
     const cancelled = await this.gateways
@@ -306,6 +315,7 @@ export class PaymentsService {
       .cancelPayment(current.providerPaymentId);
     if (
       cancelled.status !== PaymentStatus.CANCELLED ||
+      cancelled.orderClosure !== PaymentStatus.CANCELLED ||
       cancelled.providerPaymentId !== current.providerPaymentId ||
       cancelled.externalReference !== current.externalReference ||
       !current.amount.equals(cancelled.amount)
@@ -314,7 +324,8 @@ export class PaymentsService {
         'O provedor não confirmou o cancelamento deste pagamento.',
       );
     }
-    return this.prisma.$transaction(async (transaction) => {
+    return this.reconcileSerializable(async (transaction) => {
+      await this.requireSinglePaymentAttempt(transaction, current);
       const update = await transaction.payment.updateMany({
         where: {
           id,
@@ -333,6 +344,11 @@ export class PaymentsService {
           transaction,
           current.purchaseId,
           PurchaseStatus.CANCELLED,
+          {
+            id,
+            providerPaymentId: cancelled.providerPaymentId,
+            status: PaymentStatus.CANCELLED,
+          },
         );
       }
       const payment = await transaction.payment.findUniqueOrThrow({
@@ -502,6 +518,10 @@ export class PaymentsService {
       if (this.jsonObject(trackedPayment.metadata).nativeSandboxPix === true)
         this.requireNativeSandboxPix();
       const gatewayPayment = await provider.getPaymentStatus(event.resourceId);
+      if (gatewayPayment.providerPaymentId !== event.resourceId)
+        throw new ConflictException(
+          'Identificador da ordem do provedor divergente.',
+        );
       const { payment: result, duplicate } = await this.processGatewayUpdate(
         storedEvent.id,
         gatewayPayment,
@@ -661,10 +681,15 @@ export class PaymentsService {
           'O provedor não confirmou uma cobrança Pix do ambiente de teste.',
         );
       }
-      const storedStatus =
-        gatewayResult.status === PaymentStatus.APPROVED
-          ? PaymentStatus.PROCESSING
-          : gatewayResult.status;
+      const storedStatus = (
+        [
+          PaymentStatus.APPROVED,
+          PaymentStatus.CANCELLED,
+          PaymentStatus.EXPIRED,
+        ] as PaymentStatus[]
+      ).includes(gatewayResult.status)
+        ? PaymentStatus.PROCESSING
+        : gatewayResult.status;
       const updated = await this.prisma.payment.update({
         where: { id: prepared.payment.id },
         data: {
@@ -967,6 +992,11 @@ export class PaymentsService {
         });
         if (!payment)
           throw new NotFoundException('Referência externa inválida.');
+        if (gateway.providerPaymentId !== payment.providerPaymentId) {
+          throw new ConflictException(
+            'Identificador da ordem do provedor divergente.',
+          );
+        }
         if (gateway.externalReference !== payment.externalReference) {
           throw new ConflictException('Referência externa divergente.');
         }
@@ -999,8 +1029,10 @@ export class PaymentsService {
         // A confirmação nunca pode ser reaberta por uma notificação tardia.
         // O ledger permite apenas um débito de reversão por pagamento liquidado.
         const closedPayment =
-          payment.status === PaymentStatus.CANCELLED ||
-          payment.status === PaymentStatus.EXPIRED;
+          (payment.status === PaymentStatus.CANCELLED ||
+            payment.status === PaymentStatus.EXPIRED) &&
+          (payment.purchase.status === PurchaseStatus.CANCELLED ||
+            payment.purchase.status === PurchaseStatus.EXPIRED);
         if (
           reversed ||
           (localApproval && !reversal) ||
@@ -1146,12 +1178,20 @@ export class PaymentsService {
     }>,
     gateway: GatewayPaymentResult,
   ) {
-    const terminalStatuses: PaymentStatus[] = [
-      PaymentStatus.REJECTED,
-      PaymentStatus.CANCELLED,
-      PaymentStatus.EXPIRED,
-    ];
-    const terminal = terminalStatuses.includes(gateway.status);
+    const closing =
+      gateway.status === PaymentStatus.CANCELLED
+        ? PaymentStatus.CANCELLED
+        : gateway.status === PaymentStatus.EXPIRED
+          ? PaymentStatus.EXPIRED
+          : undefined;
+    if (closing) {
+      if (gateway.orderClosure !== closing)
+        throw new ConflictException(
+          'Encerramento da ordem não confirmado. A reserva continua retida.',
+        );
+      await this.requireSinglePaymentAttempt(transaction, payment);
+    }
+    const terminal = closing || gateway.status === PaymentStatus.REJECTED;
     await transaction.payment.update({
       where: { id: payment.id },
       data: {
@@ -1164,25 +1204,40 @@ export class PaymentsService {
           gateway.status === PaymentStatus.CANCELLED ? new Date() : undefined,
       },
     });
-    const releasableStatuses: PaymentStatus[] = [
-      PaymentStatus.CANCELLED,
-      PaymentStatus.EXPIRED,
-    ];
-    if (releasableStatuses.includes(gateway.status)) {
+    if (closing) {
       await this.releasePurchase(
         transaction,
         payment.purchaseId,
         gateway.status === PaymentStatus.EXPIRED
           ? PurchaseStatus.EXPIRED
           : PurchaseStatus.CANCELLED,
+        {
+          id: payment.id,
+          providerPaymentId: gateway.providerPaymentId,
+          status: closing,
+        },
       );
     }
+  }
+
+  private async requireSinglePaymentAttempt(
+    tx: Pick<Prisma.TransactionClient, 'payment'>,
+    current: { id: string; purchaseId: string },
+  ) {
+    const other = await tx.payment.count({
+      where: { purchaseId: current.purchaseId, id: { not: current.id } },
+    });
+    if (other > 0)
+      throw new ConflictException(
+        'Há outras tentativas de pagamento. A reserva continua retida para conciliação.',
+      );
   }
 
   private async releasePurchase(
     transaction: Prisma.TransactionClient,
     purchaseId: string,
     status: PurchaseStatus,
+    closure: ClosedProviderAttempt,
   ) {
     const purchase = await transaction.purchase.findUnique({
       where: { id: purchaseId },
@@ -1200,6 +1255,7 @@ export class PaymentsService {
           status === PurchaseStatus.CANCELLED ? new Date() : undefined,
       },
     });
+    await releaseUnusedCouponCapacity(transaction, [purchaseId], closure);
     await transaction.campaign.update({
       where: { id: purchase.campaignId },
       data: {

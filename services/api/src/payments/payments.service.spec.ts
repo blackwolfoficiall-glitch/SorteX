@@ -148,7 +148,10 @@ describe('PaymentsService', () => {
         updateMany: jest.fn(),
       },
       auditLog: { create: jest.fn() },
-      promotionUsage: { updateMany: jest.fn() },
+      promotionUsage: {
+        updateMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       purchase: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
@@ -777,7 +780,10 @@ describe('PaymentsService', () => {
     );
     await (service as any).processGatewayUpdate(
       'event-1',
-      gatewayResult({ status: PaymentStatus.EXPIRED }),
+      gatewayResult({
+        status: PaymentStatus.EXPIRED,
+        orderClosure: PaymentStatus.EXPIRED,
+      }),
     );
     expect(prisma.ticket.updateMany).not.toHaveBeenCalled();
     expect(prisma.ticket.deleteMany).toHaveBeenCalled();
