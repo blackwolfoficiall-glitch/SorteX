@@ -1,0 +1,55 @@
+name: Diagnóstico manual de storage privado QA
+on:
+  push:
+    branches: [homologacao/web-ios-integrada]
+    paths: [.github/workflows/sortex-qa-storage-smoke.yml]
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "preflight lê somente metadados; execute publica uma função de teste e grava um PNG sintético"
+        type: choice
+        options: [preflight, execute]
+        default: preflight
+      confirm_bucket:
+        description: "Para execute, confirme exatamente sortex-qa-media"
+        type: string
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: sortex-web-ios-qa-bootstrap
+  cancel-in-progress: false
+jobs:
+  storage:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event.repository.private == false
+    environment: sortex-web-ios-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Preparar e verificar pacote separado sem credenciais
+        if: github.event_name == 'workflow_dispatch' && inputs.mode == 'execute'
+        env:
+          DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_build
+        run: |
+          npm ci --include=dev --no-audit --no-fund
+          npx --no-install prisma generate
+          npm run build
+          node --test infra/neon-storage-smoke/*.test.mjs
+          node infra/neon-storage-smoke/build.cjs
+      - name: Conferir somente o escopo QA selecionado
+        env:
+          QA_ENABLE: ${{ vars.SORTEX_QA_BOOTSTRAP }}
+          SORTEX_QA_STORAGE_SMOKE: ${{ vars.SORTEX_QA_STORAGE_SMOKE }}
+          SORTEX_QA_STORAGE_CONFIRMATION: ${{ inputs.confirm_bucket }}
+          SORTEX_QA_STORAGE_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'preflight' }}
+          SORTEX_QA_NEON_API_KEY: ${{ secrets.SORTEX_QA_NEON_API_KEY }}
+        run: node infra/neon-storage-smoke/ci.mjs "$SORTEX_QA_STORAGE_MODE"
