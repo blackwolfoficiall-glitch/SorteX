@@ -97,6 +97,15 @@ jobs:
           DATABASE_URL="$SORTEX_PAYMENTS_TEST_DATABASE_URL" npx --no-install prisma migrate deploy
           DATABASE_URL="$SORTEX_DRAW_AUDIT_DATABASE_URL" npx --no-install prisma migrate deploy
           npm run test:e2e -- --runInBand payments-postgres draw-audit
+      - name: Validar permissões administrativas e revogação isoladas (cenário 9)
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_ADMIN_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_admin_ci
+        run: |
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_admin_ci
+          DATABASE_URL="$SORTEX_ADMIN_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          npm run test:e2e -- --runInBand --runTestsByPath test/admin-authorization-postgres.e2e-spec.ts
       - name: Testar configuração e build do site
         working-directory: apps/web
         run: |
