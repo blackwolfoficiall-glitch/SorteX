@@ -323,10 +323,9 @@ export class AffiliatesService {
     // Reopening a used invite must not reset an organizer's approval.
     const accepted = (status: AffiliateStatus) =>
       status === AffiliateStatus.ACTIVE || status === AffiliateStatus.PENDING;
-    if (affiliate.userId === user.id && accepted(affiliate.status)) {
-      const { program: _program, ...linked } = affiliate;
-      return linked;
-    }
+    const { program, ...matchedAffiliate } = affiliate;
+    if (affiliate.userId === user.id && accepted(affiliate.status))
+      return matchedAffiliate;
     const now = new Date();
     if (affiliate.inviteExpiresAt && affiliate.inviteExpiresAt <= now)
       throw new BadRequestException('Este convite expirou.');
@@ -343,11 +342,11 @@ export class AffiliatesService {
       },
       data: {
         userId: user.id,
-        status: affiliate.program.allowSelfSignup
+        status: program.allowSelfSignup
           ? AffiliateStatus.ACTIVE
           : AffiliateStatus.PENDING,
         joinedAt: now,
-        approvedAt: affiliate.program.allowSelfSignup ? now : undefined,
+        approvedAt: program.allowSelfSignup ? now : undefined,
       },
     });
     const linked = await this.prisma.affiliate.findUnique({

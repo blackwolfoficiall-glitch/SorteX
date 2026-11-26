@@ -20,10 +20,7 @@ describe('safe request path', () => {
       '/affiliates/invite/synthetic-credential/accept?ref=excluded',
       '/affiliates/invite/[redacted]/accept',
     ],
-    [
-      '/affiliates/invite/accept',
-      '/affiliates/invite/accept',
-    ],
+    ['/affiliates/invite/accept', '/affiliates/invite/accept'],
   ])('redacts invitation credentials in %s', (input, expected) => {
     expect(safeRequestPath(input)).toBe(expected);
   });
