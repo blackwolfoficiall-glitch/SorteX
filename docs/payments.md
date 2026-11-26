@@ -215,24 +215,50 @@ Pago a cada atualização de tela. O fluxo reutiliza a mesma reserva, valor
 calculado pela API, chave idempotente, webhook e extrato do checkout web.
 Não retoma pedidos de outro comprador ou tentativas já iniciadas no checkout web.
 
-- O build precisa de `EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS=1`,
-  `EXPO_PUBLIC_ENABLE_NATIVE_SANDBOX_PIX=1` **e** da URL
-  HTTPS da prévia isolada já permitida no app; HTTP local não habilita Pix.
-- O backend exige `ENABLE_NATIVE_SANDBOX_PIX=1`, `APP_ENV=staging` e
-  `PAYMENT_ENV=sandbox`, sem pagamentos/saques reais, ativo somente com
-  `MERCADO_PAGO_WEBHOOK_SECRET_TEST`. O segredo genérico e o de produção
-  devem estar ausentes.
-- Uma pessoa com acesso ao [painel do provedor](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/resources/credentials)
-  deve confirmar a origem do token em **Teste** para a aplicação isolada,
-  colocar o token correspondente apenas no backend e registrar seu SHA-256
-  em `MERCADO_PAGO_VERIFIED_TEST_TOKEN_SHA256`, também apenas no backend.
-  O fingerprint comprova a coincidência com o token verificado, não prova
-  a origem do token por si só. Não derivar o fingerprint de um token
-  já configurado sem comparar com o painel. Não transmitir a credencial por chat.
-- A API revalida esses requisitos antes da criação no SDK e não registra
-  como válida uma resposta sem o ticket sandbox, referência e valor
-  esperados. O formato do ticket vem do [exemplo oficial de Pix de teste](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/integration-test/pix).
-  Não publique a prévia com essa chave ativa sem evidência independente.
-- Sem comprovação das credenciais de teste, o recurso permanece desligado,
-  mesmo se a build solicitar. Os testes locais não contatam o Mercado Pago
-  e não demonstram entrega de webhook externo nem aceite no iPhone.
+- O build **Core** não habilita reservas nem Pix. No
+  [roteiro para iPhone](SORTEX_TESTE_IPHONE_FISICO.md), o perfil explícito
+  `checkout-sandbox` liga apenas as duas flags públicas do teste. Ambos os
+  perfis são fixados à função HTTPS **sortexqa** no projeto Neon
+  **sortex-web-ios-qa**. A integração recusa a Fase 1, produção e HTTP local.
+- O backend exige o `NEON_BRANCH_ID` automático da branch QA e o `API_URL`
+  canônico da função QA, além de `ENABLE_NATIVE_SANDBOX_PIX=1`,
+  `APP_ENV=staging`, `PAYMENT_ENV=sandbox`, pagamentos/saques reais
+  desligados e somente `MERCADO_PAGO_WEBHOOK_SECRET_TEST`
+  (sem segredo genérico nem de produção).
+- Uma pessoa com acesso ao [painel do Mercado Pago](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/resources/credentials)
+  precisa selecionar **Teste** na aplicação Checkout Transparente (Orders) e
+  confirmar que o token é dessa tela. O prefixo `APP_USR` não prova a origem.
+  Configurar o evento **Order (Mercado Pago)** no [webhook de Teste](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/notifications),
+  no endpoint HTTPS da função QA com o caminho
+  `/webhooks/payments/mercado-pago`, sem alterar a aba Produção.
+- No Neon, atualizar apenas a função QA, sem reinicializar o bootstrap.
+  Usar [atualização incremental das variáveis](https://neon.com/docs/compute/functions/environment-variables#user-defined-variables)
+  para preservar JWT, chave de criptografia, CORS e toda configuração
+  existente. Não reenviar um env completo nem sobrescrever `DATABASE_URL`
+  ou `NEON_BRANCH_ID`, que o Neon injeta. Na configuração protegida do GitHub,
+  usar apenas os secrets do
+  ambiente `sortex-web-ios-qa` restrito à branch de integração:
+  `SORTEX_QA_MP_TEST_ACCESS_TOKEN` e `SORTEX_QA_MP_TEST_WEBHOOK_SECRET`.
+  A implantação autorizada mapeia esses valores para
+  `MERCADO_PAGO_ACCESS_TOKEN` e `MERCADO_PAGO_WEBHOOK_SECRET_TEST`
+  no backend QA e calcula `MERCADO_PAGO_VERIFIED_TEST_TOKEN_SHA256`
+  a partir do token de Teste atestado pelo operador, nunca do token já
+  presente no servidor. Não envie valores por chat, commit ou log.
+  Esses secrets não ativam nada sozinhos. Ativar a flag do backend só
+  após conferir a revisão, a prontidão e a origem dos segredos. As rotas
+  web legadas também conseguem usar um token instalado no backend,
+  então mantenha todos os dados/campanhas sintéticos e configure o token
+  apenas na janela autorizada. Ao encerrar, desative a flag e retire
+  as credenciais de Teste por atualização incremental; use o perfil Core.
+- A API revalida esses requisitos antes da criação no SDK e exige o ticket
+  sandbox documentado, a referência e o valor esperado. Não mostra QR Code,
+  código Pix ou link bancário. Use exclusivamente o
+  [roteiro oficial de Pix de teste](https://www.mercadopago.com.br/developers/pt/docs/checkout-api-orders/integration-test/pix):
+  a aprovação de teste é automática, sem fazer Pix de verdade. Acompanhe a
+  order e o evento recebido no painel de Teste, confira o mesmo ID/estado
+  nas duas superfícies e valide que a reentrega não duplica títulos.
+- Configurar uma conta SorteX no ambiente isolado ou validar login e
+  rascunhos não exige acesso ao Mercado Pago. Só a configuração e o aceite
+  financeiro requerem um operador autorizado na aplicação de **Teste**.
+  Os testes locais não contatam o Mercado Pago e não comprovam entrega de
+  webhook externo nem execução no iPhone.

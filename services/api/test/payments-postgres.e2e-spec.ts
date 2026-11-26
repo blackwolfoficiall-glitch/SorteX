@@ -348,6 +348,9 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
     const env = { ...process.env };
     try {
       process.env.ENABLE_NATIVE_SANDBOX_PIX = '1';
+      process.env.NEON_BRANCH_ID = 'br-weathered-forest-bccwn49d';
+      process.env.API_URL =
+        'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech';
       process.env.FEATURE_REAL_PAYMENTS = 'false';
       process.env.FEATURE_PAYOUTS = 'false';
       delete process.env.MERCADO_PAGO_VERIFIED_TEST_TOKEN_SHA256;

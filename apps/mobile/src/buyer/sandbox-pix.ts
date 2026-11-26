@@ -1,5 +1,5 @@
 import { ApiError, type SortexClient } from "../api/client";
-import { TEST_API } from "../api/config";
+import { QA_API } from "../api/config";
 
 const route = "/payments/native-sandbox-pix";
 
@@ -46,7 +46,7 @@ export class BuyerSandboxPix {
   }
 
   private usesAllowedApi() {
-    return this.optIn && this.client.baseUrl === TEST_API;
+    return this.optIn && this.client.baseUrl === QA_API;
   }
 
   private async scoped<T>(run: () => Promise<T>) {

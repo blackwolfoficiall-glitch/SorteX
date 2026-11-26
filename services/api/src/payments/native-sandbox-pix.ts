@@ -1,5 +1,8 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 
+const qaBranch = 'br-weathered-forest-bccwn49d';
+const qaApi = `https://${qaBranch}-sortexqa.compute.c-16.us-east-1.aws.neon.tech`;
+
 export function nativeSandboxPixEnabled(env = process.env) {
   const token = env.MERCADO_PAGO_ACCESS_TOKEN;
   // This fingerprint must come from independently verified provider Test
@@ -8,6 +11,8 @@ export function nativeSandboxPixEnabled(env = process.env) {
   if (
     env.ENABLE_NATIVE_SANDBOX_PIX !== '1' ||
     env.APP_ENV !== 'staging' ||
+    env.NEON_BRANCH_ID !== qaBranch ||
+    env.API_URL?.replace(/\/$/, '') !== qaApi ||
     env.PAYMENT_ENV !== 'sandbox' ||
     ![undefined, '', 'false'].includes(env.FEATURE_REAL_PAYMENTS) ||
     ![undefined, '', 'false'].includes(env.FEATURE_PAYOUTS) ||

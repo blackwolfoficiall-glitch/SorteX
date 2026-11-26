@@ -337,7 +337,6 @@ test("perfil retornado da sessão anterior não substitui o novo usuário", asyn
   assert.equal(app.client.snapshot().user?.id, "2");
 });
 
-
 test("Pix nativo exige opt-in, HTTPS conhecido, comprador e config explícita", async () => {
   const calls: string[] = [];
   let remote: unknown = {
@@ -347,7 +346,7 @@ test("Pix nativo exige opt-in, HTTPS conhecido, comprador e config explícita", 
     provider: "MERCADO_PAGO",
   };
   const signed = {
-    baseUrl: TEST_API,
+    baseUrl: QA_API,
     snapshot: () =>
       ({ status: "signedIn", user }) as ReturnType<SortexClient["snapshot"]>,
     request: async <T>(path: string) => {
@@ -367,6 +366,15 @@ test("Pix nativo exige opt-in, HTTPS conhecido, comprador e config explícita", 
     ).enabled(),
     false,
   );
+  for (const baseUrl of [
+    TEST_API,
+    "https://sortex-homologacao.netlify.app",
+    QA_API + ".example.test",
+  ]) {
+    const disabled = new BuyerSandboxPix({ ...signed, baseUrl }, user.id, true);
+    assert.equal(await disabled.enabled(), false);
+    await assert.rejects(disabled.create("purchase-1", true), /indisponível/);
+  }
   await assert.rejects(
     new BuyerSandboxPix(signed, "different-user", true).enabled(),
     /conta de comprador/,
@@ -399,7 +407,7 @@ test("Pix nativo vincula solicitação e resposta ao pedido, sem enviar valor ou
   };
   const api = new BuyerSandboxPix(
     {
-      baseUrl: TEST_API,
+      baseUrl: QA_API,
       snapshot: () =>
         ({ status: "signedIn", user }) as ReturnType<SortexClient["snapshot"]>,
       request: async <T>(path: string, method?: string, body?: unknown) => {

@@ -7,6 +7,7 @@ import {
   hasReleaseEnvOverride,
   parseMode,
   qaIsReady,
+  qaReleaseBuildEnv,
 } from './iphone.mjs';
 
 const qa = 'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech';
@@ -27,6 +28,31 @@ test('Release does not accept a legacy branch, dirty source or a different API',
   assert.throws(() => assertQaRelease('homologacao/web-ios-integrada', true, {}), /clone limpo/);
   assert.throws(() => assertQaRelease('homologacao/web-ios-integrada', false, { EXPO_PUBLIC_API_URL: 'https://another.example' }), /API configurada/);
   assert.throws(() => assertQaRelease('homologacao/web-ios-integrada', false, { SKIP_BUNDLING: '1' }), /empacotamento/);
+});
+
+test('only the explicit checkout profile enables sandbox reservations and Pix', () => {
+  assert.deepEqual(parseMode(['release', '--device', udid, '--profile', 'checkout-sandbox']), {
+    mode: 'release', udid, profile: 'checkout-sandbox',
+  });
+  for (const args of [
+    ['release', '--device', udid, '--profile', 'production'],
+    ['release', '--device', udid, '--profile', 'checkout-sandbox', '--lan'],
+    ['prepare-release', '--profile', 'checkout-sandbox'],
+    ['go', '--profile', 'checkout-sandbox'],
+  ])
+    assert.throws(() => parseMode(args), /Uso:/);
+  const core = qaReleaseBuildEnv();
+  const checkout = qaReleaseBuildEnv('checkout-sandbox');
+  for (const env of [core, checkout]) {
+    assert.equal(env.EXPO_PUBLIC_API_URL, qa);
+    assert.equal(env.EXPO_PUBLIC_ALLOW_LOCAL_API, '0');
+    assert.equal(env.EXPO_NO_DOTENV, '1');
+  }
+  for (const key of ['EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS', 'EXPO_PUBLIC_ENABLE_NATIVE_SANDBOX_PIX']) {
+    assert.equal(core[key], '0');
+    assert.equal(checkout[key], '1');
+  }
+  assert.throws(() => qaReleaseBuildEnv('production'), /Perfil Release QA inválido/);
 });
 
 test('device preflight rejects unavailable, simulator and non-iOS targets', () => {

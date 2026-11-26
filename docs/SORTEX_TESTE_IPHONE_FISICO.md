@@ -44,6 +44,28 @@ Substitua `IDENTIFIER_DO_IPHONE` pelo valor mostrado no Xcode, sem colchetes. O 
 3. Quando web e iOS apontarem para a mesma API QA, use a **mesma conta sintética** nas duas interfaces e confronte perfil e uma campanha de teste. Não valide compra ou Pix neste build inicial. Não confunda navegação no iPhone com homologação financeira.
 4. Registre erros de assinatura, inicialização, rede ou sessão separadamente. O binário de simulador e a exportação de JS não instalam nem comprovam execução em iPhone físico. O build mantém Apple/Google e capacidades não configuradas fora desse caminho de aceitação.
 
+## 4. Checkout sandbox (perfil separado, somente após habilitação verificada)
+
+O comando da etapa 2 usa o perfil **Core**. Ele continua sem reserva de teste e
+sem Pix, mesmo se o Terminal tiver essas variáveis ativadas. Não é necessário
+configurar o Mercado Pago para instalar ou validar cadastro, login, sessão e
+rascunhos no Core.
+
+Só depois de confirmar a ativação isolada descrita no
+[roteiro de pagamentos](payments.md#pix-nativo-isolado-desativado-por-padrão),
+instale um build separado para o teste de checkout:
+
+```sh
+node .github/mobile/iphone.mjs release --device IDENTIFIER_DO_IPHONE --profile checkout-sandbox
+```
+
+O perfil não contém segredos. Continua fixado à mesma API HTTPS QA e exige um
+comprador autenticado e autorização de teste retornada pela API. Não usa a
+Fase 1, a API principal, endereço de rede local ou fallback. Use apenas
+campanha/reserva sintética nesta etapa. Não escaneie nenhum QR Code e não
+faça Pix por um banco. Registre o perfil instalado com o SHA e volte ao
+perfil Core ao encerrar o teste.
+
 ## Expo Go é opcional para prévia, não atende a este roteiro
 
 A [listagem brasileira da App Store](https://apps.apple.com/br/app/expo-go/id982107779) mostra que o Expo Go **58.0.5** acrescentou suporte ao SDK 58; instalações antigas, como 57.0.9, não atendem esta versão. Mesmo atualizado, Expo Go depende de Metro e não substitui o aplicativo SorteX com identidade nativa própria. Não se requer Expo Go, conta Expo, EAS Build, TestFlight ou plano pago para o caminho acima.

@@ -9,20 +9,36 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const app = path.join(root, 'apps/mobile');
 const phase1Api = 'https://sortex-fase1-review.netlify.app/.netlify/functions/sortex-api';
 const qaApi = 'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech';
-const usage = 'Uso: node .github/mobile/iphone.mjs check | go [--tunnel|--lan] | xcode | prepare-release | release --device <UDID>';
+const usage = 'Uso: node .github/mobile/iphone.mjs check | go [--tunnel|--lan] | xcode | prepare-release | release --device <UDID> [--profile checkout-sandbox]';
 const qaBranch = 'homologacao/web-ios-integrada';
 const releaseEnvKeys = /\b(?:EXPO_PUBLIC_\w+|EXPO_NO_DOTENV|SKIP_BUNDLING|FORCE_BUNDLING)\b/;
 export function parseMode(args) {
   const [mode = 'go', flag, value, ...rest] = args;
+  if (mode === 'release' && flag === '--device' &&
+      /^(?:[a-f0-9]{8}-[a-f0-9]{16}|[a-f0-9]{40})$/i.test(value ?? '')) {
+    if (rest.length === 0) return { mode, udid: value };
+    if (rest.length === 2 && rest[0] === '--profile' && rest[1] === 'checkout-sandbox')
+      return { mode, udid: value, profile: 'checkout-sandbox' };
+    fail(usage);
+  }
   if (rest.length) fail(usage);
   if (mode === 'go' && value === undefined && [undefined, '--lan', '--tunnel'].includes(flag))
     return { mode, connection: flag ?? '--tunnel' };
-  if (mode === 'release' && flag === '--device' &&
-      /^(?:[a-f0-9]{8}-[a-f0-9]{16}|[a-f0-9]{40})$/i.test(value ?? ''))
-    return { mode, udid: value };
   if (['check', 'xcode', 'prepare-release'].includes(mode) && flag === undefined)
     return { mode };
   fail(usage);
+}
+export function qaReleaseBuildEnv(profile = 'core') {
+  if (!['core', 'checkout-sandbox'].includes(profile)) fail('Perfil Release QA inválido.');
+  const checkout = profile === 'checkout-sandbox' ? '1' : '0';
+  return {
+    EXPO_PUBLIC_API_URL: qaApi,
+    EXPO_NO_DOTENV: '1',
+    EXPO_NO_TELEMETRY: '1',
+    EXPO_PUBLIC_ALLOW_LOCAL_API: '0',
+    EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS: checkout,
+    EXPO_PUBLIC_ENABLE_NATIVE_SANDBOX_PIX: checkout,
+  };
 }
 export function assertQaRelease(branch, dirty, env = process.env) {
   if (branch !== qaBranch || dirty)
@@ -69,7 +85,7 @@ function capture(command, args, options = {}) {
 }
 
 async function main() {
-  const { mode, connection, udid } = parseMode(process.argv.slice(2));
+  const { mode, connection, udid, profile } = parseMode(process.argv.slice(2));
   const release = mode === 'release' || mode === 'prepare-release';
   if (release && process.platform !== 'darwin')
     fail('A preparação/instalação Release exige o Mac do proprietário com Xcode.');
@@ -97,13 +113,7 @@ async function main() {
     fail('API recusada: este iniciador aceita somente a prévia isolada.');
   // Explicitly override dotenv API values in the child process; never print env contents.
   process.env.EXPO_PUBLIC_API_URL = api;
-  if (release) {
-    process.env.EXPO_NO_DOTENV = '1';
-    process.env.EXPO_NO_TELEMETRY = '1';
-    process.env.EXPO_PUBLIC_ALLOW_LOCAL_API = '0';
-    process.env.EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS = '0';
-    process.env.EXPO_PUBLIC_ENABLE_NATIVE_SANDBOX_PIX = '0';
-  }
+  if (release) Object.assign(process.env, qaReleaseBuildEnv(profile));
   if (mode !== 'prepare-release') {
     let response;
     try {
@@ -191,6 +201,7 @@ async function main() {
     let devices;
     try { devices = JSON.parse(detected.stdout); } catch { fail('Lista de dispositivos inválida no Xcode. Confira a seleção e o cabo.'); }
     ensureDevice(devices, udid);
+    console.log(profile === 'checkout-sandbox' ? 'Perfil Checkout Sandbox: somente QA isolada. Não escaneie nem pague Pix.' : 'Perfil Core: reservas e Pix de teste desativados.');
     console.log('Release QA assinada para desenvolvimento, com JavaScript embutido. Nenhuma distribuição ou cobrança.');
     run('npx', ['--no-install', 'expo', 'run:ios', '--scheme', 'SorteXTeste', '--configuration', 'Release', '--no-bundler', '--no-install', '--device', udid]);
     console.log('Confirme no aparelho a abertura pelo ícone com o Mac desconectado, sem iniciar Metro.');

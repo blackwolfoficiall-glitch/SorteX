@@ -209,6 +209,9 @@ describe('PaymentsService', () => {
         ...originalEnv,
         ENABLE_NATIVE_SANDBOX_PIX: '1',
         APP_ENV: 'staging',
+        NEON_BRANCH_ID: 'br-weathered-forest-bccwn49d',
+        API_URL:
+          'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech',
         PAYMENT_ENV: 'sandbox',
         FEATURE_REAL_PAYMENTS: 'false',
         FEATURE_PAYOUTS: 'false',
