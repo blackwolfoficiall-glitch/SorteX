@@ -196,7 +196,7 @@ export default function CampaignDashboard() {
         ) : error ? null : visibleCampaigns.length === 0 ? (
           <Card className="mt-6 p-12 text-center"><Ticket className="mx-auto text-violet-500" size={44} /><h2 className="mt-4 text-xl font-black">Nenhuma campanha encontrada</h2><p className="mt-2 text-zinc-500">Ajuste os filtros ou crie uma nova campanha.</p></Card>
         ) : (
-          <div className="mt-6 grid gap-5 md:grid-cols-2">
+          <div className="mt-6 grid grid-cols-1 gap-5 md:grid-cols-2">
             {visibleCampaigns.map((campaign) => <CampaignCard key={campaign.id} campaign={campaign} busy={busyId === campaign.id} run={run} remove={remove} />)}
           </div>
         )}
@@ -220,7 +220,7 @@ function CampaignCard({ campaign, busy, run, remove }: { campaign: Campaign; bus
   const canPause = campaign.status === "PUBLISHED";
   const canFinish = ["PUBLISHED", "PAUSED"].includes(campaign.status);
   return (
-    <Card className="relative transition-shadow hover:shadow-lg">
+    <Card className="relative min-w-0 transition-shadow hover:shadow-lg">
       <div className="relative aspect-[16/9] overflow-hidden rounded-t-3xl bg-gradient-to-br from-violet-100 to-purple-50">
         {campaign.coverImageUrl ? <Image src={versionedCoverUrl(ownedMediaUrl(campaign.coverImageUrl), campaign.coverImageRevision)} alt={campaign.title} fill unoptimized className="object-cover" /> : <Ticket className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-violet-300" size={52} />}
       </div>
