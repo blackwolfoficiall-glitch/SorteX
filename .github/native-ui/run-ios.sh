@@ -14,7 +14,8 @@ refuse() {
   refuse fixture-scope
 [[ "${EXPO_PUBLIC_API_URL:-}" == "$SORTEX_IOS_UI_API" && "${EXPO_PUBLIC_ALLOW_LOCAL_API:-}" == 1 ]] ||
   refuse api-destination
-[[ "${SORTEX_SIMULATOR_ID:-}" =~ ^[[:xdigit:]]{8}(-[[:xdigit:]]{4}){3}-[[:xdigit:]]{12}$ &&
+simulator_id_re='^[[:xdigit:]]{8}(-[[:xdigit:]]{4}){3}-[[:xdigit:]]{12}$'
+[[ "${SORTEX_SIMULATOR_ID:-}" =~ $simulator_id_re &&
   "${SORTEX_IOS_UI_BUYER_PASSWORD:-}" =~ ^[0-9a-f]{48}$ ]] ||
   refuse synthetic-inputs
 [[ -d "${RUNNER_TEMP:-}" && -n "${GITHUB_SHA:-}" && -x "${MAESTRO_BIN:-}" ]] ||
