@@ -1,18 +1,18 @@
-# Matriz de paridade SorteX • 25/11/2026
+# Matriz de paridade SorteX • atualizada em 26/11/2026
 
-Portal indica link para o site dentro do aplicativo. Restrito indica exclusão intencional da administração no app. As fontes de Banco são modelos Prisma. Cada teste citado por nome pode cobrir apenas parte da linha. Somente os ensaios registrados no diagnóstico contam como executados. A classificação é da jornada integrada; a classificação por cliente consta nas colunas Site e App. A existência de rota ou de um botão não certifica sua execução.
+Portal indica link para o site dentro do aplicativo. Restrito indica exclusão intencional da administração no app. As fontes de Banco são modelos Prisma. Cada teste citado por nome pode cobrir apenas parte da linha. A tabela distingue caminhos presentes e evidência executada; veja a seção de aceite para as verificações mais recentes. A classificação é da jornada integrada; a classificação por cliente consta nas colunas Site e App. A existência de rota ou de um botão não certifica sua execução.
 
 | Módulo | Site | App | Backend | Banco | Testes | Problemas | Prioridade | Estimativa | Classificação integrada |
 |---|---|---|---|---|---|---|---|---|---|
-| Login por senha | login | Login | auth | User/AuthSession | auth, cross | Confirmar no iPhone | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
+| Login por senha | login | Login | auth | User/AuthSession | HTTP no Neon QA | Login por senha passou por HTTP; confirmar no iPhone | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Cadastro comprador, endereço e CPF | cadastro/comprador | Register | auth,locations | BuyerAddress/ConsentRecord | PG + navegador | Repetir no aparelho | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
-| Cadastro organizador PF/PJ e CPF/CNPJ | cadastro/organizador | Register | auth,organizers | OrganizerProfile | PG + navegador | Repetir duas identidades no iPhone | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
+| Cadastro organizador PF/PJ e CPF/CNPJ | cadastro/organizador | Register | auth,organizers | OrganizerProfile | PG, navegador e HTTP no Neon QA | Cadastro PF passou por HTTP nos dois sentidos; repetir PF/PJ no iPhone | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Apple e Google | login | Indisponíveis | social-auth | SocialIdentity | 15 OIDC | Provedores simulados; callbacks reais pendentes | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Recuperação de senha | esqueci-senha, recuperar-senha | Forgot, Reset | auth | PasswordResetToken | password-reset-mail | Entrega e abertura do link no celular | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
-| Sessões e permissões | login, admin/login | Main, SecureStore | auth/guards | AuthSession | JWT, guards, 16 mobile | Portal abre sessão distinta | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
+| Sessões e permissões | login, admin/login | Main, SecureStore | auth/guards | AuthSession | Rotação HTTP no Neon QA; 27 mobile | Persistência em SecureStore ainda não exercitada no iPhone; portal abre sessão distinta | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Dashboard | dashboard | Home | dashboard | Campaign/Payment | dashboard.spec | Comparar totais por ID e período | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
-| Criar campanhas | dashboard/campanhas/nova | Portal | campaigns | Campaign | BFF↔cliente | Criação via BFF comprovada, sem editor nativo | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
-| Editar campanhas | dashboard/campanhas/[id]/editar | Portal | campaigns | Campaign | campaigns.spec | Editar no iPhone e reler no site | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
+| Criar campanhas | dashboard/campanhas/nova | Criar rascunho nativo; portal para edição avançada | campaigns | Campaign | BFF↔cliente no Neon QA | Mesmo ID de rascunho por HTTP; interface e publicação ainda não verificadas no iPhone | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
+| Editar campanhas | dashboard/campanhas/[id]/editar | Editar rascunho nativo; portal para edição avançada | campaigns | Campaign | BFF↔cliente no Neon QA | Alteração sincronizada por HTTP; repetir na interface física | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Gerenciar campanhas e publicações | dashboard/campanhas | Campaigns, Campaign; portal | campaigns | Campaign | campaigns.spec | Publicação e bloqueios no dispositivo | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Prêmios e fotos | editor de campanha | Portal | campaigns, media | CampaignImage | media, DTO | Upload e releitura no telefone | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Promoções e cupons | dashboard/promocoes | Portal | campaigns,purchases | CampaignPromotion | purchases, DTO | Aplicar desconto no checkout móvel | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
@@ -28,12 +28,12 @@ Portal indica link para o site dentro do aplicativo. Restrito indica exclusão i
 | Comunicação e notificações CRM | dashboard/comunicacao | Portal | crm,growth | OutboundMessage | communication-full web | Confirmar entrega em cada canal | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Ads e Modo Turbo | dashboard/ads, painel-mobile.html#turbo | Portal | growth, CRM | SortexAdCampaign | inspeção | Ads sandbox; Turbo é agrupador de atalhos | P2 | 0,5–1 d de teste | SOMENTE INTERFACE (atalhos Turbo); Ads simulado |
 | Domínio, redes e prévia | dashboard/personalizacao | Portal | personalization | OrganizerDomain | personalization-persistence web | Publicação do domínio pendente | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
-| Mídias e documentos | organizador/midias e organizador/verificacao | Portal | media,organizers | MediaAsset/OrganizerDocument | media, organizer-storage | Storage da revisão reportou not-initialized | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
+| Mídias e documentos | organizador/midias e organizador/verificacao | Portal | media,organizers | MediaAsset/OrganizerDocument | media, organizer-storage | Storage local exercitado; desabilitado na API de homologação | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Planos e jurídico | dashboard/configuracoes/plano, juridico | Portal | plans,legal | Subscription/LegalAcceptance | legal | Validar aceite e plano correto no portal | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Comprador: visualizar campanhas | campanha/[slug] | Campaigns, Campaign | buyer,public-campaigns | Campaign | public-campaigns | Conferir campanha publicada no dispositivo | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
-| Selecionar e reservar cotas | campanha/[slug] | Ausente | purchases/reserve-manual, reserve-random | Ticket/Purchase | 8 disputas PG | Falta ação de reserva no comprador nativo | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
-| Compra e checkout | comprador/checkout/[id] | Ausente | auth/checkout,purchases,payments | Purchase/Payment | HTTP/PG, payments | Fluxo nativo termina em consulta | P0 | 2–4 d de ligação ao fluxo existente | PARCIALMENTE FUNCIONAL |
-| Pix e confirmação para comprador | comprador/checkout/[id], pagamento/sucesso | Order consulta | payments,webhooks | Payment/PaymentEvent | payments | Falta cobrar e reconfirmar no iPhone | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
+| Selecionar e reservar cotas | campanha/[slug] | Reserva manual/aleatória sob flag de teste; desligada no Release Core | purchases/reserve-manual, reserve-random | Ticket/Purchase | HTTP/PG local, inclusive expiração e concorrência | Checkout sandbox no aparelho pendente | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
+| Compra e checkout | comprador/checkout/[id] | Pix nativo sob flag; Core só consulta | auth/checkout,purchases,payments | Purchase/Payment | HTTP/PG local com provedor controlado | Perfil checkout-sandbox preparado localmente, sem deploy ou aceite | P0 | 2–4 d de ligação ao fluxo existente | PARCIALMENTE FUNCIONAL |
+| Pix e confirmação para comprador | comprador/checkout/[id], pagamento/sucesso | Order consulta; Pix protegido por flag | payments,webhooks | Payment/PaymentEvent | HTTP/PG local com provedor controlado | Falta ordem Teste, webhook do provedor e iPhone | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Meus títulos e histórico | comprador/meus-numeros, compras/[id] | Orders, Order | purchases/my, tickets | Purchase/Ticket | purchases | Comparar números após confirmação | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Cotas premiadas e meus prêmios | comprador/meus-premios | Results parcial | buyer,draws | InstantPrizeResult/Winner | draws | Releitura do prêmio pelo comprador | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Resultados e ganhadores | comprador/sorteios | DrawRoom, Results | draws,public-campaigns | CampaignDraw/Winner | draws | Reproduzir extração publicada | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
@@ -55,8 +55,26 @@ Portal indica link para o site dentro do aplicativo. Restrito indica exclusão i
 | Split de pagamentos | financeiro | Ausente | Ledger interno | LedgerEntry | fee, ledger | Liquidação dividida pelo provedor sem evidência | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Saques | dashboard/financeiro | Portal | finance/payouts | PayoutRequest | finance | Solicitação e saldo internos; repasse externo pendente | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Loteria Federal automática | admin/loteria | DrawRoom consulta | ManualLotteryResultsProvider | LotteryDraw | draws | Consulta automática desativada | P1 | fora da janela | NÃO IMPLEMENTADO |
-| Builder de regras e apuração | editor, dashboard/sorteios | Portal; DrawRoom consulta | draw-rule-templates,draws | DrawRuleTemplate/CampaignDraw | draw-rule-engine | Replay histórico oficial e imutabilidade pendentes | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
+| Builder de regras e apuração | editor, dashboard/sorteios | Portal; DrawRoom consulta | draw-rule-templates,draws | DrawRuleTemplate/CampaignDraw | draw-rule-engine e auditoria HTTP/PG | Prova recalculável e bloqueio de divergência testados; replay no aparelho pendente | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Notificações externas | dashboard/comunicacao | Sem push nativo | crm/fila | OutboundMessage | crm | Entrega externa pendente | P1 | 0,5–1 d de teste | BLOQUEADO POR DEPENDÊNCIA EXTERNA |
+
+## Evidências dos nove cenários • 26/11/2026
+
+**Aceite formal: 0/9.** A API de homologação está ativa com 21 migrações no Neon. O [teste HTTP no Neon QA](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45750452791) exercitou o frontend Next no executor e a lógica HTTP do app sem hardware. A [CI compilou e abriu o aplicativo Release no simulador](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45750452673), não em um iPhone. Não há link privado do site ou instalação física verificados nesta rodada.
+
+| # | Cenário obrigatório | Evidência atual | Falta para aceitar |
+|---|---|---|---|
+| 1 | Criar na web, ver no iPhone | Mesmo ID de rascunho no Next e cliente móvel por HTTP no Neon QA | Site privado e interface física; distinguir rascunho de publicação |
+| 2 | Editar no iPhone, ver na web | Rascunho editado pelo cliente móvel e relido no Next por HTTP no Neon QA | Edição pela interface física e releitura visual |
+| 3 | Cadastro web e login no app | IDs, papéis, login e rotação conferidos por HTTP no Neon QA | Acesso no iPhone e sessão preservada após reabrir |
+| 4 | Reservar e comprar cotas de teste | Reserva e reaproveitamento de cota exercitados com PostgreSQL isolado | Compra sintética em ambiente Teste do provedor e interface física |
+| 5 | Confirmação via webhook | Teste local com resposta de provedor controlada | Ordem rastreada no Mercado Pago Teste e webhook assinado entregue pelo provedor |
+| 6 | Títulos, ganhadores e saldo | Testes locais separados de emissão/estorno e auditoria de apuração | Os três resultados na mesma jornada QA por web e iOS |
+| 7 | Impedir duplicidade de cotas | Corrida em PostgreSQL isolado: uma reserva vencedora; a outra recebe conflito | Corrida web/iOS e reentrega do webhook sem novo título ou lançamento |
+| 8 | Isolamento dos organizadores | Isolamento de leitura/alteração passou no Neon QA por HTTP | Conferir com duas identidades na web privada e iPhone |
+| 9 | Permissões administrativas | Ações isoladas testadas; painel administrativo não pertence ao app comprador/organizador | Matriz de papéis no QA, ações permitidas/bloqueadas no site e o app sem acesso administrativo |
+
+Seguimento: quando houver acesso ao Mac, testar login e campanhas no Release Core com pagamentos desligados. A prévia Next e o app devem confirmar a mesma revisão de API; o site precisa negar acesso anônimo antes de compartilhar seu link. Para a etapa financeira, usar somente credenciais atestadas na aba Teste do provedor, campanha e identidades sintéticas; uma confirmação local ou simulada não conta como entrega do webhook. Produção e App Store fora desta rodada.
 
 ## Inventário por arquivo
 
