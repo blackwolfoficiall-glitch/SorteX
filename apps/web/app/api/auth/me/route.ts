@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import type { AuthTokens } from "@/lib/auth/types";
 import {
   ACCESS_COOKIE,
   REFRESH_COOKIE,
@@ -7,7 +6,7 @@ import {
   clearAuthCookies,
   jsonFromUpstream,
   readJson,
-  setAuthCookies,
+  renewAuthSession,
 } from "@/lib/auth/server";
 
 async function fetchMe(accessToken: string) {
@@ -37,18 +36,9 @@ export async function GET() {
     return Response.json({ message: "Sessão expirada." }, { status: 401 });
   }
 
-  const refreshResponse = await apiFetch("/auth/refresh", {
-    method: "POST",
-    body: JSON.stringify({ refreshToken }),
-  });
-  const tokens = (await readJson(refreshResponse)) as AuthTokens;
+  const renewal = await renewAuthSession(cookieStore, refreshToken);
+  if (!renewal.ok) return renewal.response;
 
-  if (!refreshResponse.ok) {
-    clearAuthCookies(cookieStore);
-    return jsonFromUpstream(tokens, refreshResponse.status);
-  }
-
-  setAuthCookies(cookieStore, tokens);
-  const response = await fetchMe(tokens.accessToken);
+  const response = await fetchMe(renewal.accessToken);
   return jsonFromUpstream(await readJson(response), response.status);
 }
