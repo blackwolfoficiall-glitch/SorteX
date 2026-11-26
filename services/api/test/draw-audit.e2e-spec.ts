@@ -104,6 +104,11 @@ isolated('Federal audit proof via HTTP and isolated PostgreSQL', () => {
         sourceType: 'OFFICIAL_API',
         sourcePrizes: ['086997', '004852', '000091', '082438', '039210'],
         sourceDocumentHash: 'e'.repeat(64),
+        sourceUrl: 'https://example.test/private-document?token=fixture',
+        notes: 'Internal lottery moderation fixture',
+        enteredByUserId: organizer.id,
+        reviewedByUserId: organizer.id,
+        reviewedAt: day,
       },
     });
     const purchase = await db.purchase.create({
@@ -193,6 +198,32 @@ isolated('Federal audit proof via HTTP and isolated PostgreSQL', () => {
     expect(publicProof.body.draw.auditHash).toBe(draw.auditHash);
     expect(publicProof.body.draw).not.toHaveProperty('auditHashVersion');
     expect(publicProof.body.winningNumber).toBe('00091');
+    const proof = publicProof.body as {
+      draw: {
+        result: { normalizedResult: string; lottery: { sourceUrl: unknown } };
+        lottery: Record<string, unknown>;
+      };
+    };
+    expect(proof.draw.result.normalizedResult).toBe('00091');
+    expect(proof.draw.result).not.toHaveProperty('ticketId');
+    expect(proof.draw.result.lottery).not.toHaveProperty('id');
+    expect(proof.draw.result.lottery.sourceUrl).toBeNull();
+    expect(proof.draw.lottery).toMatchObject({
+      extractionNumber: lotto.extractionNumber,
+      thirdPrize: '00091',
+      sourceDocumentHash: 'e'.repeat(64),
+      sourceUrl: null,
+    });
+    for (const field of [
+      'notes',
+      'enteredByUserId',
+      'reviewedByUserId',
+      'id',
+    ]) {
+      expect(proof.draw.lottery).not.toHaveProperty(field);
+    }
+    expect(JSON.stringify(proof)).not.toContain('private-document');
+    expect(JSON.stringify(proof)).not.toContain(lotto.notes);
 
     const auditor = await db.user.create({
       data: {

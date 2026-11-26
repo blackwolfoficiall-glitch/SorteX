@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 
-const CAIXA_FEDERAL_ENDPOINT =
+export const CAIXA_FEDERAL_ENDPOINT =
   'https://servicebus2.caixa.gov.br/portaldeloterias/api/federal';
 const MAX_BODY_BYTES = 64 * 1024;
 const CAIXA_RESPONSE_ERROR =

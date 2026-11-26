@@ -31,6 +31,7 @@ import {
 } from "./src/components/ui";
 import { LocationPicker } from "./src/components/LocationPicker";
 import { NativeOrganizerDraft } from "./src/components/NativeOrganizerDraft";
+import { NativePublicDrawProof } from "./src/components/NativePublicDrawProof";
 import { isEditableOrganizerCampaign } from "./src/domain/organizer-draft";
 import { NativeBuyerOrder, NativeBuyerReservation } from "./src/buyer/NativeBuyerPurchase";
 import {
@@ -945,6 +946,7 @@ function Results() {
   }, [state.data, version]);
   return (
     <Page title="Resultados">
+      <NativePublicDrawProof client={client} />
       <Load state={state}>
         {loading ? (
           <ActivityIndicator />

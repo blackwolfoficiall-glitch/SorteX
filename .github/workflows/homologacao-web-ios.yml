@@ -186,6 +186,11 @@ jobs:
           }
           wait_ready "$SORTEX_PARITY_API" "$api_pid" "API"
           wait_ready "$SORTEX_PARITY_WEB/api" "$web_pid" "Site"
+          export SORTEX_FEDERAL_PARITY_MODE=local-synthetic-only
+          export SORTEX_FEDERAL_PARITY_FIXTURE="$RUNNER_TEMP/sortex-federal-parity.json"
+          trap 'rm -f -- "$SORTEX_FEDERAL_PARITY_FIXTURE"; kill "$api_pid" "$web_pid" 2>/dev/null || true' EXIT
+          (cd services/api && node scripts/seed-public-draw-parity.cjs)
           cd apps/mobile
           node --import tsx scripts/test-web-ios-parity.ts
           node --import tsx scripts/test-published-campaign-parity.ts
+          node --import tsx scripts/test-public-draw-parity.ts

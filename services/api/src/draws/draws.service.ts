@@ -18,7 +18,11 @@ import {
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
-import { CaixaFederalResultsService } from './caixa-federal-results.service';
+import {
+  CAIXA_FEDERAL_ENDPOINT,
+  CaixaFederalResultsService,
+  FEDERAL_EXTRACTION_PATTERN,
+} from './caixa-federal-results.service';
 import { AuditHashService } from './audit-hash.service';
 import {
   DrawRuleDefinition,
@@ -683,13 +687,48 @@ export class DrawsService {
             },
           },
         },
-        campaignDraw: { include: { lotteryDraw: true } },
+        campaignDraw: {
+          include: {
+            lotteryDraw: {
+              select: {
+                provider: true,
+                lotteryName: true,
+                extractionNumber: true,
+                drawDate: true,
+                drawTime: true,
+                firstPrize: true,
+                secondPrize: true,
+                thirdPrize: true,
+                fourthPrize: true,
+                fifthPrize: true,
+                sourceType: true,
+                sourcePrizes: true,
+                sourceDocumentHash: true,
+                sourceUrl: true,
+                status: true,
+              },
+            },
+          },
+        },
       },
     });
     if (winner?.campaignDraw.status !== CampaignDrawStatus.CONFIRMED)
       throw new NotFoundException(
         'Não há prova de ganhador válida para este código.',
       );
+    const { lotteryDraw, resultSnapshot } = winner.campaignDraw;
+    const sourceUrl = (extraction: unknown, source: unknown) =>
+      typeof extraction === 'string' &&
+      FEDERAL_EXTRACTION_PATTERN.test(extraction) &&
+      source === `${CAIXA_FEDERAL_ENDPOINT}/${extraction}`
+        ? source
+        : null;
+    const record = (value: Prisma.JsonValue | undefined) =>
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? value
+        : null;
+    const result = record(resultSnapshot);
+    const snapshot = record(result?.lottery);
     return {
       verificationCode: winner.publicVerificationCode,
       status: winner.status,
@@ -715,8 +754,39 @@ export class DrawsService {
         date: winner.campaignDraw.confirmedAt,
         auditHash: winner.campaignDraw.auditHash,
         rule: winner.campaignDraw.ruleSnapshot,
-        result: winner.campaignDraw.resultSnapshot,
-        lottery: winner.campaignDraw.lotteryDraw,
+        result: result
+          ? {
+              steps: result.steps,
+              rawResult: result.rawResult,
+              normalizedResult: result.normalizedResult,
+              explanation: result.explanation,
+              warnings: result.warnings,
+              valid: result.valid,
+              policy: result.policy,
+              lottery: snapshot
+                ? {
+                    extractionNumber: snapshot.extractionNumber,
+                    drawDate: snapshot.drawDate,
+                    prizes: snapshot.prizes,
+                    sourcePrizes: snapshot.sourcePrizes,
+                    sourceDocumentHash: snapshot.sourceDocumentHash,
+                    sourceUrl: sourceUrl(
+                      snapshot.extractionNumber,
+                      snapshot.sourceUrl,
+                    ),
+                  }
+                : null,
+            }
+          : null,
+        lottery: lotteryDraw
+          ? {
+              ...lotteryDraw,
+              sourceUrl: sourceUrl(
+                lotteryDraw.extractionNumber,
+                lotteryDraw.sourceUrl,
+              ),
+            }
+          : null,
       },
     };
   }
