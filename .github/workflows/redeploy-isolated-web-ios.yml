@@ -1,0 +1,53 @@
+name: Atualizar código da API isolada SorteX
+on:
+  push:
+    branches: [homologacao/web-ios-integrada]
+    paths: [.github/workflows/redeploy-isolated-web-ios.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: sortex-web-ios-qa-bootstrap
+  cancel-in-progress: false
+jobs:
+  update:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event.repository.private == false
+    environment: sortex-web-ios-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SORTEX_QA_CODE_SHA: ba183db2dde6abff5588482e695053c53200d4dc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: ba183db2dde6abff5588482e695053c53200d4dc
+          path: validated-candidate
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node --test services/api/scripts/redeploy-isolated-qa.test.cjs
+      - name: Compilar apenas a revisão aprovada em CI, sem conexão ao banco QA
+        working-directory: validated-candidate/services/api
+        env:
+          DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_build
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SORTEX_QA_CODE_SHA"
+          npm ci --include=dev --no-audit --no-fund
+          npx --no-install prisma generate
+          npm run build:neon
+      - name: Atualizar somente a função QA existente sem migrar banco ou ativar pagamentos
+        working-directory: validated-candidate/services/api
+        env:
+          QA_ENABLE: ${{ vars.SORTEX_QA_BOOTSTRAP }}
+          SORTEX_QA_NEON_API_KEY: ${{ secrets.SORTEX_QA_NEON_API_KEY }}
+        run: node "$GITHUB_WORKSPACE/services/api/scripts/redeploy-isolated-qa.cjs"
+  hosted-parity:
+    needs: update
+    uses: ./.github/workflows/sortex-hosted-qa-smoke.yml
+    with:
+      expected-api-sha: ba183db2dde6abff5588482e695053c53200d4dc

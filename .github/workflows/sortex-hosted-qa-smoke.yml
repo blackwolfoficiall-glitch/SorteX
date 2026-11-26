@@ -1,11 +1,17 @@
 name: SorteX QA hospedado (HTTP sintético)
 
 on:
-  push:
-    branches: [homologacao/web-ios-integrada]
-    paths:
-      - .github/workflows/sortex-hosted-qa-smoke.yml
+  workflow_call:
+    inputs:
+      expected-api-sha:
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      expected-api-sha:
+        required: true
+        type: string
+        default: ba183db2dde6abff5588482e695053c53200d4dc
 
 permissions:
   contents: read
@@ -23,7 +29,7 @@ jobs:
       SORTEX_PARITY_API: https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech
       SORTEX_PARITY_WEB: http://127.0.0.1:4408
       SORTEX_PARITY_MODE: hosted-qa-synthetic
-      SORTEX_PARITY_EXPECTED_API_SHA: 23eccd35344aea5402fa32a7a59762e7262067d3
+      SORTEX_PARITY_EXPECTED_API_SHA: ${{ inputs.expected-api-sha }}
       SORTEX_HOMOLOGATION_API_URL: https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech
       NEXT_TELEMETRY_DISABLED: "1"
       EXPO_NO_TELEMETRY: "1"
