@@ -292,16 +292,27 @@ isolated(
       });
       const readAudit = await api()
         .get('/admin/audit-logs')
-        .query({ action: 'USER_BLOCK', actorUserId: actor.id })
+        .query({
+          action: 'USER_BLOCK',
+          actorUserId: actor.id,
+          entityType: 'User',
+        })
         .auth(auditor.accessToken, { type: 'bearer' })
         .expect(200);
+      await api()
+        .get('/admin/audit-logs')
+        .query({ role: 'NOT_A_ROLE' })
+        .auth(auditor.accessToken, { type: 'bearer' })
+        .expect(400);
       const readMember = await api()
         .get(`/admin/users/${actor.id}`)
         .auth(actor.accessToken, { type: 'bearer' })
         .expect(200);
       type AuditRow = { id: string; previousData: unknown; newData: unknown };
+      const filtered = (readAudit.body as { data: AuditRow[] }).data;
+      expect(filtered.map((entry) => entry.id)).toEqual([record.id]);
       for (const entries of [
-        (readAudit.body as { data: AuditRow[] }).data,
+        filtered,
         (readMember.body as { auditLogs: AuditRow[] }).auditLogs,
       ]) {
         const result = entries.find((entry) => entry.id === record.id);

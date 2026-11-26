@@ -46,6 +46,12 @@ export class AdminListDto {
   @IsOptional() @IsDateString() to?: string;
   @IsOptional() @IsString() sort?: string;
 }
+export class AdminAuditListDto extends AdminListDto {
+  @IsOptional() @IsString() action?: string;
+  @IsOptional() @IsString() entityType?: string;
+  @IsOptional() @IsString() actorUserId?: string;
+  @IsOptional() @IsEnum(UserRole) role?: UserRole;
+}
 export class UserListDto extends AdminListDto {
   @IsOptional() @IsEnum(UserRole) role?: UserRole;
   @IsOptional() @IsEnum(UserStatus) status?: UserStatus;
