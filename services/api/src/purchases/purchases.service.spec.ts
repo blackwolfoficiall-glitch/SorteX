@@ -269,6 +269,11 @@ describe('PurchasesService', () => {
   it('aplica promoção ativa e calcula desconto', async () => {
     const promotion = {
       id: 'promo-1',
+      type: 'PACKAGE',
+      status: 'ACTIVE',
+      deletedAt: null,
+      totalLimit: null,
+      usageCount: 0,
       numberQuantity: 10,
       packagePrice: new Prisma.Decimal(0.7),
       isActive: true,

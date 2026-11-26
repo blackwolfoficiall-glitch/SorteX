@@ -117,6 +117,288 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
     }
   });
 
+  it.each(['PERCENTAGE', 'FIXED'] as const)(
+    'preserva cupom %s uma vez na reserva, Pix sintético e relatório',
+    async (type) => {
+      const server = app.getHttpServer() as Server;
+      const run = randomUUID();
+      const password = `synthetic-coupon-${run}`;
+      const organizer = await organizerFixture(
+        `coupon-${run}@example.test`,
+        password,
+      );
+      const organizerToken = await login(organizer.email, password);
+      await prisma.organizerProfile.create({
+        data: {
+          userId: organizer.id,
+          fullName: 'Organizador sintético',
+          cpf: '00000000000',
+          phone: '00000000000',
+          verificationStatus: 'VERIFIED',
+        },
+      });
+      const campaign = await prisma.campaign.create({
+        data: {
+          organizerId: organizer.id,
+          title: 'Campanha sintética com cupom',
+          slug: `coupon-${run}`,
+          numberPrice: 10,
+          minimumPurchase: 2,
+          totalNumbers: 30,
+          numberSelectionMode: 'RANDOM',
+          status: 'PUBLISHED',
+        },
+      });
+      const code = `QA-${run.slice(0, 8).toUpperCase()}`;
+      const base = { campaignId: campaign.id, quantity: 3, couponCode: code };
+      const makePromotion = (data: object) =>
+        request(server)
+          .post('/promotions')
+          .auth(organizerToken, { type: 'bearer' })
+          .send({ campaignId: campaign.id, ...data });
+      const strategy = await makePromotion({
+        name: 'Cupom sintético',
+        type: 'COUPON',
+        status: 'DRAFT',
+        totalLimit: 1,
+        perBuyerLimit: 1,
+        config: {
+          code,
+          discountType: type,
+          discountValue: type === 'FIXED' ? 4.5 : 15,
+          minimumAmount: 30,
+        },
+      }).expect(201);
+      const { id: promotionId } = strategy.body as { id: string };
+      const manage = (action: string) =>
+        request(server)
+          .post(`/promotions/${promotionId}/${action}`)
+          .auth(organizerToken, { type: 'bearer' });
+      const quote = (input: object = base) =>
+        request(server).post('/promotion-quote').send(input);
+      await quote().expect(400);
+      await manage('activate').expect(201);
+      await manage('pause').expect(201);
+      await quote().expect(400);
+      await manage('activate').expect(201);
+
+      let packageId: string | undefined;
+      if (type === 'FIXED') {
+        const bundle = await makePromotion({
+          name: 'Pacote sintético',
+          type: 'PACKAGE',
+          status: 'ACTIVE',
+          config: { quantity: 3, promotionalPrice: 27 },
+        }).expect(201);
+        packageId = (bundle.body as { id: string }).id;
+      }
+      const publicBundles = await request(server)
+        .get(`/public/campaigns/${campaign.slug}/promotions`)
+        .expect(200);
+      const ids = (publicBundles.body as Array<{ id: string }>).map(
+        ({ id }) => id,
+      );
+      expect(ids).toEqual(packageId ? [packageId] : []);
+      await quote({ ...base, quantity: 2 }).expect(400);
+      const price = {
+        subtotal: 30,
+        discount: packageId ? 7.5 : 4.5,
+        total: packageId ? 22.5 : 25.5,
+      };
+      const preview = await quote({ ...base, promotionId: packageId }).expect(
+        201,
+      );
+      expect(preview.body).toMatchObject({ ...price, promotionId });
+
+      const [buyer, competitor] = buyers;
+      const key = randomUUID();
+      const reserve = (token: string, idempotencyKey: string) =>
+        request(server)
+          .post('/purchases/reserve-random')
+          .auth(token, { type: 'bearer' })
+          .send({ ...base, promotionId: packageId, idempotencyKey });
+      const contender = type === 'FIXED' ? buyer : competitor;
+      const requests = await Promise.all([
+        reserve(buyer.token, key),
+        reserve(contender.token, type === 'FIXED' ? key : randomUUID()),
+      ]);
+      expect(requests.map((response) => response.status).sort()).toEqual(
+        type === 'FIXED' ? [201, 201] : [201, 400],
+      );
+      const winner = requests[0].status === 201 ? buyer : contender;
+      const accepted = requests.find(({ status }) => status === 201)!;
+      const { id: purchaseId } = accepted.body as { id: string };
+      expect(accepted.body).toMatchObject({
+        ...price,
+        status: 'AWAITING_PAYMENT',
+        promotionId,
+      });
+      if (type === 'FIXED')
+        expect(requests[1].body).toMatchObject({ id: purchaseId });
+      await quote().expect(400);
+      const reserved = await prisma.promotionUsage.findMany({
+        where: { promotionId },
+      });
+      expect(reserved).toHaveLength(1);
+      expect(reserved[0]).toMatchObject({
+        status: 'RESERVED',
+        purchaseId,
+        buyerId: winner.id,
+      });
+      expect(reserved[0].discountAmount.toFixed(2)).toBe(
+        price.discount.toFixed(2),
+      );
+      const coupon = await prisma.promotionCoupon.findUniqueOrThrow({
+        where: { organizerId_code: { organizerId: organizer.id, code } },
+      });
+      expect(coupon.usageCount).toBe(1);
+      expect(reserved[0].couponId).toBe(coupon.id);
+      expect(
+        await prisma.ticket.count({
+          where: { campaignId: campaign.id, status: 'RESERVED' },
+        }),
+      ).toBe(3);
+
+      // Edits after the reservation must not change the already agreed price.
+      await request(server)
+        .patch(`/promotions/${promotionId}`)
+        .auth(organizerToken, { type: 'bearer' })
+        .send({
+          campaignId: campaign.id,
+          name: 'Cupom sintético editado',
+          type,
+          totalLimit: 1,
+          perBuyerLimit: 1,
+          config: {
+            code,
+            discountType: type,
+            discountValue: 1,
+            minimumAmount: 30,
+          },
+        })
+        .expect(400);
+      await request(server)
+        .patch(`/promotions/${promotionId}`)
+        .auth(organizerToken, { type: 'bearer' })
+        .send({
+          campaignId: campaign.id,
+          name: 'Cupom sintético editado',
+          type: 'COUPON',
+          totalLimit: 1,
+          perBuyerLimit: 1,
+          config: {
+            code,
+            discountType: type,
+            discountValue: 1,
+            minimumAmount: 30,
+          },
+        })
+        .expect(200);
+      await manage('pause').expect(201);
+      const orderId = `ord-coupon-${run}`;
+      const create = jest
+        .spyOn(Order.prototype, 'create')
+        .mockImplementation(({ body }) =>
+          Promise.resolve({
+            id: orderId,
+            external_reference: body.external_reference,
+            total_amount: body.total_amount,
+            status: 'action_required',
+            status_detail: 'waiting_transfer',
+          }),
+        );
+      const get = jest
+        .spyOn(Order.prototype, 'get')
+        .mockRejectedValue(new Error('Consulta externa bloqueada no teste.'));
+      try {
+        const pix = () =>
+          request(server)
+            .post('/payments/pix')
+            .auth(winner.token, { type: 'bearer' })
+            .send({ purchaseId, acceptedTerms: true });
+        const checkout = await pix().expect(201);
+        const { id: paymentId } = checkout.body as { id: string };
+        expect(checkout.body).toMatchObject({
+          id: paymentId,
+          amount: price.total,
+          status: 'PENDING',
+        });
+        expect(create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            body: expect.objectContaining({
+              total_amount: price.total.toFixed(2),
+            }),
+          }),
+        );
+        await pix().expect(201, checkout.body);
+        expect(create).toHaveBeenCalledTimes(1);
+        const stored = await prisma.payment.findUniqueOrThrow({
+          where: { id: paymentId },
+        });
+        get.mockResolvedValueOnce({
+          id: orderId,
+          external_reference: stored.externalReference,
+          total_amount: price.total.toFixed(2),
+          status: 'processed',
+          status_detail: 'accredited',
+        });
+        const webhook = () => {
+          const ts = String(Math.floor(Date.now() / 1000));
+          const rid = randomUUID();
+          const sig = createHmac('sha256', secret)
+            .update(`id:${orderId};request-id:${rid};ts:${ts};`)
+            .digest('hex');
+          return request(server)
+            .post('/webhooks/payments/mercado-pago')
+            .query({ 'data.id': orderId })
+            .set('x-request-id', rid)
+            .set('x-signature', `ts=${ts},v1=${sig}`)
+            .send({
+              id: `coupon-event-${run}`,
+              action: 'order.processed',
+              data: { id: orderId },
+            });
+        };
+        await webhook().expect(200, {
+          received: true,
+          duplicate: false,
+          status: 'APPROVED',
+        });
+        await webhook().expect(200, { received: true, duplicate: true });
+        const report = await request(server)
+          .get(`/promotions/${promotionId}/report`)
+          .auth(organizerToken, { type: 'bearer' })
+          .expect(200);
+        expect(report.body).toMatchObject({
+          usages: 1,
+          uniqueBuyers: 1,
+          revenue: price.total,
+          grantedDiscount: price.discount,
+        });
+        expect(
+          await prisma.promotionUsage.findMany({
+            where: { promotionId },
+            select: { purchaseId: true, status: true },
+          }),
+        ).toEqual([{ purchaseId, status: 'APPROVED' }]);
+        expect(
+          await prisma.ticket.count({
+            where: { campaignId: campaign.id, status: 'SOLD' },
+          }),
+        ).toBe(3);
+        expect(
+          await prisma.ledgerEntry.count({
+            where: { paymentId, type: 'ORGANIZER_NET_REVENUE' },
+          }),
+        ).toBe(1);
+      } finally {
+        create.mockRestore();
+        get.mockRestore();
+      }
+    },
+    15_000,
+  );
+
   it.each([
     {
       label: 'isenta somente a taxa SorteX na primeira campanha criada',

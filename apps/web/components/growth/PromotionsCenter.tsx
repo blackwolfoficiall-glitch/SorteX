@@ -230,8 +230,8 @@ const initialForm = (): FormState => ({
 });
 
 export default function PromotionsCenter() {
-  const searchParams=useSearchParams();
-  const prefillHandled=useRef(false);
+  const searchParams = useSearchParams();
+  const prefillHandled = useRef(false);
   const [items, setItems] = useState<Promotion[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [stats, setStats] = useState<Record<string, number>>({});
@@ -291,7 +291,36 @@ export default function PromotionsCenter() {
     // A consulta é reagendada intencionalmente quando os filtros mudam.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
-  useEffect(()=>{if(prefillHandled.current||!campaigns.length||searchParams.get("action")!=="create"||searchParams.get("strategy")!=="price-reduction")return;const campaignId=searchParams.get("campaignId")||"";const campaign=campaigns.find(item=>item.id===campaignId);if(!campaign)return;prefillHandled.current=true;const price=Number(searchParams.get("price"));const previousPrice=Number(searchParams.get("previousPrice"));const timer=window.setTimeout(()=>{setForm({...initialForm(),campaignId:campaign.id,type:"FLASH",strategyKey:"FLASH",name:"Preço reduzido",description:`Novo valor público da cota: ${Number.isFinite(price)?money.format(price):"valor atualizado"}. Valor anterior: ${Number.isFinite(previousPrice)?money.format(previousPrice):"não informado"}.`,quantity:"1",value:Number.isFinite(price)?String(price):""});setWizardStep(1);setWizardOpen(true)},0);return()=>window.clearTimeout(timer)},[campaigns,searchParams]);
+  useEffect(() => {
+    if (
+      prefillHandled.current ||
+      !campaigns.length ||
+      searchParams.get("action") !== "create" ||
+      searchParams.get("strategy") !== "price-reduction"
+    )
+      return;
+    const campaignId = searchParams.get("campaignId") || "";
+    const campaign = campaigns.find((item) => item.id === campaignId);
+    if (!campaign) return;
+    prefillHandled.current = true;
+    const price = Number(searchParams.get("price"));
+    const previousPrice = Number(searchParams.get("previousPrice"));
+    const timer = window.setTimeout(() => {
+      setForm({
+        ...initialForm(),
+        campaignId: campaign.id,
+        type: "FLASH",
+        strategyKey: "FLASH",
+        name: "Preço reduzido",
+        description: `Novo valor público da cota: ${Number.isFinite(price) ? money.format(price) : "valor atualizado"}. Valor anterior: ${Number.isFinite(previousPrice) ? money.format(previousPrice) : "não informado"}.`,
+        quantity: "1",
+        value: Number.isFinite(price) ? String(price) : "",
+      });
+      setWizardStep(1);
+      setWizardOpen(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [campaigns, searchParams]);
 
   const visible = useMemo(() => {
     if (section === "all") return items;
@@ -1031,6 +1060,11 @@ function Catalog({
                 <p className="mt-2 text-sm text-zinc-600">
                   {strategy.description}
                 </p>
+                {strategy.type !== "PACKAGE" && strategy.type !== "COUPON" && (
+                  <p className="mt-1 text-xs font-bold text-zinc-600">
+                    Sem benefício automático no checkout.
+                  </p>
+                )}
                 <p className="mt-3 text-xs font-bold text-zinc-500">
                   Melhor momento: {strategy.moment}
                 </p>
@@ -1133,6 +1167,12 @@ function Wizard({
               </span>
               <h3 className="mt-2 text-2xl font-black">{strategy.name}</h3>
               <p className="mt-2 text-zinc-600">{strategy.description}</p>
+              {strategy.type !== "PACKAGE" && strategy.type !== "COUPON" && (
+                <p className="mt-2 text-sm font-bold text-zinc-600">
+                  Esta estratégia pode ser gerida, mas não concede benefício
+                  automático no checkout.
+                </p>
+              )}
               <button
                 type="button"
                 onClick={() => {

@@ -148,6 +148,7 @@ describe('PaymentsService', () => {
         updateMany: jest.fn(),
       },
       auditLog: { create: jest.fn() },
+      promotionUsage: { updateMany: jest.fn() },
       purchase: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),

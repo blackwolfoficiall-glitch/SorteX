@@ -5,7 +5,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CampaignStatus, DrawBasis, Prisma, UserRole } from '@prisma/client';
+import {
+  CampaignStatus,
+  DrawBasis,
+  Prisma,
+  PromotionType,
+  UserRole,
+} from '@prisma/client';
 import { randomInt } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { DrawRuleEngineService } from '../draws/draw-rule-engine.service';
@@ -631,7 +637,11 @@ export class CampaignsService {
         },
         promotions: {
           create: source.promotions
-            .filter((promotion) => !promotion.isPopular)
+            .filter(
+              (promotion) =>
+                promotion.type === PromotionType.PACKAGE &&
+                !promotion.isPopular,
+            )
             .map((promotion) => ({
               name: promotion.name,
               numberQuantity: promotion.numberQuantity,
@@ -1808,6 +1818,8 @@ export class CampaignsService {
       promotions: campaign.promotions
         .filter(
           (promotion) =>
+            promotion.type === PromotionType.PACKAGE &&
+            promotion.packagePrice.gt(0) &&
             !promotion.isPopular &&
             promotion.name.trim().toLocaleLowerCase('pt-BR') !==
               'mais popular' &&

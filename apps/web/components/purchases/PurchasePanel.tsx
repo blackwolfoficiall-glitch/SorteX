@@ -26,7 +26,11 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
   const [error, setError] = useState("");
   const [selectedQuick, setSelectedQuick] = useState<number>();
   const [couponCode, setCouponCode] = useState("");
-  const [couponDiscount, setCouponDiscount] = useState(0);
+  const [couponQuote, setCouponQuote] = useState<{
+    key: string;
+    total: number;
+  }>();
+  const couponRequest = useRef(0);
   const [couponMessage, setCouponMessage] = useState("");
   const [identityStep, setIdentityStep] = useState<"PHONE" | "EXISTING" | null>(
     null,
@@ -57,8 +61,22 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
   const effectiveQuantity =
     campaign.numberSelectionMode === "MANUAL" ? selected.length : quantity;
   const subtotal = effectiveQuantity * campaign.numberPrice;
-  const baseTotal = promotion?.packagePrice ?? subtotal;
-  const total = Math.max(0, baseTotal - couponDiscount);
+  const bestPackage = campaign.promotions
+    .filter((item) => item.numberQuantity === effectiveQuantity)
+    .reduce<number | undefined>(
+      (best, item) =>
+        best == null ? item.packagePrice : Math.min(best, item.packagePrice),
+      undefined,
+    );
+  const baseTotal = promotion?.packagePrice ?? bestPackage ?? subtotal;
+  const couponKey = JSON.stringify([
+    effectiveQuantity,
+    promotionId,
+    couponCode.trim(),
+  ]);
+  const appliedCoupon =
+    couponQuote?.key === couponKey ? couponQuote : undefined;
+  const total = appliedCoupon?.total ?? baseTotal;
   const discount = Math.max(0, subtotal - total);
   const rouletteRounds = rouletteRoundsForQuantity(
     campaign.customization?.configuration,
@@ -83,7 +101,7 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
               campaignId: campaign.id,
               numbers: selected,
               promotionId,
-              couponCode: couponCode || undefined,
+              couponCode: appliedCoupon ? couponCode.trim() : undefined,
               idempotencyKey: idempotencyKey.current,
               affiliateCode,
             })
@@ -91,7 +109,7 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
               campaignId: campaign.id,
               quantity,
               promotionId,
-              couponCode: couponCode || undefined,
+              couponCode: appliedCoupon ? couponCode.trim() : undefined,
               idempotencyKey: idempotencyKey.current,
               affiliateCode,
             });
@@ -108,6 +126,12 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
     if (loading) return;
     if (!canReserve) {
       setError("Escolha uma quantidade válida para continuar.");
+      return;
+    }
+    if (couponCode.trim() && !appliedCoupon) {
+      setError(
+        "Aplique o cupom a esta seleção ou apague o código para continuar.",
+      );
       return;
     }
     setLoading(true);
@@ -173,7 +197,11 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
     window.addEventListener("sortex:select-roulette-combo", listener);
     return () =>
       window.removeEventListener("sortex:select-roulette-combo", listener);
-  }, [campaign.maximumPurchasePerBuyer, campaign.minimumPurchase, campaign.promotions]);
+  }, [
+    campaign.maximumPurchasePerBuyer,
+    campaign.minimumPurchase,
+    campaign.promotions,
+  ]);
 
   async function identifyPhone() {
     if (loading) return;
@@ -278,8 +306,9 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
   }
 
   async function applyCoupon() {
+    const attempt = ++couponRequest.current;
     setCouponMessage("");
-    setCouponDiscount(0);
+    setCouponQuote(undefined);
     try {
       const response = await fetch("/api/platform/promotion-quote", {
         method: "POST",
@@ -287,17 +316,23 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
         body: JSON.stringify({
           campaignId: campaign.id,
           quantity: effectiveQuantity,
-          couponCode,
+          promotionId,
+          couponCode: couponCode.trim(),
         }),
       });
       const result = await response.json();
+      if (response.status === 401)
+        throw new Error("Entre na sua conta para consultar o cupom.");
       if (!response.ok) throw new Error(result.message || "Cupom inválido.");
-      setCouponDiscount(Number(result.discount) || 0);
-      setCouponMessage("Cupom aplicado com sucesso.");
+      if (typeof result.total !== "number" || result.total <= 0)
+        throw new Error("Não foi possível confirmar o valor com desconto.");
+      if (attempt === couponRequest.current)
+        setCouponQuote({ key: couponKey, total: result.total });
     } catch (cause) {
-      setCouponMessage(
-        cause instanceof Error ? cause.message : "Cupom inválido.",
-      );
+      if (attempt === couponRequest.current)
+        setCouponMessage(
+          cause instanceof Error ? cause.message : "Cupom inválido.",
+        );
     }
   }
 
@@ -525,9 +560,12 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
             <input
               value={couponCode}
               onChange={(e) => {
+                couponRequest.current++;
                 setCouponCode(e.target.value.toUpperCase());
-                setCouponDiscount(0);
+                setCouponQuote(undefined);
+                setCouponMessage("");
               }}
+              aria-label="Código do cupom"
               placeholder="CÓDIGO"
               className="h-10 min-w-0 flex-1 rounded-xl border bg-white px-3 uppercase"
             />
@@ -539,10 +577,13 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
               Aplicar
             </button>
           </div>
-          {couponMessage && (
-            <p
-              className={`mt-2 text-xs ${couponDiscount > 0 ? "text-green-700" : "text-red-700"}`}
-            >
+          {appliedCoupon && (
+            <p role="status" className="mt-2 text-xs text-green-700">
+              Desconto calculado. Os limites do cupom são conferidos na reserva.
+            </p>
+          )}
+          {!appliedCoupon && couponMessage && (
+            <p role="alert" className="mt-2 text-xs text-red-700">
               {couponMessage}
             </p>
           )}

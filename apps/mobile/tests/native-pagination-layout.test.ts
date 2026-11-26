@@ -11,7 +11,7 @@ const source = ts.createSourceFile(
   ts.ScriptKind.TSX,
 );
 
-for (const name of ["Campaigns", "Orders"]) {
+for (const name of ["Campaigns", "Orders", "OrganizerOrders"]) {
   test(`${name} pagination does not put literal text directly in native layout`, () => {
     const screen = source.statements.find((node): node is ts.FunctionDeclaration =>
       ts.isFunctionDeclaration(node) && node.name?.text === name,

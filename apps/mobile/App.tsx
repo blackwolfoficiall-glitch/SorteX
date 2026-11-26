@@ -39,6 +39,8 @@ import type { OrganizerCampaignState } from "./src/domain/organizer-campaign-lif
 import { NativeBuyerPrizes } from "./src/buyer/NativeBuyerPrizes";
 import { BuyerInboxScreen } from "./src/buyer/NativeBuyerInbox";
 import { BuyerFavoritesScreen, NativeBuyerFavoriteToggle } from "./src/buyer/NativeBuyerFavorites";
+import { NativeBuyerOrderHistory } from "./src/buyer/NativeBuyerOrderHistory";
+import { buyerHistorySession } from "./src/buyer/order-history";
 import { NativeBuyerDrawResults } from "./src/buyer/NativeBuyerDrawResults";
 import { NativePublicDrawProof } from "./src/components/NativePublicDrawProof";
 import { NativePublicCampaignCover } from "./src/components/NativePublicCampaignCover";
@@ -727,18 +729,36 @@ function OrganizerFinanceScreen() {
   );
 }
 function Orders({ navigation, route }: any) {
-  const auth = useSyncExternalStore(client.subscribe, client.snapshot),
-    organizer = auth.user?.role === "ORGANIZER";
+  const auth = useSyncExternalStore(client.subscribe, client.snapshot);
+  const revision = useSyncExternalStore(client.subscribe, client.activeSessionRevision);
+  const focused = useIsFocused();
+  if (auth.status !== "signedIn" || !auth.user || revision === null) {
+    return <Page title="Pedidos"><Notice error message="Entre para consultar seus pedidos." /></Page>;
+  }
+  if (auth.user.role === "ORGANIZER") {
+    return <OrganizerOrders
+      key={`${auth.user.id}:${revision}`}
+      navigation={navigation}
+      route={route}
+    />;
+  }
+  const session = buyerHistorySession(client);
+  return session && focused ? (
+    <NativeBuyerOrderHistory
+      key={`${session.buyerId}:${session.revision}`}
+      client={client}
+      session={session}
+      onOrder={(id) => navigation.navigate("Order", { item: { id } })}
+    />
+  ) : null;
+}
+function OrganizerOrders({ navigation, route }: any) {
   const [page, setPage] = useState(1);
   const campaignId = route?.params?.campaignId;
-  const state = useData<Purchase[] | PageResult<Purchase>>(
-    organizer
-      ? `/organizer/orders?page=${page}&limit=20${campaignId ? `&campaignId=${encodeURIComponent(campaignId)}` : ""}`
-      : "/purchases/my",
+  const state = useData<PageResult<Purchase>>(
+    `/organizer/orders?page=${page}&limit=20${campaignId ? `&campaignId=${encodeURIComponent(campaignId)}` : ""}`,
   );
-  const items = Array.isArray(state.data)
-    ? state.data
-    : state.data?.items || [];
+  const items = state.data?.items || [];
   return (
     <Page title={campaignId ? "Pedidos e participantes" : "Pedidos"}>
       <Load state={state}>
@@ -752,11 +772,9 @@ function Orders({ navigation, route }: any) {
             <Notice
               message={`${item.quantity} títulos · ${new Date(item.createdAt).toLocaleDateString("pt-BR")}`}
             />
-            {organizer && (
-              <Text style={s.text}>
-                Participante: {item.buyer?.name || "Não informado"}
-              </Text>
-            )}
+            <Text style={s.text}>
+              Participante: {item.buyer?.name || "Não informado"}
+            </Text>
             <Button
               secondary
               title="Ver pedido e títulos"
@@ -764,7 +782,7 @@ function Orders({ navigation, route }: any) {
             />
           </View>
         ))}
-        {!Array.isArray(state.data) && state.data && (
+        {state.data && (
           <>
             <Notice
               message={`${state.data.total} pedidos · página ${page}. Participantes correspondem aos pedidos exibidos.`}

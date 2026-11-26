@@ -8,6 +8,7 @@ import {
   AiRecommendationPriority,
   AiRecommendationStatus,
   CampaignStatus,
+  DiscountType,
   Prisma,
   PromotionStatus,
   PromotionType,
@@ -19,6 +20,7 @@ import {
 import { createHash, randomBytes } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { PrismaService } from '../prisma/prisma.service';
+import { reservationPricing } from '../purchases/reservation-pricing';
 import {
   AdTrackDto,
   PromotionDto,
@@ -116,11 +118,39 @@ export class GrowthService {
       pages: Math.ceil(total / q.limit),
     };
   }
+  private couponFields(config: Record<string, unknown>) {
+    const code = String(config.code ?? '')
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, '');
+    if (!code) throw new BadRequestException('Informe o código do cupom.');
+    const type = config.discountType;
+    if (type !== DiscountType.PERCENTAGE && type !== DiscountType.FIXED)
+      throw new BadRequestException('Tipo de desconto inválido.');
+    const value = Number(config.discountValue);
+    const minimum = Number(config.minimumAmount ?? 0);
+    if (
+      !Number.isFinite(value) ||
+      value < 0.01 ||
+      (type === DiscountType.PERCENTAGE && value > 100) ||
+      !Number.isFinite(minimum) ||
+      minimum < 0
+    )
+      throw new BadRequestException('Valor ou mínimo do cupom inválido.');
+    return {
+      code,
+      discountType: type,
+      discountValue: new Prisma.Decimal(value).toDecimalPlaces(2),
+      minimumAmount: new Prisma.Decimal(minimum).toDecimalPlaces(2),
+    };
+  }
   async createPromotion(user: AuthenticatedUser, d: PromotionDto) {
     this.organizer(user);
     const campaign = await this.campaign(d.campaignId, user.id);
     this.validatePeriod(d.startsAt, d.endsAt);
     const config = d.config ?? {};
+    const coupon =
+      d.type === PromotionType.COUPON ? this.couponFields(config) : undefined;
     const qty = Number(config.quantity ?? config.minimumQuantity ?? 1);
     const promoPrice = new Prisma.Decimal(Number(config.promotionalPrice ?? 0));
     const regular = campaign.numberPrice.mul(qty);
@@ -167,32 +197,24 @@ export class GrowthService {
         perBuyerLimit: d.perBuyerLimit,
         config: config as Prisma.InputJsonValue,
         stackRules: (d.stackRules ?? {}) as Prisma.InputJsonValue,
+        ...(coupon
+          ? {
+              coupons: {
+                create: {
+                  ...coupon,
+                  organizerId: user.id,
+                  name: d.name,
+                  totalLimit: d.totalLimit,
+                  perBuyerLimit: d.perBuyerLimit,
+                  startsAt: d.startsAt ? new Date(d.startsAt) : null,
+                  endsAt: d.endsAt ? new Date(d.endsAt) : null,
+                  isActive: status === PromotionStatus.ACTIVE,
+                },
+              },
+            }
+          : {}),
       },
     });
-    if (d.type === PromotionType.COUPON) {
-      const code = String(config.code ?? '')
-        .trim()
-        .toUpperCase()
-        .replace(/\s+/g, '');
-      if (!code) throw new BadRequestException('Informe o código do cupom.');
-      await this.prisma.promotionCoupon.create({
-        data: {
-          organizerId: user.id,
-          promotionId: item.id,
-          code,
-          name: d.name,
-          discountType:
-            String(config.discountType) === 'FIXED' ? 'FIXED' : 'PERCENTAGE',
-          discountValue: new Prisma.Decimal(Number(config.discountValue ?? 0)),
-          minimumAmount: new Prisma.Decimal(Number(config.minimumAmount ?? 0)),
-          totalLimit: d.totalLimit,
-          perBuyerLimit: d.perBuyerLimit,
-          startsAt: item.startsAt,
-          endsAt: item.endsAt,
-          isActive: item.isActive,
-        },
-      });
-    }
     await this.audit(user, 'PROMOTION_CREATED', item.id);
     return this.promotionNumbers(item);
   }
@@ -227,6 +249,11 @@ export class GrowthService {
     )
       throw new BadRequestException('O período desta promoção já terminou.');
     const isActive = nextStatus === PromotionStatus.ACTIVE;
+    const coupon =
+      current.type === PromotionType.COUPON
+        ? this.couponFields(d.config ?? {})
+        : undefined;
+
     const updated = await this.prisma.campaignPromotion.update({
       where: { id },
       data: {
@@ -240,32 +267,27 @@ export class GrowthService {
         isActive,
         config: (d.config ?? {}) as Prisma.InputJsonValue,
         stackRules: (d.stackRules ?? {}) as Prisma.InputJsonValue,
+        ...(coupon
+          ? {
+              discountRate: coupon.discountValue,
+              coupons: {
+                updateMany: {
+                  where: {},
+                  data: {
+                    ...coupon,
+                    name: d.name,
+                    totalLimit: d.totalLimit ?? null,
+                    perBuyerLimit: d.perBuyerLimit ?? null,
+                    startsAt: d.startsAt ? new Date(d.startsAt) : null,
+                    endsAt: d.endsAt ? new Date(d.endsAt) : null,
+                    isActive,
+                  },
+                },
+              },
+            }
+          : {}),
       },
     });
-    if (current.type === PromotionType.COUPON) {
-      const config = d.config ?? {};
-      const code = String(config.code ?? '')
-        .trim()
-        .toUpperCase()
-        .replace(/\s+/g, '');
-      if (!code) throw new BadRequestException('Informe o código do cupom.');
-      await this.prisma.promotionCoupon.updateMany({
-        where: { promotionId: id },
-        data: {
-          code,
-          name: d.name,
-          discountType:
-            String(config.discountType) === 'FIXED' ? 'FIXED' : 'PERCENTAGE',
-          discountValue: new Prisma.Decimal(Number(config.discountValue ?? 0)),
-          minimumAmount: new Prisma.Decimal(Number(config.minimumAmount ?? 0)),
-          totalLimit: d.totalLimit,
-          perBuyerLimit: d.perBuyerLimit,
-          isActive,
-          startsAt: updated.startsAt,
-          endsAt: updated.endsAt,
-        },
-      });
-    }
     await this.audit(user, 'PROMOTION_UPDATED', id);
     return this.promotionNumbers(updated);
   }
@@ -443,71 +465,27 @@ export class GrowthService {
     });
   }
   async quote(d: PromotionQuoteDto) {
-    const campaign = await this.prisma.campaign.findUnique({
-      where: { id: d.campaignId },
+    const campaign = await this.prisma.campaign.findFirst({
+      where: { id: d.campaignId, status: CampaignStatus.PUBLISHED },
+      include: { promotions: true },
     });
     if (!campaign) throw new NotFoundException('Campanha não encontrada.');
-    const now = new Date(),
-      promotions = await this.prisma.campaignPromotion.findMany({
-        where: {
-          campaignId: d.campaignId,
-          status: PromotionStatus.ACTIVE,
-          isActive: true,
-          deletedAt: null,
-          OR: [{ startsAt: null }, { startsAt: { lte: now } }],
-          AND: [{ OR: [{ endsAt: null }, { endsAt: { gt: now } }] }],
-        },
-      });
-    const subtotal = campaign.numberPrice.mul(d.quantity);
-    let discount = new Prisma.Decimal(0),
-      promotionId: string | null = null;
-    for (const p of promotions) {
-      if (p.type === PromotionType.PACKAGE && p.numberQuantity === d.quantity) {
-        discount = subtotal.sub(p.packagePrice);
-        promotionId = p.id;
-      }
-      if (p.type === PromotionType.QUANTITY_DISCOUNT) {
-        const tiers = Array.isArray((p.config as any)?.tiers)
-          ? (p.config as any).tiers
-          : [];
-        const best = tiers
-          .filter((t: any) => Number(t.quantity) <= d.quantity)
-          .sort((a: any, b: any) => Number(b.quantity) - Number(a.quantity))[0];
-        if (best) {
-          const candidate = subtotal.mul(Number(best.percent)).div(100);
-          if (candidate.gt(discount)) {
-            discount = candidate;
-            promotionId = p.id;
-          }
-        }
-      }
-    }
-    if (d.couponCode) {
-      const coupon = await this.prisma.promotionCoupon.findFirst({
-        where: {
-          organizerId: campaign.organizerId,
-          code: d.couponCode.trim().toUpperCase(),
-          isActive: true,
-          promotion: {
-            campaignId: d.campaignId,
-            status: PromotionStatus.ACTIVE,
-          },
-        },
-      });
-      if (!coupon)
-        throw new BadRequestException('Cupom inválido, expirado ou esgotado.');
-      const candidate =
-        coupon.discountType === 'PERCENTAGE'
-          ? subtotal.mul(coupon.discountValue).div(100)
-          : coupon.discountValue;
-      discount = Prisma.Decimal.min(subtotal, candidate);
-      promotionId = coupon.promotionId;
-    }
+    if (
+      campaign.purchasesBlocked ||
+      d.quantity < campaign.minimumPurchase ||
+      d.quantity >
+        (campaign.maximumPurchasePerBuyer ?? campaign.totalNumbers) ||
+      d.quantity > campaign.totalNumbers
+    )
+      throw new BadRequestException(
+        'A quantidade não está disponível para esta compra.',
+      );
+    const pricing = await reservationPricing(this.prisma, campaign, d);
     return {
-      subtotal: Number(subtotal),
-      discount: Number(discount),
-      total: Number(Prisma.Decimal.max(0, subtotal.sub(discount))),
-      promotionId,
+      subtotal: Number(pricing.subtotal),
+      discount: Number(pricing.discount),
+      total: Number(pricing.total),
+      promotionId: pricing.promotionId ?? null,
     };
   }
   async adsDashboard(

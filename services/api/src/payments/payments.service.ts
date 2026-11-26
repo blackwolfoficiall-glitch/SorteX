@@ -760,7 +760,6 @@ export class PaymentsService {
         const purchase = await transaction.purchase.findFirst({
           where: { id: purchaseId, buyerId: user.id },
           include: {
-            promotion: true,
             buyer: true,
             tickets: true,
             campaign: {
@@ -861,18 +860,27 @@ export class PaymentsService {
   private recalculateAmount(purchase: {
     quantity: number;
     unitPrice: Prisma.Decimal;
-    promotion: { numberQuantity: number; packagePrice: Prisma.Decimal } | null;
+    subtotal: Prisma.Decimal;
+    discount: Prisma.Decimal;
+    total: Prisma.Decimal;
+    promotionId: string | null;
   }) {
-    const subtotal = new Prisma.Decimal(purchase.unitPrice).mul(
-      purchase.quantity,
-    );
-    if (purchase.promotion) {
-      if (purchase.promotion.numberQuantity !== purchase.quantity) {
-        throw new ConflictException('Promoção incompatível com a compra.');
-      }
-      return new Prisma.Decimal(purchase.promotion.packagePrice);
-    }
-    return subtotal;
+    // Charge the server-calculated snapshot. A later edit to the promotion
+    // must not change the price agreed when the stock was held.
+    const subtotal = purchase.unitPrice
+      .mul(purchase.quantity)
+      .toDecimalPlaces(2);
+    if (
+      !subtotal.equals(purchase.subtotal) ||
+      purchase.discount.lt(0) ||
+      (!purchase.promotionId && !purchase.discount.isZero()) ||
+      !purchase.total.gt(0) ||
+      !subtotal.sub(purchase.discount).equals(purchase.total)
+    )
+      throw new ConflictException(
+        'Valores da reserva divergem. Faça uma nova reserva.',
+      );
+    return purchase.total;
   }
 
   private async createOrReadPaymentEvent(
@@ -1065,6 +1073,10 @@ export class PaymentsService {
               soldNumbers: { increment: sold.count },
               grossRevenue: { increment: payment.amount },
             },
+          });
+          await transaction.promotionUsage.updateMany({
+            where: { purchaseId: payment.purchaseId, status: 'RESERVED' },
+            data: { status: 'APPROVED' },
           });
           await this.ledger.recordApprovedPayment(transaction, payment.id);
           await this.affiliateCommissions.recordApprovedPayment(

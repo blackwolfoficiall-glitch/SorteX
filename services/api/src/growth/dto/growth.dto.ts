@@ -49,6 +49,7 @@ export class PromotionListDto {
 export class PromotionQuoteDto {
   @IsString() campaignId: string;
   @Type(() => Number) @IsInt() @Min(1) quantity: number;
+  @IsOptional() @IsString() promotionId?: string;
   @IsOptional() @IsString() couponCode?: string;
 }
 
