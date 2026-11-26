@@ -74,3 +74,7 @@ O build inicial usa e-mail e senha. Google/Apple ainda exigem implementação do
 Como organizador, salve o rascunho, abra os detalhes e toque em **Editar rascunho → Adicionar capa** (ou **Substituir capa**). O seletor do sistema usa um JPG, PNG ou WEBP de até 20 MB guardado em Arquivos. A confirmação aparece só após o servidor registrar e devolver a nova revisão. O app não muda capas de campanhas já publicadas ou pausadas; o envio não publica a campanha.
 
 Este caminho requer a API candidata com a verificação de revisão de capa e um novo development build com `expo-document-picker` 58.0.5. O navegador auxiliar não abre o seletor nativo.
+
+### Cotas premiadas de rascunho
+
+Em **Campanhas → Detalhes → Gerenciar cotas premiadas**, o organizador pode incluir uma cota exata com os zeros à esquerda, editar nome, tipo e valor do prêmio e remover uma cota sem reserva ou resultado. O app usa o mesmo cadastro consultado no painel web. As ações não valem para campanhas já publicadas e não apuram nem pagam prêmios. Metas, roleta e geração em lote não fazem parte deste fluxo.

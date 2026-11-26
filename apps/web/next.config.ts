@@ -1,8 +1,11 @@
+import { resolve } from "node:path";
 import type { NextConfig } from "next";
 
 import { resolveApiUpstream } from "./lib/api-upstream";
 
 const nextConfig: NextConfig = {
+  // Shared contracts live outside apps/web (apps/web has its own lockfile).
+  turbopack: { root: resolve(__dirname, "../..") },
   allowedDevOrigins: [
     "localhost",
     "127.0.0.1",

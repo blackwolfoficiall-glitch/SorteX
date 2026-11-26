@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -17,6 +18,11 @@ import {
   PrizeTicketQueryDto,
   UpdateInstantPrizeDto,
 } from './dto/draw.dto';
+
+import {
+  CreateDraftInstantPrizeDto,
+  UpdateDraftInstantPrizeDto,
+} from './dto/draft-instant-prize.dto';
 
 @Injectable()
 export class InstantPrizeDetectionService {
@@ -293,6 +299,220 @@ export class InstantPrizeDetectionService {
       })),
     }));
   }
+  private async lockDraftPrizeCampaign(
+    tx: Prisma.TransactionClient,
+    campaignId: string,
+    organizerId: string,
+  ) {
+    const campaign = await tx.campaign.findFirst({
+      where: { id: campaignId, organizerId },
+      select: { totalNumbers: true, status: true, publishedAt: true },
+    });
+    if (!campaign) throw new NotFoundException('Campanha não encontrada.');
+    if (
+      campaign.status !== CampaignStatus.DRAFT ||
+      campaign.publishedAt !== null
+    )
+      throw new ConflictException(
+        'Somente rascunhos nunca publicados podem alterar estas cotas.',
+      );
+    // Every draft prize mutation shares the campaign row lock with publication.
+    const lock = await tx.campaign.updateMany({
+      where: {
+        id: campaignId,
+        organizerId,
+        status: CampaignStatus.DRAFT,
+        publishedAt: null,
+        totalNumbers: campaign.totalNumbers,
+      },
+      data: { updatedAt: new Date() },
+    });
+    if (lock.count !== 1)
+      throw new ConflictException(
+        'A campanha mudou. Atualize antes de alterar as cotas.',
+      );
+    return campaign;
+  }
+
+  private async draftPrize(
+    tx: Prisma.TransactionClient,
+    campaignId: string,
+    prizeId: string,
+    revision: string,
+  ) {
+    const prize = await tx.campaignInstantPrize.findFirst({
+      where: { id: prizeId, campaignId },
+    });
+    if (!prize) throw new NotFoundException('Cota premiada não encontrada.');
+    if (
+      prize.updatedAt.toISOString() !== revision ||
+      prize.foundCount > 0 ||
+      prize.winnerUserId !== null ||
+      (prize.status !== InstantPrizeStatus.AVAILABLE &&
+        prize.status !== InstantPrizeStatus.CANCELLED) ||
+      (await tx.instantPrizeResult.count({
+        where: { instantPrizeId: prizeId },
+      }))
+    )
+      throw new ConflictException(
+        'Esta cota mudou ou possui resultado. Atualize antes de continuar.',
+      );
+    if (prize.exactNumber !== null)
+      await this.ensureDraftPrizeNumberFree(
+        tx,
+        campaignId,
+        Number(prize.exactNumber),
+      );
+    return prize;
+  }
+
+  private async ensureDraftPrizeNumberFree(
+    tx: Prisma.TransactionClient,
+    campaignId: string,
+    number: number,
+  ) {
+    const ticket = await tx.ticket.findFirst({
+      where: {
+        campaignId,
+        number,
+        status: { in: [TicketStatus.RESERVED, TicketStatus.SOLD] },
+      },
+      select: { id: true },
+    });
+    if (ticket)
+      throw new ConflictException('A cota já está reservada ou vendida.');
+  }
+
+  createDraftPrizeTicket(
+    user: AuthenticatedUser,
+    campaignId: string,
+    dto: CreateDraftInstantPrizeDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const campaign = await this.lockDraftPrizeCampaign(
+        tx,
+        campaignId,
+        user.id,
+      );
+      const width = String(campaign.totalNumbers - 1).length;
+      if (
+        dto.exactNumber.length !== width ||
+        Number(dto.exactNumber) >= campaign.totalNumbers
+      )
+        throw new BadRequestException(
+          `Informe uma cota válida com ${width} dígitos.`,
+        );
+      const existing = await tx.campaignInstantPrize.findFirst({
+        where: { campaignId, exactNumber: dto.exactNumber },
+        select: { id: true },
+      });
+      if (existing)
+        throw new ConflictException(
+          'Esta cota já está cadastrada como premiada.',
+        );
+      await this.ensureDraftPrizeNumberFree(
+        tx,
+        campaignId,
+        Number(dto.exactNumber),
+      );
+      const prize = await tx.campaignInstantPrize.create({
+        data: {
+          campaignId,
+          exactNumber: dto.exactNumber,
+          description: dto.description.trim(),
+          value: dto.value,
+          type: dto.type,
+          quantity: 1,
+          generationRule: { origin: 'MANUAL' },
+        },
+      });
+      await this.auditDraftPrize(tx, user, prize.id, 'INSTANT_PRIZES_CREATED');
+      return { id: prize.id };
+    });
+  }
+
+  updateDraftPrizeTicket(
+    user: AuthenticatedUser,
+    campaignId: string,
+    prizeId: string,
+    dto: UpdateDraftInstantPrizeDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockDraftPrizeCampaign(tx, campaignId, user.id);
+      await this.draftPrize(tx, campaignId, prizeId, dto.revision);
+      const changed = await tx.campaignInstantPrize.updateMany({
+        where: {
+          id: prizeId,
+          campaignId,
+          updatedAt: new Date(dto.revision),
+          foundCount: 0,
+          status: {
+            in: [InstantPrizeStatus.AVAILABLE, InstantPrizeStatus.CANCELLED],
+          },
+          results: { none: {} },
+        },
+        data: {
+          description: dto.description.trim(),
+          value: dto.value,
+          type: dto.type,
+        },
+      });
+      if (changed.count !== 1)
+        throw new ConflictException(
+          'Esta cota mudou. Atualize antes de continuar.',
+        );
+      await this.auditDraftPrize(tx, user, prizeId, 'INSTANT_PRIZE_UPDATED');
+      return { id: prizeId };
+    });
+  }
+
+  removeDraftPrizeTicket(
+    user: AuthenticatedUser,
+    campaignId: string,
+    prizeId: string,
+    revision: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockDraftPrizeCampaign(tx, campaignId, user.id);
+      await this.draftPrize(tx, campaignId, prizeId, revision);
+      const changed = await tx.campaignInstantPrize.deleteMany({
+        where: {
+          id: prizeId,
+          campaignId,
+          updatedAt: new Date(revision),
+          foundCount: 0,
+          status: {
+            in: [InstantPrizeStatus.AVAILABLE, InstantPrizeStatus.CANCELLED],
+          },
+          results: { none: {} },
+        },
+      });
+      if (changed.count !== 1)
+        throw new ConflictException(
+          'Esta cota mudou. Atualize antes de continuar.',
+        );
+      await this.auditDraftPrize(tx, user, prizeId, 'INSTANT_PRIZE_REMOVED');
+      return { id: prizeId };
+    });
+  }
+
+  private auditDraftPrize(
+    tx: Prisma.TransactionClient,
+    user: AuthenticatedUser,
+    prizeId: string,
+    action: string,
+  ) {
+    return tx.auditLog.create({
+      data: {
+        entityType: 'INSTANT_PRIZE',
+        entityId: prizeId,
+        action,
+        actorUserId: user.id,
+        actorRole: user.role,
+      },
+    });
+  }
+
   async createPrizeTickets(
     user: AuthenticatedUser,
     dto: CreateInstantPrizeDto,

@@ -339,6 +339,48 @@ export class CampaignsService {
       : undefined;
 
     const campaign = await this.prisma.$transaction(async (transaction) => {
+      const changingDraftRange =
+        current.status === CampaignStatus.DRAFT &&
+        data.totalNumbers !== undefined &&
+        data.totalNumbers !== current.totalNumbers;
+      if (
+        (data.instantPrizes && current.status === CampaignStatus.DRAFT) ||
+        changingDraftRange
+      ) {
+        const lock = await transaction.campaign.updateMany({
+          where: {
+            id,
+            organizerId: user.id,
+            status: CampaignStatus.DRAFT,
+            publishedAt: null,
+            totalNumbers: current.totalNumbers,
+            updatedAt: current.updatedAt,
+          },
+          data: { updatedAt: new Date() },
+        });
+        if (!lock.count)
+          throw new ConflictException(
+            'O rascunho mudou. Atualize as cotas premiadas antes de continuar.',
+          );
+        if (changingDraftRange && !data.instantPrizes) {
+          const total = data.totalNumbers!;
+          const width = String(Math.max(0, total - 1)).length;
+          const prizes = await transaction.campaignInstantPrize.findMany({
+            where: { campaignId: id },
+            select: { exactNumber: true },
+          });
+          if (
+            prizes.some(
+              ({ exactNumber }) =>
+                exactNumber !== null &&
+                (exactNumber.length !== width || Number(exactNumber) >= total),
+            )
+          )
+            throw new BadRequestException(
+              'A quantidade informada não comporta as cotas premiadas já cadastradas.',
+            );
+        }
+      }
       if (
         data.promotions &&
         current.status !== CampaignStatus.PUBLISHED &&
@@ -1817,7 +1859,22 @@ export class CampaignsService {
   }
 
   private serializePublic(campaign: CampaignPayload) {
-    const serialized = this.serialize(campaign);
+    const owned = this.serialize(campaign);
+    const serialized = {
+      ...owned,
+      // Keep the public prize cards, but not the exact selector, generation
+      // metadata or winner identifiers. Award evidence has a separate masked route.
+      instantPrizes: owned.instantPrizes.map((prize) => ({
+        id: prize.id,
+        description: prize.description,
+        value: prize.value,
+        type: prize.type,
+        quantity: prize.quantity,
+        status: prize.status,
+        foundCount: prize.foundCount,
+        imageUrl: prize.imageUrl,
+      })),
+    };
     const customization = serialized.customization;
     const configuration =
       customization?.configuration &&

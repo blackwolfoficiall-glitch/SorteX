@@ -67,7 +67,7 @@ export function nativeDraftCoverForm(
 }
 
 export function activeCoverSession(
-  api: CoverClient,
+  api: Pick<CoverClient, "snapshot" | "activeSessionRevision">,
   accountId: string,
   revision: number,
 ) {

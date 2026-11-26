@@ -1,13 +1,14 @@
 import { authRequest } from '@/lib/auth/client';
+import { parseBuyerFavorites, privateFavoritePath, privateFavoritesPath } from '../../../../packages/contracts/src/buyer-favorites';
 import { parseBuyerInbox } from '../../../../packages/contracts/src/buyer-inbox';
 import type { BuyerCampaign, BuyerHome, BuyerProfile } from './types';
 export const getBuyerHome=()=>authRequest<BuyerHome>('/api/buyer/home',{cache:'no-store'});
 export const getBuyerCampaigns=(query='')=>authRequest<{items:BuyerCampaign[];total:number;page:number;pages:number}>(`/api/buyer/campaigns${query}`,{cache:'no-store'});
 export const getBuyerProfile=()=>authRequest<BuyerProfile>('/api/buyer/profile',{cache:'no-store'});
 export const updateBuyerProfile=(body:Partial<BuyerProfile>)=>authRequest<BuyerProfile>('/api/buyer/profile',{method:'PATCH',body:JSON.stringify(body)});
-export const getFavorites=()=>authRequest<Array<{id:string;campaign:BuyerCampaign}>>('/api/buyer/favorites',{cache:'no-store'});
-export const addFavorite=(id:string)=>authRequest(`/api/buyer/favorites/${id}`,{method:'POST'});
-export const removeFavorite=(id:string)=>authRequest(`/api/buyer/favorites/${id}`,{method:'DELETE'});
+export const getFavorites=()=>authRequest<unknown>(`/api${privateFavoritesPath}`,{cache:'no-store'}).then(parseBuyerFavorites);
+export const addFavorite=(id:string)=>authRequest(`/api${privateFavoritePath(id)}`,{method:'POST'});
+export const removeFavorite=(id:string)=>authRequest(`/api${privateFavoritePath(id)}`,{method:'DELETE'});
 export const getNotifications=()=>authRequest<unknown>('/api/buyer/notifications',{cache:'no-store'}).then(parseBuyerInbox);
 export const readNotification=(id:string)=>authRequest(`/api/buyer/notifications/${encodeURIComponent(id)}/read`,{method:'POST'});
 export const readAllNotifications=()=>authRequest('/api/buyer/notifications/read-all',{method:'POST'});

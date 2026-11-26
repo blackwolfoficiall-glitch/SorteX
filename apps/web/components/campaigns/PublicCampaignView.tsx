@@ -545,7 +545,7 @@ export default function PublicCampaignView({
                   <SectionTitle
                     icon={<Sparkles />}
                     title="Cotas premiadas disponíveis"
-                    subtitle="Confira os números que ainda podem ser premiados."
+                    subtitle="Os números das cotas disponíveis ficam em sigilo."
                   />
                   <SoldBadge percent={percent} />
                 </div>
@@ -573,7 +573,7 @@ export default function PublicCampaignView({
                         className="mt-1 overflow-hidden text-ellipsis rounded border border-dashed px-0.5 py-1 font-mono text-[8px] font-black sm:rounded-lg sm:text-base lg:text-xl"
                         style={{ borderColor: accent }}
                       >
-                        {prize.exactNumber}
+                        {prize.description}
                       </p>
                       <p className="mt-1 truncate text-[7px] font-black text-green-700 sm:mt-2 sm:text-sm lg:text-lg">
                         {money(prize.value)}
@@ -600,7 +600,7 @@ export default function PublicCampaignView({
                       >
                         <div className="min-w-0">
                           <p className="font-mono text-sm font-black sm:text-base">
-                            {prize.exactNumber}
+                            {prize.description}
                           </p>
                           <p className="text-[10px] font-black uppercase text-zinc-500">
                             Pode sair

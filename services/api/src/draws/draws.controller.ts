@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Header,
   Param,
@@ -29,6 +30,11 @@ import {
   UpdateInstantPrizeDto,
   PrizeTicketQueryDto,
 } from './dto/draw.dto';
+import {
+  CreateDraftInstantPrizeDto,
+  DraftInstantPrizeRevisionDto,
+  UpdateDraftInstantPrizeDto,
+} from './dto/draft-instant-prize.dto';
 import { InstantPrizeDetectionService } from './instant-prize-detection.service';
 import { RouletteService } from './roulette.service';
 
@@ -122,6 +128,40 @@ export class DrawsController {
     @Query() query: PrizeTicketQueryDto,
   ) {
     return this.instant.organizerPrizeTickets(user.id, query);
+  }
+  @Post('campaigns/:campaignId/draft-prize-tickets')
+  @Roles(UserRole.ORGANIZER)
+  createDraftPrizeTicket(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('campaignId') campaignId: string,
+    @Body() dto: CreateDraftInstantPrizeDto,
+  ) {
+    return this.instant.createDraftPrizeTicket(user, campaignId, dto);
+  }
+  @Patch('campaigns/:campaignId/draft-prize-tickets/:prizeId')
+  @Roles(UserRole.ORGANIZER)
+  updateDraftPrizeTicket(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('campaignId') campaignId: string,
+    @Param('prizeId') prizeId: string,
+    @Body() dto: UpdateDraftInstantPrizeDto,
+  ) {
+    return this.instant.updateDraftPrizeTicket(user, campaignId, prizeId, dto);
+  }
+  @Delete('campaigns/:campaignId/draft-prize-tickets/:prizeId')
+  @Roles(UserRole.ORGANIZER)
+  removeDraftPrizeTicket(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('campaignId') campaignId: string,
+    @Param('prizeId') prizeId: string,
+    @Query() query: DraftInstantPrizeRevisionDto,
+  ) {
+    return this.instant.removeDraftPrizeTicket(
+      user,
+      campaignId,
+      prizeId,
+      query.revision,
+    );
   }
   @Get('organizer/prize-tickets/summary')
   @Roles(UserRole.ORGANIZER)

@@ -163,6 +163,8 @@ describe('CampaignsService', () => {
       campaignCustomization: {
         upsert: jest.fn(),
       },
+      purchase: { groupBy: jest.fn().mockResolvedValue([]) },
+      affiliateProgram: { findFirst: jest.fn().mockResolvedValue(null) },
       drawRuleTemplate: {
         upsert: jest.fn(),
         findMany: jest.fn(),
@@ -203,6 +205,50 @@ describe('CampaignsService', () => {
       ).rejects.toBeInstanceOf(ForbiddenException);
     },
   );
+
+  it('keeps instant selectors and winner identifiers private on public list and detail', async () => {
+    const row = campaign({
+      status: CampaignStatus.PUBLISHED,
+      instantPrizes: [
+        {
+          id: 'prize-1',
+          exactNumber: '000091',
+          generationRule: { instructions: 'internal' },
+          description: 'Prêmio sintético',
+          value: 12.34,
+          type: CampaignPrizeType.PRODUCT,
+          quantity: 1,
+          status: 'AVAILABLE',
+          foundCount: 0,
+          winnerUserId: 'internal-id',
+        },
+      ],
+    });
+    prisma.campaign.findMany.mockResolvedValue([row]);
+    prisma.campaign.findFirst.mockResolvedValue(row);
+    prisma.campaign.findUnique.mockResolvedValue(row);
+    const [listing, detail, ownerView] = await Promise.all([
+      service.listPublic(),
+      service.getPublic('corolla-ou-90-mil'),
+      service.getOwned('campaign-1', owner),
+    ]);
+    for (const one of [listing[0], detail]) {
+      expect(one.instantPrizes[0]).toEqual({
+        id: 'prize-1',
+        description: 'Prêmio sintético',
+        value: 12.34,
+        type: 'PRODUCT',
+        quantity: 1,
+        status: 'AVAILABLE',
+        foundCount: 0,
+        imageUrl: null,
+      });
+    }
+    expect(ownerView.instantPrizes[0]).toMatchObject({
+      exactNumber: '000091',
+      generationRule: { instructions: 'internal' },
+    });
+  });
 
   it('keeps the nominal private route restricted when the cover is public', async () => {
     prisma.campaign.findFirst.mockResolvedValue(

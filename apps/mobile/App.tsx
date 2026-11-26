@@ -33,10 +33,12 @@ import { LocationPicker } from "./src/components/LocationPicker";
 import { NativeOrganizerDraft } from "./src/components/NativeOrganizerDraft";
 import { NativeOrganizerFinance } from "./src/organizer/NativeOrganizerFinance";
 import { organizerFinanceSession } from "./src/organizer/finance";
+import { NativeOrganizerDraftPrizes } from "./src/components/NativeOrganizerDraftPrizes";
 import { NativeOrganizerCampaignLifecycle } from "./src/components/NativeOrganizerCampaignLifecycle";
 import type { OrganizerCampaignState } from "./src/domain/organizer-campaign-lifecycle";
 import { NativeBuyerPrizes } from "./src/buyer/NativeBuyerPrizes";
 import { BuyerInboxScreen } from "./src/buyer/NativeBuyerInbox";
+import { BuyerFavoritesScreen, NativeBuyerFavoriteToggle } from "./src/buyer/NativeBuyerFavorites";
 import { NativeBuyerDrawResults } from "./src/buyer/NativeBuyerDrawResults";
 import { NativePublicDrawProof } from "./src/components/NativePublicDrawProof";
 import { NativePublicCampaignCover } from "./src/components/NativePublicCampaignCover";
@@ -520,6 +522,10 @@ function Home({ navigation }: any) {
         <Button secondary title="Notificações"
           onPress={() => navigation.navigate("BuyerInbox")} />
       )}
+      {auth.user?.role === "BUYER" && (
+        <Button secondary title="Favoritos"
+          onPress={() => navigation.navigate("BuyerFavorites")} />
+      )}
       {organizer && (
         <Button
           secondary
@@ -609,7 +615,7 @@ function CampaignDetail({ route, navigation }: any) {
     organizer = auth.user?.role === "ORGANIZER";
   const item = route.params.item as Campaign;
   const focused = useIsFocused();
-  const state = useData<Campaign & OrganizerCampaignState>(
+  const state = useData<Campaign & OrganizerCampaignState & { publishedAt?: string | null }>(
     !focused ? null : organizer
       ? `/campaigns/${encodeURIComponent(item.id)}`
       : `/public/campaigns/${encodeURIComponent(item.slug)}`,
@@ -629,6 +635,7 @@ function CampaignDetail({ route, navigation }: any) {
           <NativePublicCampaignCover key={cover?.uri ?? publicDetail.id}
             source={cover} title={publicDetail.title} />
         )}
+        {publicDetail && <NativeBuyerFavoriteToggle campaignId={publicDetail.id} />}
         <View style={s.card}>
           <Text style={s.text}>
             {(organizer ? description || shortDescription : shortDescription || description) ||
@@ -648,6 +655,12 @@ function CampaignDetail({ route, navigation }: any) {
           <Button secondary title={state.data?.status === "DRAFT" ? "Editar rascunho" : "Editar campanha"}
             onPress={() => navigation.navigate("OrganizerDraft", { campaignId: item.id })} />
         )}
+        {organizer && focused && state.data?.id === item.id &&
+          state.data.organizerId === auth.user?.id && state.data.status === "DRAFT" &&
+          state.data.publishedAt === null && (
+            <Button secondary title="Gerenciar cotas premiadas"
+              onPress={() => navigation.navigate("OrganizerDraftPrizes", { campaignId: item.id })} />
+          )}
         {organizer && focused && auth.user && state.data?.id === item.id && (
           <NativeOrganizerCampaignLifecycle
             key={`${auth.user.id}:${item.id}`}
@@ -685,6 +698,15 @@ function OrganizerDraftScreen({ navigation, route }: any) {
   const campaignId = typeof route.params?.campaignId === "string" ? route.params.campaignId : undefined;
   return <NativeOrganizerDraft key={`${auth.user.id}:${revision}:${campaignId ?? "new"}`} organizerId={auth.user.id}
     revision={revision} campaignId={campaignId} onSaved={() => navigation.goBack()} />;
+}
+function OrganizerDraftPrizesScreen({ route }: any) {
+  const auth = useSyncExternalStore(client.subscribe, client.snapshot);
+  const revision = useSyncExternalStore(client.subscribe, client.activeSessionRevision);
+  const campaignId = route.params?.campaignId;
+  if (auth.user?.role !== "ORGANIZER" || revision === null || typeof campaignId !== "string")
+    return <Page title="Cotas premiadas"><Notice error message="Abra o rascunho com uma sessão de organizador ativa." /></Page>;
+  return <NativeOrganizerDraftPrizes key={`${auth.user.id}:${revision}:${campaignId}`}
+    accountId={auth.user.id} revision={revision} campaignId={campaignId} />;
 }
 function OrganizerFinanceScreen() {
   useSyncExternalStore(client.subscribe, client.snapshot);
@@ -1092,6 +1114,10 @@ export default function App() {
                   <Stack.Screen name="BuyerInbox" component={BuyerInboxScreen}
                     options={{ title: "Notificações" }} />
                 )}
+                {auth.user?.role === "BUYER" && (
+                  <Stack.Screen name="BuyerFavorites" component={BuyerFavoritesScreen}
+                    options={{ title: "Favoritos" }} />
+                )}
                 <Stack.Screen
                   name="Campaign"
                   component={CampaignDetail}
@@ -1102,6 +1128,10 @@ export default function App() {
                   component={OrganizerDraftScreen}
                   options={{ title: "Editor de campanha" }}
                 />
+                {auth.user?.role === "ORGANIZER" && (
+                  <Stack.Screen name="OrganizerDraftPrizes" component={OrganizerDraftPrizesScreen}
+                    options={{ title: "Cotas premiadas" }} />
+                )}
                 {auth.user?.role === "ORGANIZER" && (
                   <Stack.Screen
                     name="OrganizerFinance"
