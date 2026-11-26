@@ -58,7 +58,8 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
         transform: true,
       }),
     );
-    await app.init();
+    // Keep one loopback listener for overlapping Supertest requests.
+    await app.listen(0, '127.0.0.1');
     prisma = app.get(PrismaService);
   });
 
@@ -481,6 +482,354 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       get.mockRestore();
     }
   });
+
+  it.each(['approval', 'expiry', 'cancellation'] as const)(
+    'reconcilia cancelamento, expiração e aprovação concorrentes: %s vence',
+    async (winner) => {
+      const run = randomUUID();
+      const server = app.getHttpServer() as Server;
+      const password = 'isolated-payment-race-fixture';
+      const passwordHash = await hash(password, 4);
+      const [owner, buyer, competitor] = await Promise.all(
+        (['ORGANIZER', 'BUYER', 'BUYER'] as const).map((role, index) =>
+          prisma.user.create({
+            data: {
+              name: 'Conta sintética',
+              email: `race-${run}-${index}@example.test`,
+              password: passwordHash,
+              role,
+            },
+          }),
+        ),
+      );
+      await prisma.organizerProfile.create({
+        data: {
+          userId: owner.id,
+          fullName: 'Organizador sintético',
+          cpf: '00000000000',
+          phone: '00000000000',
+          verificationStatus: 'VERIFIED',
+        },
+      });
+      const campaign = await prisma.campaign.create({
+        data: {
+          title: 'Campanha sintética de concorrência',
+          slug: `race-${run}`,
+          organizerId: owner.id,
+          numberPrice: 5,
+          totalNumbers: 10,
+          numberSelectionMode: 'MANUAL',
+          status: 'PUBLISHED',
+        },
+      });
+      const [token, competitorToken] = await Promise.all(
+        [buyer, competitor].map(async ({ email }) => {
+          const response = await request(server)
+            .post('/auth/login')
+            .send({ email, password })
+            .expect(201);
+          return (response.body as { accessToken: string }).accessToken;
+        }),
+      );
+      const reserve = (auth: string) =>
+        request(server)
+          .post('/purchases/reserve-manual')
+          .auth(auth, { type: 'bearer' })
+          .send({
+            campaignId: campaign.id,
+            numbers: [2],
+            idempotencyKey: randomUUID(),
+          });
+      const reservation = await reserve(token).expect(201);
+      const purchaseId = (reservation.body as { id: string }).id;
+      const orderId = `ord-race-${run}`;
+      const providerOrder = {
+        id: orderId,
+        total_amount: '5.00',
+        status: 'action_required',
+        status_detail: 'waiting_transfer',
+      };
+      const create = jest
+        .spyOn(Order.prototype, 'create')
+        .mockImplementation(({ body }) =>
+          Promise.resolve({
+            ...providerOrder,
+            external_reference: body.external_reference,
+          }),
+        );
+      const cancel = jest
+        .spyOn(Order.prototype, 'cancel')
+        .mockRejectedValue(
+          new Error('Cancelamento externo bloqueado no teste.'),
+        );
+      const get = jest
+        .spyOn(Order.prototype, 'get')
+        .mockRejectedValue(new Error('Consulta externa bloqueada no teste.'));
+      const cancellationStarted = Promise.withResolvers<void>();
+      const releaseCancellation = Promise.withResolvers<void>();
+      const firstApprovalStarted = Promise.withResolvers<void>();
+      const secondApprovalStarted = Promise.withResolvers<void>();
+      const releaseApprovals = Promise.withResolvers<void>();
+      const inFlight: Promise<unknown>[] = [];
+      const awaitAdapter = (
+        started: Promise<void>,
+        response: Promise<{ status: number }>,
+      ) =>
+        Promise.race([
+          started,
+          response.then(({ status }) => {
+            throw new Error(`HTTP ${status} antes de entrar no adaptador.`);
+          }),
+        ]);
+
+      try {
+        const checkout = await request(server)
+          .post('/payments/pix')
+          .auth(token, { type: 'bearer' })
+          .send({ purchaseId, acceptedTerms: true })
+          .expect(201);
+        const paymentId = (checkout.body as { id: string }).id;
+        const payment = await prisma.payment.findUniqueOrThrow({
+          where: { id: paymentId },
+        });
+        const pendingOrder = {
+          ...providerOrder,
+          external_reference: payment.externalReference,
+        };
+        const approvedOrder = {
+          ...pendingOrder,
+          status: 'processed',
+          status_detail: 'accredited',
+        };
+        const notify = (event: string) => {
+          const ts = String(Math.floor(Date.now() / 1000));
+          const requestId = randomUUID();
+          const digest = createHmac('sha256', secret)
+            .update(`id:${orderId};request-id:${requestId};ts:${ts};`)
+            .digest('hex');
+          return request(server)
+            .post('/webhooks/payments/mercado-pago')
+            .query({ 'data.id': orderId })
+            .set('x-request-id', requestId)
+            .set('x-signature', `ts=${ts},v1=${digest}`)
+            .send({
+              id: `race-${run}-${event}`,
+              action: 'order.updated',
+              data: { id: orderId },
+            })
+            .timeout(5_000);
+        };
+        cancel.mockImplementationOnce(async () => {
+          cancellationStarted.resolve();
+          await releaseCancellation.promise;
+          return {
+            ...pendingOrder,
+            status: 'canceled',
+            status_detail: 'canceled_by_api',
+          };
+        });
+        const cancelling = request(server)
+          .post(`/payments/${paymentId}/cancel`)
+          .auth(token, { type: 'bearer' })
+          .timeout(5_000)
+          .then((response) => response);
+        inFlight.push(cancelling);
+        await awaitAdapter(cancellationStarted.promise, cancelling);
+
+        // Force local expiration during in-flight cancellation, without sleeps.
+        // An externally pending order must hold the quota despite the local clock.
+        const past = new Date(Date.now() - 30_000);
+        await prisma.$transaction([
+          prisma.purchase.update({
+            where: { id: purchaseId },
+            data: { expiresAt: past },
+          }),
+          prisma.ticket.updateMany({
+            where: { purchaseId },
+            data: { reservedUntil: past },
+          }),
+          prisma.payment.update({
+            where: { id: paymentId },
+            data: { expiresAt: past },
+          }),
+        ]);
+        await request(server)
+          .get(`/public/campaigns/${campaign.slug}/availability`)
+          .expect(200)
+          .expect(({ body }) =>
+            expect(body).toMatchObject({ reservedNumbers: 1, soldNumbers: 0 }),
+          );
+        await reserve(competitorToken).expect(409);
+
+        get.mockImplementationOnce(async () => {
+          firstApprovalStarted.resolve();
+          await releaseApprovals.promise;
+          return approvedOrder;
+        });
+        const first = notify('approval').then((response) => response);
+        inFlight.push(first);
+        await awaitAdapter(firstApprovalStarted.promise, first);
+        let successorId: string | undefined;
+        if (winner === 'approval') {
+          // Same provider event ID, separate signed HTTP deliveries. Both reach
+          // the adapter before either reconciliation begins.
+          get.mockImplementationOnce(async () => {
+            secondApprovalStarted.resolve();
+            await releaseApprovals.promise;
+            return approvedOrder;
+          });
+          const duplicate = notify('approval').then((response) => response);
+          inFlight.push(duplicate);
+          await awaitAdapter(secondApprovalStarted.promise, duplicate);
+          releaseApprovals.resolve();
+          const batch = await Promise.all([first, duplicate]);
+          expect(batch.map(({ status }) => status)).toEqual([200, 200]);
+          expect(
+            batch
+              .map(({ body }) => (body as { duplicate: boolean }).duplicate)
+              .sort(),
+          ).toEqual([false, true]);
+          await notify('approval').expect(200, {
+            received: true,
+            duplicate: true,
+          });
+          await reserve(competitorToken).expect(409);
+        } else {
+          // A terminal update arrives while the older approval lookup is
+          // still in flight; a different buyer can then reserve the quota.
+          if (winner === 'expiry') {
+            get.mockResolvedValueOnce({
+              ...pendingOrder,
+              status: 'expired',
+              status_detail: 'expired',
+            });
+            await notify('expiry').expect(200, {
+              received: true,
+              duplicate: false,
+              status: 'EXPIRED',
+            });
+          } else {
+            releaseCancellation.resolve();
+            const cancelled = await cancelling;
+            expect(cancelled.status).toBe(201);
+            expect(cancelled.body).toMatchObject({
+              status: 'CANCELLED',
+              purchase: { status: 'CANCELLED' },
+            });
+          }
+          const successor = await reserve(competitorToken).expect(201);
+          successorId = (successor.body as { id: string }).id;
+          releaseApprovals.resolve();
+          expect((await first).status).toBe(409);
+          get.mockResolvedValueOnce(approvedOrder);
+          await notify('approval').expect(409);
+          if (winner === 'expiry') {
+            await notify('expiry').expect(200, {
+              received: true,
+              duplicate: true,
+            });
+          }
+        }
+        if (winner !== 'cancellation') {
+          releaseCancellation.resolve();
+          expect((await cancelling).status).toBe(409);
+        }
+
+        expect(cancel).toHaveBeenCalledTimes(1);
+        expect(get).toHaveBeenCalledTimes(winner === 'expiry' ? 3 : 2);
+        const snapshot = await prisma.payment.findUniqueOrThrow({
+          where: { id: paymentId },
+          include: { purchase: true, campaign: true, ledgerEntries: true },
+        });
+        const tickets = await prisma.ticket.findMany({
+          where: { campaignId: campaign.id },
+          select: {
+            number: true,
+            buyerId: true,
+            status: true,
+            purchaseId: true,
+          },
+        });
+        const credits = snapshot.ledgerEntries.filter(
+          (entry) => entry.type === 'ORGANIZER_NET_REVENUE',
+        );
+        const events = await prisma.paymentEvent.findMany({
+          where: { providerEventId: { startsWith: `race-${run}-` } },
+          select: {
+            processed: true,
+            providerEventId: true,
+            errorMessage: true,
+          },
+        });
+        if (winner === 'approval') {
+          expect(snapshot).toMatchObject({
+            status: 'APPROVED',
+            purchase: { status: 'PAID' },
+            campaign: { reservedNumbers: 0, soldNumbers: 1 },
+          });
+          expect(snapshot.campaign.grossRevenue.toFixed(2)).toBe('5.00');
+          expect(tickets).toEqual([
+            {
+              number: 2,
+              status: 'SOLD',
+              buyerId: buyer.id,
+              purchaseId,
+            },
+          ]);
+          expect(credits).toHaveLength(1);
+          expect(credits[0].amount.toFixed(2)).toBe(
+            snapshot.netAmount.toFixed(2),
+          );
+          expect(events).toEqual([
+            {
+              providerEventId: `race-${run}-approval`,
+              processed: true,
+              errorMessage: null,
+            },
+          ]);
+        } else {
+          const terminal = winner === 'expiry' ? 'EXPIRED' : 'CANCELLED';
+          expect(snapshot).toMatchObject({
+            status: terminal,
+            activePurchaseKey: null,
+            purchase: { status: terminal },
+            campaign: { reservedNumbers: 1, soldNumbers: 0 },
+          });
+          expect(snapshot.campaign.grossRevenue.toFixed(2)).toBe('0.00');
+          expect(tickets).toEqual([
+            {
+              number: 2,
+              status: 'RESERVED',
+              buyerId: competitor.id,
+              purchaseId: successorId,
+            },
+          ]);
+          expect(snapshot.ledgerEntries).toHaveLength(0);
+          const late = events.find(
+            (event) => event.providerEventId === `race-${run}-approval`,
+          );
+          expect(late?.processed).toBe(false);
+          expect(late?.errorMessage).toContain('requer análise manual');
+          if (winner === 'expiry') {
+            expect(events).toContainEqual({
+              providerEventId: `race-${run}-expiry`,
+              processed: true,
+              errorMessage: null,
+            });
+          }
+          expect(events).toHaveLength(winner === 'expiry' ? 2 : 1);
+        }
+      } finally {
+        releaseApprovals.resolve();
+        releaseCancellation.resolve();
+        await Promise.allSettled(inFlight);
+        create.mockRestore();
+        cancel.mockRestore();
+        get.mockRestore();
+      }
+    },
+    15_000,
+  );
 
   it('liquida cotas uma vez e registra apenas um estorno integral no extrato', async () => {
     const run = randomUUID();

@@ -231,20 +231,24 @@ export class PaymentsService {
     }
     const event =
       existingEvent ||
-      (await this.prisma.paymentEvent.create({
-        data: {
-          paymentId: payment.id,
-          provider: payment.provider,
-          providerEventId,
-          eventType: 'PAYMENT_STATUS_POLLED',
-          payload: {
-            source: 'POLLING',
-            status: gatewayPayment.status,
-          },
+      (await this.createOrReadPaymentEvent({
+        paymentId: payment.id,
+        provider: payment.provider,
+        providerEventId,
+        eventType: 'PAYMENT_STATUS_POLLED',
+        payload: {
+          source: 'POLLING',
+          status: gatewayPayment.status,
         },
       }));
+    if (event.processed)
+      return this.sanitize(await this.findOwned(id, user.id));
     try {
-      const updated = await this.processGatewayUpdate(event.id, gatewayPayment);
+      const { payment: updated, duplicate } = await this.processGatewayUpdate(
+        event.id,
+        gatewayPayment,
+      );
+      if (duplicate) return this.sanitize(await this.findOwned(id, user.id));
       if (updated.status === PaymentStatus.APPROVED) {
         await this.instantPrizes.detectForPurchase(updated.purchaseId);
       }
@@ -257,8 +261,8 @@ export class PaymentsService {
       );
       return this.sanitize(await this.findOwned(id, user.id));
     } catch (error) {
-      await this.prisma.paymentEvent.update({
-        where: { id: event.id },
+      await this.prisma.paymentEvent.updateMany({
+        where: { id: event.id, processed: false },
         data: { errorMessage: this.safeError(error) },
       });
       throw error;
@@ -401,14 +405,13 @@ export class PaymentsService {
     });
     if (storedEvent?.processed) return { received: true, duplicate: true };
     if (!storedEvent) {
-      storedEvent = await this.prisma.paymentEvent.create({
-        data: {
-          provider: GatewayProvider.MERCADO_PAGO,
-          providerEventId: event.providerEventId,
-          eventType: event.eventType,
-          payload: event.payload as Prisma.InputJsonValue,
-        },
+      storedEvent = await this.createOrReadPaymentEvent({
+        provider: GatewayProvider.MERCADO_PAGO,
+        providerEventId: event.providerEventId,
+        eventType: event.eventType,
+        payload: event.payload as Prisma.InputJsonValue,
       });
+      if (storedEvent.processed) return { received: true, duplicate: true };
     }
 
     let trackedPayment = await this.prisma.payment.findFirst({
@@ -499,20 +502,21 @@ export class PaymentsService {
       if (this.jsonObject(trackedPayment.metadata).nativeSandboxPix === true)
         this.requireNativeSandboxPix();
       const gatewayPayment = await provider.getPaymentStatus(event.resourceId);
-      const result = await this.processGatewayUpdate(
+      const { payment: result, duplicate } = await this.processGatewayUpdate(
         storedEvent.id,
         gatewayPayment,
       );
+      if (duplicate) return { received: true, duplicate: true };
       if (result.status === PaymentStatus.APPROVED) {
         await this.instantPrizes.detectForPurchase(result.purchaseId);
       }
       return { received: true, duplicate: false, status: result.status };
     } catch (error) {
-      await this.prisma.paymentEvent.update({
-        where: { id: storedEvent.id },
-        data: {
-          errorMessage: this.safeError(error),
-        },
+      // A failed attempt must not overwrite an acknowledgement committed by
+      // another delivery of the same event.
+      await this.prisma.paymentEvent.updateMany({
+        where: { id: storedEvent.id, processed: false },
+        data: { errorMessage: this.safeError(error) },
       });
       throw error;
     }
@@ -871,12 +875,75 @@ export class PaymentsService {
     return subtotal;
   }
 
+  private async createOrReadPaymentEvent(
+    data: Prisma.PaymentEventUncheckedCreateInput,
+  ) {
+    try {
+      return await this.prisma.paymentEvent.create({ data });
+    } catch (error) {
+      // Two first deliveries can both observe an absent event. Only the unique
+      // provider/event pair can be reused, not an unrelated unique violation.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await this.prisma.paymentEvent.findUnique({
+          where: {
+            provider_providerEventId: {
+              provider: data.provider,
+              providerEventId: data.providerEventId,
+            },
+          },
+        });
+        if (existing) return existing;
+      }
+      throw error;
+    }
+  }
+
+  private async reconcileSerializable<T>(
+    reconcile: (transaction: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(reconcile, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        });
+      } catch (error) {
+        // PostgreSQL aborted the whole transaction; no intermediate writes
+        // survived. Re-read state in a new transaction, never repeat the SDK.
+        if (
+          !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+          error.code !== 'P2034'
+        ) {
+          throw error;
+        }
+      }
+    }
+    throw new ServiceUnavailableException(
+      'Conciliação concorrente. Tente novamente.',
+    );
+  }
+
   private async processGatewayUpdate(
     eventId: string,
     gateway: GatewayPaymentResult,
   ) {
-    const result = await this.prisma.$transaction(
+    const result = await this.reconcileSerializable(
+      // Event acknowledgement and accounting must commit together.
       async (transaction) => {
+        const handled = await transaction.paymentEvent.findUnique({
+          where: { id: eventId },
+          select: { processed: true, paymentId: true },
+        });
+        if (handled?.processed && handled.paymentId) {
+          return {
+            payment: await transaction.payment.findUniqueOrThrow({
+              where: { id: handled.paymentId },
+            }),
+            duplicate: true,
+          };
+        }
         const payment = await transaction.payment.findFirst({
           where: {
             provider: GatewayProvider.MERCADO_PAGO,
@@ -950,7 +1017,7 @@ export class PaymentsService {
               errorMessage: null,
             },
           });
-          return payment;
+          return { payment, duplicate: false };
         }
 
         if (gateway.status === PaymentStatus.APPROVED) {
@@ -1046,14 +1113,16 @@ export class PaymentsService {
             errorMessage: null,
           },
         });
-        return transaction.payment.findUniqueOrThrow({
-          where: { id: payment.id },
-        });
+        return {
+          payment: await transaction.payment.findUniqueOrThrow({
+            where: { id: payment.id },
+          }),
+          duplicate: false,
+        };
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
-    if (result.status === PaymentStatus.APPROVED) {
-      await this.campaignMilestones.evaluateReached(result.campaignId);
+    if (!result.duplicate && result.payment.status === PaymentStatus.APPROVED) {
+      await this.campaignMilestones.evaluateReached(result.payment.campaignId);
     }
     return result;
   }

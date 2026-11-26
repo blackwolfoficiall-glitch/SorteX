@@ -145,6 +145,7 @@ describe('PaymentsService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
       },
       auditLog: { create: jest.fn() },
       purchase: {
@@ -492,6 +493,41 @@ describe('PaymentsService', () => {
     expect(provider.getPaymentStatus).not.toHaveBeenCalled();
   });
 
+  it('reusa evento registrado por outra entrega enquanto tentava criá-lo', async () => {
+    const event = { id: 'db-event-1', processed: true };
+    provider.parseWebhookEvent.mockReturnValue({
+      providerEventId: 'gateway-event-1',
+      eventType: 'order.updated',
+      resourceId: 'local-fixture-order',
+      payload: {},
+    });
+    prisma.paymentEvent.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(event);
+    prisma.paymentEvent.create.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unique event', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(
+      service.handleMercadoPagoWebhook({ body: {} }),
+    ).resolves.toEqual({
+      received: true,
+      duplicate: true,
+    });
+    expect(prisma.paymentEvent.findUnique).toHaveBeenLastCalledWith({
+      where: {
+        provider_providerEventId: {
+          provider: GatewayProvider.MERCADO_PAGO,
+          providerEventId: 'gateway-event-1',
+        },
+      },
+    });
+    expect(provider.getPaymentStatus).not.toHaveBeenCalled();
+  });
+
   it('confirma recebimento assinado de recurso não rastreado sem consultar provider', async () => {
     provider.parseWebhookEvent.mockReturnValue({
       providerEventId: 'event-simulator-1',
@@ -593,7 +629,7 @@ describe('PaymentsService', () => {
         data: { status: TicketStatus.SOLD, reservedUntil: null },
       }),
     );
-    expect(result.status).toBe(PaymentStatus.APPROVED);
+    expect(result.payment.status).toBe(PaymentStatus.APPROVED);
   });
 
   it.each([PaymentStatus.REFUNDED, PaymentStatus.CHARGEBACK])(
@@ -619,7 +655,7 @@ describe('PaymentsService', () => {
         'event-reversal-duplicate',
         gatewayResult({ status }),
       );
-      expect(result.status).toBe(status);
+      expect(result.payment.status).toBe(status);
       expect(prisma.payment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({ status, activePurchaseKey: null }),
@@ -649,7 +685,7 @@ describe('PaymentsService', () => {
       'event-stale',
       gatewayResult({ status: PaymentStatus.APPROVED }),
     );
-    expect(result.status).toBe(PaymentStatus.REFUNDED);
+    expect(result.payment.status).toBe(PaymentStatus.REFUNDED);
     expect(ledger.recordApprovedPayment).not.toHaveBeenCalled();
     expect(prisma.payment.update).not.toHaveBeenCalled();
     expect(prisma.ticket.updateMany).not.toHaveBeenCalled();
