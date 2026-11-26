@@ -1,6 +1,6 @@
 # SorteX Mobile — desenvolvimento isolado
 
-**iPhone físico:** siga [`SORTEX_TESTE_IPHONE_FISICO.md`](../../docs/SORTEX_TESTE_IPHONE_FISICO.md). Há um iniciador específico: na raiz do repositório, `node .github/mobile/iphone.mjs go` verifica o ambiente, autentica pelo navegador oficial do Mac quando necessário e abre o Expo Go com QR/túnel. Não há um QR hospedado ativo neste executor sem autenticação Expo. O pacote `.app` abaixo é somente para simulador.
+**iPhone físico:** siga [o roteiro da candidata QA](../../docs/SORTEX_TESTE_IPHONE_FISICO.md). Em um clone limpo de `homologacao/web-ios-integrada`, `node .github/mobile/iphone.mjs prepare-release` prepara o workspace no Mac; `release --device IDENTIFIER_DO_IPHONE` compila e instala com Personal Team após confirmar que a API QA está pronta. Não depende de Metro após a instalação. O artefato de simulador não serve no iPhone físico.
 
 Builds Android e iOS simulator disponíveis no commit `f4386949348aa42cce19f5ed4247804e55ad06b7`: [APK Android](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/43704153974/artifacts/14157517257) · [Pacote iOS para simulador](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/43704153974/artifacts/14158646604). Retenção de 1 dia; relatório completo e resultados no documento de continuidade ao final.
 
@@ -21,7 +21,7 @@ npm start
 
 O clone cria uma pasta separada e preserva o checkout anterior. Não precisa preencher `.env`: o destino padrão é exclusivamente a API isolada `sortex-fase1-review`. O aplicativo recusa o ambiente principal e hosts arbitrários. Não coloque `DATABASE_URL`, client secrets, chaves administrativas ou senhas em `EXPO_PUBLIC_*`. Variáveis públicas são incluídas no binário.
 
-- iPhone: instalar Expo Go oficial compatível com SDK 58 e usar a mesma conta Expo no CLI e no aparelho. Na raiz, `node .github/mobile/iphone.mjs go` usa túnel (internet em ambos); `node .github/mobile/iphone.mjs go --lan` usa a mesma rede Wi-Fi. O Mac/Metro precisa permanecer disponível. Isso executa os fluxos de e-mail; não habilita OAuth nativo nem o esquema próprio do app. Não informar senha/token ao assistente.
+- iPhone: priorize a Release QA no clone separado. Expo Go com SDK compatível continua opção de prévia de desenvolvimento com Metro, mas não comprova identidade nativa, abertura independente ou integração Web + iOS.
 - Simulador iOS: em Mac com Xcode e runtime já instalados, `npm start` e tecla `i` para Expo Go, ou `npm run ios -- --device "NOME_DO_SIMULADOR"` para development build. Liste os nomes com `xcrun simctl list devices available`; selecione explicitamente um simulador. Este executor Linux não tem Xcode.
 - Android: Expo Go e QR para teste inicial. Com Android Studio, SDK, Platform-Tools/adb, JDK compatível e licenças **já aceitas pelo proprietário**, `npm run android`. Não há aceite automático de licenças neste projeto.
 - Development build: `npm run start:dev-client`. É necessário para integrações nativas e retorno OAuth confiável. Não assumir que Expo Go serve para todos os módulos.

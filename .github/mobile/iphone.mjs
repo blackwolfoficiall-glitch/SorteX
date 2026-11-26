@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /** Local, interactive launcher. No server credentials, signing bypass or paid build. */
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -9,8 +9,53 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const app = path.join(root, 'apps/mobile');
 const phase1Api = 'https://sortex-fase1-review.netlify.app/.netlify/functions/sortex-api';
 const qaApi = 'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech';
-const mode = process.argv[2] || 'go';
-const connection = process.argv[3] || '--tunnel';
+const usage = 'Uso: node .github/mobile/iphone.mjs check | go [--tunnel|--lan] | xcode | prepare-release | release --device <UDID>';
+const qaBranch = 'homologacao/web-ios-integrada';
+const releaseEnvKeys = /\b(?:EXPO_PUBLIC_\w+|EXPO_NO_DOTENV|SKIP_BUNDLING|FORCE_BUNDLING)\b/;
+export function parseMode(args) {
+  const [mode = 'go', flag, value, ...rest] = args;
+  if (rest.length) fail(usage);
+  if (mode === 'go' && value === undefined && [undefined, '--lan', '--tunnel'].includes(flag))
+    return { mode, connection: flag ?? '--tunnel' };
+  if (mode === 'release' && flag === '--device' &&
+      /^(?:[a-f0-9]{8}-[a-f0-9]{16}|[a-f0-9]{40})$/i.test(value ?? ''))
+    return { mode, udid: value };
+  if (['check', 'xcode', 'prepare-release'].includes(mode) && flag === undefined)
+    return { mode };
+  fail(usage);
+}
+export function assertQaRelease(branch, dirty, env = process.env) {
+  if (branch !== qaBranch || dirty)
+    fail('Release QA exige um clone limpo na branch homologacao/web-ios-integrada. Não altere seu checkout de trabalho.');
+  if (env.EXPO_PUBLIC_API_URL && env.EXPO_PUBLIC_API_URL.replace(/\/$/, '') !== qaApi)
+    fail('Release QA recusado: a API configurada não é a QA isolada.');
+  if (env.SKIP_BUNDLING || env.FORCE_BUNDLING)
+    fail('Remova os ajustes de empacotamento da sessão antes da Release QA.');
+}
+export function ensureDevice(devices, udid) {
+  if (!Array.isArray(devices) || !devices.some((device) =>
+    typeof device?.identifier === 'string' &&
+    device.identifier.toUpperCase() === udid.toUpperCase() &&
+    device.simulator === false && device.available === true &&
+    device.platform === 'com.apple.platform.iphoneos' &&
+    /^iPhone/.test(device.modelCode || device.modelName || '')))
+    fail('O identificador não corresponde a um iPhone físico disponível. Conecte por cabo, desbloqueie e confira o Xcode.');
+}
+export function qaIsReady(status, body) {
+  return status === 200 && body?.status === 'ready' && body.database === 'up';
+}
+export function canUseNativeSnapshot(contents, revision) {
+  try {
+    const info = JSON.parse(contents);
+    return info.revision === revision && info.api === qaApi;
+  } catch {
+    return false;
+  }
+}
+export function hasReleaseEnvOverride(contents) {
+  return contents.split(/\r?\n/).some((line) =>
+    line.trim() && !line.trimStart().startsWith('#') && releaseEnvKeys.test(line));
+}
 function fail(message) { throw new Error(message); }
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -24,9 +69,10 @@ function capture(command, args, options = {}) {
 }
 
 async function main() {
-  if (!['check', 'go', 'xcode'].includes(mode) ||
-      !['--tunnel', '--lan'].includes(connection) || process.argv.length > 4)
-    fail('Uso: node .github/mobile/iphone.mjs [check|go|xcode] [--tunnel|--lan]');
+  const { mode, connection, udid } = parseMode(process.argv.slice(2));
+  const release = mode === 'release' || mode === 'prepare-release';
+  if (release && process.platform !== 'darwin')
+    fail('A preparação/instalação Release exige o Mac do proprietário com Xcode.');
   const [major, minor] = process.versions.node.split('.').map(Number);
   const supportedNode = major % 2 === 0 &&
     ((major === 22 && minor >= 13) || (major === 24 && minor >= 3) || major >= 26);
@@ -35,23 +81,45 @@ async function main() {
   const testBranches = ['feat/mobile-expo', 'homologacao/web-ios-integrada'];
   if (branch.status !== 0 || !testBranches.includes(branch.stdout.trim()))
     fail('Use um clone separado na branch feat/mobile-expo ou homologacao/web-ios-integrada; nenhuma branch foi alterada.');
-  const integrated = branch.stdout.trim() === 'homologacao/web-ios-integrada';
+  const branchName = branch.stdout.trim();
+  const integrated = branchName === qaBranch;
   const api = integrated ? qaApi : phase1Api;
   const head = capture('git', ['rev-parse', 'HEAD'], { cwd: root });
   if (head.status !== 0) fail('Não foi possível identificar o commit.');
-  console.log(`SorteX · teste iPhone · ${head.stdout.trim()}`);
+  const revision = head.stdout.trim();
+  console.log(`SorteX · teste iPhone · ${revision}`);
   const status = capture('git', ['status', '--porcelain'], { cwd: root });
   if (status.status !== 0) fail('Não foi possível conferir as alterações locais.');
-  if (status.stdout.trim()) console.log('Há alterações locais: serão preservadas. O QR executará este checkout.');
+  const dirty = Boolean(status.stdout.trim());
+  if (release) assertQaRelease(branchName, dirty);
+  else if (dirty) console.log('Há alterações locais: serão preservadas. A sessão executará este checkout.');
   if (process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_API_URL.replace(/\/$/, '') !== api)
     fail('API recusada: este iniciador aceita somente a prévia isolada.');
   // Explicitly override dotenv API values in the child process; never print env contents.
   process.env.EXPO_PUBLIC_API_URL = api;
-  const response = await fetch(`${api}/health${integrated ? '/ready' : ''}`, { redirect: 'error', signal: AbortSignal.timeout(30000) });
-  if (!response.ok || (await response.json()).status !== (integrated ? 'ready' : 'ok')) fail(`API isolada indisponível (HTTP ${response.status}).`);
-  console.log(integrated
-    ? 'PASS: API isolada Web + iOS pronta por HTTPS. Ainda não comprova a rede do iPhone.'
-    : 'PASS: prévia Fase 1 acessível por HTTPS. Não comprova a base integrada.');
+  if (release) {
+    process.env.EXPO_NO_DOTENV = '1';
+    process.env.EXPO_NO_TELEMETRY = '1';
+    process.env.EXPO_PUBLIC_ALLOW_LOCAL_API = '0';
+    process.env.EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS = '0';
+    process.env.EXPO_PUBLIC_ENABLE_NATIVE_SANDBOX_PIX = '0';
+  }
+  if (mode !== 'prepare-release') {
+    let response;
+    try {
+      response = await fetch(`${api}/health${integrated ? '/ready' : ''}`, { redirect: 'error', signal: AbortSignal.timeout(30000) });
+    } catch {
+      fail('API isolada indisponível por HTTPS. Nenhum ambiente alternativo foi usado.');
+    }
+    const health = response.ok ? await response.json().catch(() => null) : null;
+    if (!(integrated ? qaIsReady(response.status, health) : response.ok && health?.status === 'ok'))
+      fail(`API isolada indisponível ou sem banco pronto (HTTP ${response.status}). Nenhum ambiente alternativo foi usado.`);
+    console.log(integrated
+      ? 'PASS: API isolada Web + iOS pronta por HTTPS. Ainda não comprova a rede do iPhone.'
+      : 'PASS: prévia Fase 1 acessível por HTTPS. Não comprova a base integrada.');
+  } else {
+    console.log('Somente preparação local. A API QA será exigida antes da instalação Release.');
+  }
   if (!existsSync(path.join(app, 'node_modules/expo/package.json')))
     fail('Dependências ausentes. Execute npm ci em apps/mobile e tente novamente.');
   run('npx', ['--no-install', 'expo', 'install', '--check']);
@@ -86,23 +154,55 @@ async function main() {
   console.log(xcode.stdout.trim());
   run('xcodebuild', ['-checkFirstLaunchStatus']); // Check only. Never accept a license.
   run('pod', ['--version']); // CocoaPods must already be installed by the owner.
-  if (!existsSync(path.join(app, 'ios')))
+  const ios = path.join(app, 'ios');
+  const snapshot = path.join(ios, '.sortex-qa-release.json');
+  const workspace = path.join(ios, 'SorteXTeste.xcworkspace');
+  const hasIos = existsSync(ios);
+  if (release && hasIos && (!existsSync(snapshot) || !canUseNativeSnapshot(readFileSync(snapshot, 'utf8'), revision)))
+    fail('A pasta ios já existe sem comprovação deste commit QA. Use um novo clone; nada foi sobrescrito.');
+  if (mode === 'release' && !hasIos)
+    fail('Primeiro execute prepare-release e configure o Personal Team no Xcode.');
+  if (!hasIos)
     run('npx', ['--no-install', 'expo', 'prebuild', '--platform', 'ios', '--no-install']);
   else console.log('Projeto ios existente preservado: prebuild não será repetido.');
   run('node', ['scripts/check-native-config.cjs']);
-  const ios = path.join(app, 'ios');
-  // Reconcile native dependencies even when an older workspace already exists.
-  // `pod install` preserves locked versions where possible; never use `pod update`.
-  run('pod', ['install'], { cwd: ios });
-  const workspace = 'SorteXTeste.xcworkspace';
-  if (!existsSync(path.join(ios, workspace))) fail('SorteXTeste.xcworkspace não encontrado após pod install; nenhum outro projeto será aberto.');
+  if (mode === 'prepare-release' && !hasIos)
+    writeFileSync(snapshot, JSON.stringify({ revision, api }), { flag: 'wx', mode: 0o600 });
+  if (mode !== 'release') {
+    // `pod install` preserves locked versions where possible; never use `pod update`.
+    run('pod', ['install'], { cwd: ios });
+  }
+  if (!existsSync(workspace)) fail('SorteXTeste.xcworkspace não encontrado. Termine prepare-release e configure o Personal Team.');
+  if (release) {
+    for (const file of ['.xcode.env', '.xcode.env.local', '.xcode.env.updates']) {
+      const config = path.join(ios, file);
+      if (existsSync(config) && hasReleaseEnvOverride(readFileSync(config, 'utf8')))
+        fail(`${file} sobrepõe o destino ou o empacotamento da Release QA. Preserve a pasta e use um clone limpo.`);
+    }
+    if (mode === 'prepare-release') {
+      console.log('No target SorteXTeste, ajuste Automatically manage signing e selecione só seu Personal Team.');
+      console.log('Não use Product → Run agora. Conecte o iPhone e localize o Identifier no Xcode.');
+      console.log('Após a API QA ficar pronta: node .github/mobile/iphone.mjs release --device <UDID>');
+      run('open', [workspace]);
+      return;
+    }
+    const detected = capture('xcrun', ['xcdevice', 'list', '--timeout', '10'], { timeout: 20000 });
+    if (detected.error || detected.status !== 0) fail('Falha ao listar iPhones com as ferramentas do Xcode.');
+    let devices;
+    try { devices = JSON.parse(detected.stdout); } catch { fail('Lista de dispositivos inválida no Xcode. Confira a seleção e o cabo.'); }
+    ensureDevice(devices, udid);
+    console.log('Release QA assinada para desenvolvimento, com JavaScript embutido. Nenhuma distribuição ou cobrança.');
+    run('npx', ['--no-install', 'expo', 'run:ios', '--scheme', 'SorteXTeste', '--configuration', 'Release', '--no-bundler', '--no-install', '--device', udid]);
+    console.log('Confirme no aparelho a abertura pelo ícone com o Mac desconectado, sem iniciar Metro.');
+    return;
+  }
   console.log('No Xcode: selecione o iPhone físico e seu Personal Team em Signing & Capabilities.');
   console.log('Não selecione simulador, Archive, distribuição de loja nem uma capacidade Apple não configurada.');
   console.log('Em outro terminal: cd apps/mobile && npm run start:dev-client -- --lan --port 8082');
   console.log('Depois use Product → Run no Xcode. Consulte docs/SORTEX_TESTE_IPHONE_FISICO.md.');
-  run('open', [path.join(ios, workspace)]);
+  run('open', [workspace]);
 }
-main().catch(error => {
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) main().catch(error => {
   // Do not echo HTTP bodies, environment variables or captured account output.
   console.error(error instanceof Error ? error.message : 'Falha no iniciador.');
   process.exitCode = 1;

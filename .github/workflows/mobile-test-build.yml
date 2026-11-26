@@ -2,7 +2,7 @@ name: Mobile isolated test builds
 on:
   push:
     branches: [feat/mobile-expo, homologacao/web-ios-integrada]
-    paths: ['apps/mobile/**', 'packages/contracts/**', '.github/workflows/mobile-test-build.yml']
+    paths: ['apps/mobile/**', 'packages/contracts/**', '.github/mobile/**', '.github/workflows/mobile-test-build.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -70,6 +70,7 @@ jobs:
     env:
       CI: '1'
       EXPO_NO_TELEMETRY: '1'
+      EXPO_NO_DOTENV: '1'
       EXPO_PUBLIC_API_URL: ${{ github.ref == 'refs/heads/homologacao/web-ios-integrada' && 'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech' || 'https://sortex-fase1-review.netlify.app/.netlify/functions/sortex-api' }}
     steps:
       - uses: actions/checkout@v4
@@ -77,6 +78,8 @@ jobs:
         with:
           node-version: 24
       - run: npm ci --no-audit --no-fund
+      - name: Verify QA launcher modes and physical-device guards
+        run: node --test ../../.github/mobile/iphone.test.mjs
       - name: Select an available iPhone simulator explicitly
         run: |
           # Expo CLI writes its device-tool cache here on a fresh runner.
@@ -94,6 +97,10 @@ jobs:
         run: |
           xcrun simctl io "$SORTEX_SIMULATOR_ID" screenshot /tmp/sortex-ios-simulator.png
           app_path="$(xcrun simctl get_app_container "$SORTEX_SIMULATOR_ID" br.com.sortex.development app)"
+          test -s "$app_path/main.jsbundle"
+          grep -aFq -- "$EXPO_PUBLIC_API_URL" "$app_path/main.jsbundle"
+          echo 'Native Release contains a JavaScript bundle and its allowed test API string; this does not validate live routing.'
+          shasum -a 256 "$app_path/main.jsbundle"
           ditto -c -k --sequesterRsrc --keepParent "$app_path" /tmp/sortex-ios-simulator.zip
           test "$(stat -f %z /tmp/sortex-ios-simulator.zip)" -lt 100000000
       - uses: actions/upload-artifact@v4
