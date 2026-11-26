@@ -7,6 +7,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
 } from 'class-validator';
@@ -83,6 +84,12 @@ export class InviteAffiliateDto {
   @Min(1)
   @Max(90)
   validityDays?: number;
+}
+
+export class AcceptAffiliateInviteDto {
+  @IsString()
+  @Matches(/^[a-f0-9]{10}$/i)
+  code!: string;
 }
 
 export class CreateAffiliateLinkDto {

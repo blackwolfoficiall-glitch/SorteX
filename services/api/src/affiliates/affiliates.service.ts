@@ -316,24 +316,47 @@ export class AffiliatesService {
       include: { program: true },
     });
     if (!affiliate) throw new NotFoundException('Convite não encontrado.');
-    if (affiliate.inviteExpiresAt && affiliate.inviteExpiresAt <= new Date())
-      throw new BadRequestException('Este convite expirou.');
     if (affiliate.email.toLowerCase() !== user.email.toLowerCase())
       throw new ForbiddenException('Este convite pertence a outro e-mail.');
     if (affiliate.userId && affiliate.userId !== user.id)
       throw new ForbiddenException('Convite já utilizado.');
-    return this.prisma.affiliate.update({
-      where: { id: affiliate.id },
+    // Reopening a used invite must not reset an organizer's approval.
+    const accepted = (status: AffiliateStatus) =>
+      status === AffiliateStatus.ACTIVE || status === AffiliateStatus.PENDING;
+    if (affiliate.userId === user.id && accepted(affiliate.status)) {
+      const { program: _program, ...linked } = affiliate;
+      return linked;
+    }
+    const now = new Date();
+    if (affiliate.inviteExpiresAt && affiliate.inviteExpiresAt <= now)
+      throw new BadRequestException('Este convite expirou.');
+    if (affiliate.status !== AffiliateStatus.INVITED)
+      throw new BadRequestException('Este convite não está disponível.');
+    await this.prisma.affiliate.updateMany({
+      where: {
+        id: affiliate.id,
+        referralCode: affiliate.referralCode,
+        email: affiliate.email,
+        userId: affiliate.userId,
+        status: AffiliateStatus.INVITED,
+        OR: [{ inviteExpiresAt: null }, { inviteExpiresAt: { gt: now } }],
+      },
       data: {
         userId: user.id,
         status: affiliate.program.allowSelfSignup
           ? AffiliateStatus.ACTIVE
           : AffiliateStatus.PENDING,
-        joinedAt: new Date(),
-        approvedAt: affiliate.program.allowSelfSignup ? new Date() : undefined,
+        joinedAt: now,
+        approvedAt: affiliate.program.allowSelfSignup ? now : undefined,
       },
     });
+    const linked = await this.prisma.affiliate.findUnique({
+      where: { id: affiliate.id },
+    });
+    if (linked?.userId === user.id && accepted(linked.status)) return linked;
+    throw new BadRequestException('Este convite não está disponível.');
   }
+
   async resendInvite(user: AuthenticatedUser, id: string) {
     const row = await this.prisma.affiliate.findFirst({
       where: {
