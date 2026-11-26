@@ -497,7 +497,12 @@ describe('PaymentsService', () => {
       providerEventId: 'event-simulator-1',
       eventType: 'order.updated',
       resourceId: '123456',
-      payload: { data: { id: '123456' } },
+      payload: {
+        data: {
+          id: '123456',
+          external_reference: 'sortex-00000000-0000-4000-8000-000000000000',
+        },
+      },
     });
     prisma.paymentEvent.findUnique.mockResolvedValue(null);
     prisma.paymentEvent.create.mockResolvedValue({
@@ -514,6 +519,7 @@ describe('PaymentsService', () => {
       ignored: true,
     });
     expect(provider.getPaymentStatus).not.toHaveBeenCalled();
+    expect(prisma.payment.findUnique).not.toHaveBeenCalled();
     expect(prisma.paymentEvent.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({

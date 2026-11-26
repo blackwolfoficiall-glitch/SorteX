@@ -396,6 +396,7 @@ export class PaymentsService {
       // The signed query binds the order id, not this body field. Use a
       // reference only to detect a local handoff, never to link or settle it.
       if (
+        context.dataId === event.resourceId &&
         hint?.id === event.resourceId &&
         typeof reference === 'string' &&
         /^sortex-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(
