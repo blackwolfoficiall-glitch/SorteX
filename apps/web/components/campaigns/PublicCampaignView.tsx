@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Card from "@/components/ui/Card";
 import PurchasePanel from "@/components/purchases/PurchasePanel";
+import { salesWindowMessage } from "../../../../packages/contracts/src/campaign-sales-window";
 import type { Campaign, RewardSection } from "@/lib/campaigns/types";
 import { versionedCoverUrl } from "@/lib/campaigns/cover-revision";
 import { mediaUrl } from "./CampaignDashboard";
@@ -278,6 +279,8 @@ export default function PublicCampaignView({
       </main>
     );
 
+  const salesBlock = salesWindowMessage(campaign.salesWindow);
+  const drawDisplay = displayDrawSchedule(campaign);
   const percent = campaign.totalNumbers
     ? Math.min(100, (campaign.soldNumbers / campaign.totalNumbers) * 100)
     : 0;
@@ -390,8 +393,7 @@ export default function PublicCampaignView({
             )}
             <div className="absolute left-3 top-3 w-[34%] sm:left-6 sm:top-6 sm:w-[28%] lg:left-10 lg:top-9 lg:w-[22%]">
               <CampaignCountdown
-                drawDate={campaign.drawDate}
-                drawTime={campaign.drawTime}
+                target={drawDisplay.target}
               />
             </div>
             <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/35 via-black/10 to-transparent px-4 pb-5 pt-20 text-white sm:px-7 sm:pb-7 lg:px-10">
@@ -414,10 +416,7 @@ export default function PublicCampaignView({
               <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-bold sm:text-sm">
                 <span className="inline-flex items-center gap-1 rounded-lg bg-black/40 px-2 py-1 sm:backdrop-blur-sm">
                   <CalendarDays size={14} />
-                  {campaign.drawDate
-                    ? new Date(campaign.drawDate).toLocaleDateString("pt-BR")
-                    : "A definir"}{" "}
-                  às {campaign.drawTime || "--:--"}
+                  {drawDisplay.label}
                 </span>
                 <span className="inline-flex items-center gap-1 rounded-lg bg-black/40 px-2 py-1 sm:backdrop-blur-sm">
                   <Trophy size={14} />
@@ -525,7 +524,7 @@ export default function PublicCampaignView({
                   </button>
                 </div>
               ) : (
-                <PurchasePanel campaign={campaign} />
+                <PurchasePanel campaign={campaign} salesBlock={salesBlock} />
               )}
             </div>
           </Card>
@@ -900,7 +899,7 @@ export default function PublicCampaignView({
         <div className="fixed inset-x-0 bottom-0 z-[70] border-t bg-white/95 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:hidden">
           <button
             type="button"
-            disabled={previewMode}
+            disabled={previewMode || Boolean(salesBlock)}
             onClick={() => {
               const panel = document.querySelector("[data-purchase-panel]");
               if (!panel) return;
@@ -918,9 +917,9 @@ export default function PublicCampaignView({
             style={{ backgroundColor: campaignButtonColor(campaign) }}
             className="block w-full touch-manipulation rounded-2xl py-4 text-center font-black text-white shadow-lg disabled:cursor-default"
           >
-            {selectedRouletteCombo
+            {salesBlock || (selectedRouletteCombo
               ? `Continuar — ${money(rouletteCombos.find((combo) => combo.id === selectedRouletteCombo)?.price ?? 0)}`
-              : String(campaignPreferences?.buttonText || "Participar agora")}
+              : String(campaignPreferences?.buttonText || "Participar agora"))}
           </button>
         </div>
       )}
@@ -1475,20 +1474,37 @@ function countdownLabel(label: string) {
   );
 }
 
+const brazilDrawDisplay = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  dateStyle: "short",
+  timeStyle: "short",
+});
+
+function displayDrawSchedule(campaign: Campaign) {
+  // Older pre-deploy APIs did not return scheduledDrawAt. Show the entered
+  // civil date without applying the viewer's timezone, but don't invent a
+  // countdown for an API that has not confirmed the event's instant.
+  if (campaign.scheduledDrawAt === undefined) {
+    const value = campaign.drawDate?.slice(0, 10);
+    const day = value && /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? value.split("-").reverse().join("/")
+      : null;
+    return {
+      target: null,
+      label: day ? `${day} às ${campaign.drawTime || "--:--"}` : "A definir",
+    };
+  }
+  const target = campaign.scheduledDrawAt ? Date.parse(campaign.scheduledDrawAt) : NaN;
+  return Number.isFinite(target)
+    ? { target, label: `${brazilDrawDisplay.format(target)} (horário de Brasília)` }
+    : { target: null, label: "A definir" };
+}
+
 const CampaignCountdown = memo(function CampaignCountdown({
-  drawDate,
-  drawTime,
+  target,
 }: {
-  drawDate?: string | null;
-  drawTime?: string | null;
+  target: number | null;
 }) {
-  const target = useMemo(
-    () =>
-      drawDate
-        ? new Date(`${drawDate.slice(0, 10)}T${drawTime || "00:00"}`).getTime()
-        : null,
-    [drawDate, drawTime],
-  );
   const [countdown, setCountdown] = useState(() =>
     target === null ? null : countdownParts(target - Date.now()),
   );

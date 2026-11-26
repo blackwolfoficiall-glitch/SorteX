@@ -117,6 +117,169 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
     }
   });
 
+  it('usa o horário civil de Brasília para cotas novas, preserva compra e legado no fechamento', async () => {
+    jest.useFakeTimers({
+      now: new Date('2026-11-28T15:00:00Z'),
+      doNotFake: [
+        'nextTick',
+        'queueMicrotask',
+        'setTimeout',
+        'clearTimeout',
+        'setInterval',
+        'clearInterval',
+        'setImmediate',
+        'clearImmediate',
+        'hrtime',
+        'performance',
+      ],
+    });
+    process.env.JWT_ACCESS_TTL_SECONDS = '86400';
+    try {
+      const server = app.getHttpServer() as Server;
+      const run = randomUUID();
+      const password = `synthetic-${run}`;
+      const organizer = await organizerFixture(
+        `cutoff-${run}@example.test`,
+        password,
+      );
+      const buyer = await prisma.user.create({
+        data: {
+          name: 'Comprador sintético',
+          email: `cutoff-buyer-${run}@example.test`,
+          password: await hash(password, 4),
+          role: 'BUYER',
+        },
+      });
+      await prisma.organizerProfile.create({
+        data: {
+          userId: organizer.id,
+          fullName: 'Organizador sintético',
+          cpf: '00000000000',
+          phone: '00000000000',
+          verificationStatus: 'VERIFIED',
+        },
+      });
+      const [organizerToken, buyerToken] = await Promise.all([
+        login(organizer.email, password),
+        login(buyer.email, password),
+      ]);
+      const title = `Campanha civil sintética ${run}`;
+      // Same shape as the app-generated draft, including separately saved date
+      // and time. Only cover storage is seeded; no fake responses or provider.
+      const saved = await request(server)
+        .post('/campaigns')
+        .auth(organizerToken, { type: 'bearer' })
+        .send({ title })
+        .expect(201);
+      const { id, slug } = saved.body as { id: string; slug: string };
+      const update = (fields: object) =>
+        request(server)
+          .patch(`/campaigns/${id}`)
+          .auth(organizerToken, { type: 'bearer' })
+          .send(fields);
+      await update({
+        drawDate: '2026-11-28',
+        regulation: 'Fixture de homologação',
+        mainPrizeName: 'Prêmio sintético',
+        mainPrizeDescription: 'Não é prêmiação real',
+        estimatedPrizeValue: 10,
+        totalNumbers: 99,
+        numberPrice: 1,
+        salesStartAt: '2026-11-27T00:00:00.000Z',
+        drawBasis: 'MANUAL_RESULT',
+      }).expect(200);
+      await update({ drawTime: '20:00' }).expect(200);
+      await prisma.campaign.update({
+        where: { id },
+        data: { coverImage: 'qa/no-files-read.png' },
+      });
+      await request(server)
+        .post(`/campaigns/${id}/publish`)
+        .auth(organizerToken, { type: 'bearer' })
+        .expect(201);
+      const code = `DATE-${run.slice(0, 8).toUpperCase()}`;
+      const promotion = await request(server)
+        .post('/promotions')
+        .auth(organizerToken, { type: 'bearer' })
+        .send({
+          campaignId: id,
+          name: 'Cupom civil',
+          type: 'COUPON',
+          status: 'DRAFT',
+          config: { code, discountType: 'FIXED', discountValue: 0.15 },
+        })
+        .expect(201);
+      const { id: promotionId } = promotion.body as { id: string };
+      await request(server)
+        .post(`/promotions/${promotionId}/activate`)
+        .auth(organizerToken, { type: 'bearer' })
+        .expect(201);
+      const inspect = () =>
+        request(server).get(`/public/campaigns/${slug}`).expect(200);
+      const availability = () =>
+        request(server)
+          .get(`/public/campaigns/${slug}/availability`)
+          .expect(200);
+      const quote = () =>
+        request(server)
+          .post('/purchases/promotion-quote')
+          .auth(buyerToken, { type: 'bearer' })
+          .send({ campaignId: id, quantity: 1, couponCode: code });
+      const publicQuote = () =>
+        request(server)
+          .post('/promotion-quote')
+          .send({ campaignId: id, quantity: 1, couponCode: code });
+      const key = randomUUID();
+      const reserve = (idempotencyKey = key) =>
+        request(server)
+          .post('/purchases/reserve-random')
+          .auth(buyerToken, { type: 'bearer' })
+          .send({ campaignId: id, quantity: 1, idempotencyKey });
+      const cutoff = '2026-11-28T23:00:00.000Z';
+      const daytime = await inspect();
+      expect(daytime.body).toMatchObject({
+        drawDate: '2026-11-28T00:00:00.000Z',
+        drawTime: '20:00',
+        scheduledDrawAt: cutoff,
+        drawTimeZone: 'America/Sao_Paulo',
+        salesWindow: { closesAt: cutoff, status: 'OPEN' },
+      });
+      expect((await availability()).body).toMatchObject({
+        availableNumbers: 99,
+        salesWindow: { closesAt: cutoff, status: 'OPEN' },
+      });
+      await quote().expect(201);
+      await publicQuote().expect(201);
+      await request(server)
+        .post(`/campaigns/${id}/draw/execute`)
+        .auth(organizerToken, { type: 'bearer' })
+        .send({ lotteryDrawId: 'unused-test-result' })
+        .expect(400, /A data do sorteio ainda não chegou/);
+
+      jest.setSystemTime(new Date('2026-11-28T22:59:59.000Z'));
+      const before = await reserve().expect(201);
+      const { id: purchaseId } = before.body as { id: string };
+      jest.setSystemTime(new Date(cutoff));
+      await quote().expect(400, /O sorteio desta campanha já ocorreu/);
+      await publicQuote().expect(400, /O sorteio desta campanha já ocorreu/);
+      await reserve(randomUUID()).expect(
+        400,
+        /O sorteio desta campanha já ocorreu/,
+      );
+      expect((await reserve().expect(201)).body).toMatchObject({
+        id: purchaseId,
+      });
+      expect((await availability()).body).toMatchObject({
+        availableNumbers: 98,
+        salesWindow: { closesAt: cutoff, status: 'DRAW_TIME_REACHED' },
+      });
+      expect(await prisma.payment.count({ where: { purchaseId } })).toBe(0);
+    } finally {
+      delete process.env.JWT_ACCESS_TTL_SECONDS;
+      jest.useRealTimers();
+    }
+  });
+
   it.each(['PERCENTAGE', 'FIXED'] as const)(
     'preserva cupom %s uma vez na reserva, Pix sintético e relatório',
     async (type) => {

@@ -202,6 +202,39 @@ describe('PurchasesService', () => {
     );
   });
 
+  it('permite cotar e reservar no dia civil do sorteio antes do horário anunciado', async () => {
+    jest.useFakeTimers({ now: new Date('2026-11-28T15:00:00.000Z') });
+    try {
+      prisma.campaign.findUnique.mockResolvedValue(
+        campaign({
+          drawDate: new Date('2026-11-28'),
+          drawTime: '20:00',
+          drawTimeZone: 'America/Sao_Paulo',
+          salesEndAt: null,
+        }),
+      );
+      prisma.ticket.findMany.mockResolvedValue([]);
+      prisma.purchase.create.mockResolvedValue(purchase());
+      prisma.purchase.findUniqueOrThrow.mockResolvedValue(purchase());
+      const input = { campaignId: 'campaign-1', quantity: 2 };
+      await expect(
+        service.quoteCoupon(buyer, { ...input, couponCode: '' }),
+      ).resolves.toMatchObject({ total: 0.2 });
+      await expect(service.reserveRandom(buyer, input)).resolves.toMatchObject({
+        status: PurchaseStatus.AWAITING_PAYMENT,
+      });
+      jest.setSystemTime(new Date('2026-11-28T23:00:00.000Z'));
+      await expect(
+        service.quoteCoupon(buyer, { ...input, couponCode: '' }),
+      ).rejects.toThrow('O sorteio desta campanha já ocorreu.');
+      await expect(service.reserveRandom(buyer, input)).rejects.toThrow(
+        'O sorteio desta campanha já ocorreu.',
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('permite que um administrador autenticado reserve títulos', async () => {
     prisma.campaign.findUnique.mockResolvedValue(campaign());
     prisma.ticket.findMany.mockResolvedValue([]);

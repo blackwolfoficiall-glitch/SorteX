@@ -137,7 +137,7 @@ export function NativeOrganizerDraft({
               onChangeText={update("minimumPurchase")} editable={!busy} keyboardType="number-pad" placeholder="1" />
             <Field label="Data do sorteio (DD/MM/AAAA)" value={fields.drawDate}
               onChangeText={(value) => update("drawDate")(dateMask(value))} editable={!busy} keyboardType="number-pad" maxLength={10} placeholder="DD/MM/AAAA" />
-            <Field label="Horário do sorteio (HH:MM)" value={fields.drawTime}
+            <Field label="Horário do sorteio (HH:MM, Brasília para novas datas)" value={fields.drawTime}
               onChangeText={(value) => update("drawTime")(timeMask(value))} editable={!busy} keyboardType="number-pad" maxLength={5} placeholder="HH:MM" />
             <Field label="Data de início das vendas (DD/MM/AAAA)" value={fields.salesStartDate}
               onChangeText={(value) => update("salesStartDate")(dateMask(value))} editable={!busy} keyboardType="number-pad" maxLength={10} placeholder="DD/MM/AAAA" />

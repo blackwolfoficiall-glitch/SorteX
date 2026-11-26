@@ -19,6 +19,11 @@ import { OrganizerStorageService } from '../organizers/organizer-storage.service
 import type { UploadedOrganizerFile } from '../organizers/types/uploaded-file.type';
 import { PrismaService } from '../prisma/prisma.service';
 import { coverRevision } from './cover-revision';
+import {
+  authoredDrawSchedule,
+  campaignDrawInstant,
+  campaignSalesWindow,
+} from './campaign-sales-window';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { CreateDrawRuleTemplateDto } from './dto/create-draw-rule-template.dto';
 import type { CampaignMediaTarget } from './dto/upload-campaign-media.dto';
@@ -456,7 +461,7 @@ export class CampaignsService {
       return transaction.campaign.update({
         where: { id },
         data: {
-          ...this.scalarData(data),
+          ...this.scalarData(data, current),
           title: data.title,
           slug,
           milestoneWinnersRemainEligible: data.milestoneWinnersRemainEligible,
@@ -621,6 +626,7 @@ export class CampaignsService {
         numberSelectionMode: source.numberSelectionMode,
         drawDate: source.drawDate,
         drawTime: source.drawTime,
+        drawTimeZone: source.drawTimeZone,
         drawBasis: source.drawBasis,
         drawRuleTemplateId: source.drawRuleTemplateId,
         customDrawRule: source.customDrawRule ?? undefined,
@@ -1116,7 +1122,19 @@ export class CampaignsService {
     return campaign;
   }
 
-  private scalarData(data: CreateCampaignDto) {
+  private scalarData(data: CreateCampaignDto, current?: CampaignPayload) {
+    let drawSchedule: ReturnType<typeof authoredDrawSchedule>;
+    try {
+      drawSchedule = authoredDrawSchedule(
+        data.drawDate,
+        data.drawTime,
+        current,
+      );
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Data do sorteio inválida.',
+      );
+    }
     return {
       shortDescription: data.shortDescription,
       description: data.description,
@@ -1132,7 +1150,7 @@ export class CampaignsService {
       minimumPurchase: data.minimumPurchase,
       maximumPurchasePerBuyer: data.maximumPurchasePerBuyer,
       numberSelectionMode: data.numberSelectionMode,
-      drawDate: data.drawDate ? new Date(data.drawDate) : undefined,
+      ...drawSchedule,
       drawTime: data.drawTime,
       drawBasis: data.drawBasis,
       drawRuleTemplateId: data.drawRuleTemplateId,
@@ -1420,7 +1438,10 @@ export class CampaignsService {
       ['valor estimado do prêmio', campaign.estimatedPrizeValue],
       ['imagem principal do prêmio', campaign.coverImage],
       ['data do sorteio', campaign.drawDate],
-      ['horário do sorteio', campaign.drawTime],
+      [
+        'horário do sorteio',
+        campaign.drawTime && campaignDrawInstant(campaign),
+      ],
       ['início das vendas', campaign.salesStartAt],
       ['regra de sorteio', hasRule],
       ['quantidade total válida', campaign.totalNumbers > 0],
@@ -1752,6 +1773,8 @@ export class CampaignsService {
       campaign;
     return {
       ...safeCampaign,
+      scheduledDrawAt: campaignDrawInstant(campaign)?.toISOString() ?? null,
+      salesWindow: campaignSalesWindow(campaign),
       numberPrice: Number(campaign.numberPrice),
       cashAlternative:
         campaign.cashAlternative == null

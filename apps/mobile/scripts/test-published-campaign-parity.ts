@@ -35,6 +35,8 @@ type Campaign = OrganizerDraftRecord & OrganizerCampaignState & {
   slug: string;
   coverImageUrl?: string | null;
   publishedRuleSnapshot?: unknown;
+  scheduledDrawAt?: string | null;
+  drawTimeZone?: string | null;
 };
 
 async function main() {
@@ -216,7 +218,10 @@ async function main() {
     assert.equal(campaign.title, title);
     assert.equal(campaign.mainPrizeName, prize);
     assert.equal(campaign.mainPrizeDescription, prizeDescription);
+    assert.equal(campaign.drawTimeZone, "America/Sao_Paulo");
+    assert.equal(campaign.scheduledDrawAt, original.scheduledDrawAt);
   }
+  assert.ok(original.scheduledDrawAt && Number.isFinite(Date.parse(original.scheduledDrawAt)));
   const webBrowserRender = process.env.SORTEX_PARITY_WEB_RENDER === "yes";
   if (webBrowserRender) {
     const requireWeb = createRequire(new URL("../../web/package.json", import.meta.url));
@@ -227,6 +232,7 @@ async function main() {
       try {
         const context = await browser.newContext({
           ...devices[name === "webkit" ? "iPhone 13" : "Desktop Chrome"], serviceWorkers: "block",
+          timezoneId: name === "webkit" ? "America/Bahia" : "UTC",
         });
         await context.route("**/*", (route: { request(): { url(): string }; continue(): Promise<void>; abort(): Promise<void> }) =>
           new URL(route.request().url()).origin === web ? route.continue() : route.abort());
@@ -238,6 +244,9 @@ async function main() {
         await page.getByRole("heading", { name: title, exact: true }).waitFor({ timeout: 20_000 });
         const payload = await received.json();
         assert.equal(payload.id, original.id);
+        assert.equal(payload.scheduledDrawAt, original.scheduledDrawAt);
+        await page.getByText(`${schedule.drawDate}, 18:00 (horário de Brasília)`, { exact: true })
+          .waitFor({ timeout: 20_000 });
         await page.locator("summary").filter({ hasText: "Descrição e regulamento" }).click();
         await page.getByText(prizeDescription, { exact: true }).waitFor({ timeout: 20_000 });
         await page.getByText(regulation, { exact: true }).waitFor({ timeout: 20_000 });

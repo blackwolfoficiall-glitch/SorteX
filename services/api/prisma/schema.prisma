@@ -1090,6 +1090,7 @@ model Campaign {
   numberSelectionMode            NumberSelectionMode       @default(RANDOM)
   drawDate                       DateTime?
   drawTime                       String?
+  drawTimeZone                   String?
   drawBasis                      DrawBasis                 @default(LOTERIA_FEDERAL)
   drawRuleTemplateId             String?
   customDrawRule                 Json?

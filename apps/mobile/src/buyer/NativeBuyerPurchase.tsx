@@ -8,6 +8,7 @@ import React, {
 import { Alert, Pressable, Text, View } from "react-native";
 import { randomUUID } from "expo-crypto";
 import type { Campaign } from "../../../../packages/contracts/src/mobile";
+import { salesWindowMessage } from "../../../../packages/contracts/src/campaign-sales-window";
 import { ApiError, type SortexClient } from "../api/client";
 import { Button, Field, Notice, money, s, status } from "../components/ui";
 import {
@@ -135,6 +136,7 @@ function ReservationCard({
   const busyRef = useRef(false);
   const lastOrder = useRef<string | null>(null);
   const active = order ? isActiveReservation(order, now) : false;
+  const salesBlock = salesWindowMessage(availability?.salesWindow);
   const mode = availability?.selectionMode;
   const total = availability?.totalNumbers;
   const count = mode === "MANUAL" ? selection.length : parseDigits(quantity);
@@ -158,7 +160,8 @@ function ReservationCard({
     count >= limits.min &&
     count <= limits.max &&
     !checking &&
-    !active,
+    !active &&
+    !salesBlock,
   );
 
   function invalidateCoupon() {
@@ -243,7 +246,7 @@ function ReservationCard({
   }, [api, campaign.id, campaign.slug, reload]);
 
   useEffect(() => {
-    if (mode !== "MANUAL" || !total || active) return;
+    if (mode !== "MANUAL" || !total || active || salesBlock) return;
     let valid = true;
     setLoadingNumbers(true);
     setNumbers(null);
@@ -262,7 +265,22 @@ function ReservationCard({
     return () => {
       valid = false;
     };
-  }, [active, api, campaign.slug, mode, total, page, search, reload]);
+  }, [active, api, campaign.slug, mode, total, page, search, reload, salesBlock]);
+
+  const salesWindow = availability?.salesWindow;
+  useEffect(() => {
+    // This makes one read at the next server-reported boundary. It does not
+    // decide whether a reservation is valid; the API rechecks before writing.
+    const nextBoundary =
+      salesWindow?.status === "NOT_STARTED" ? salesWindow.opensAt
+        : salesWindow?.status === "OPEN" ? salesWindow.closesAt : null;
+    if (!nextBoundary) return;
+    const delay = Date.parse(nextBoundary) - Date.now();
+    const maxTimeout = 24 * 60 * 60 * 1000;
+    if (!Number.isFinite(delay) || delay <= 0) return;
+    const timer = setTimeout(() => setReload((value) => value + 1), Math.min(delay + 100, maxTimeout));
+    return () => clearTimeout(timer);
+  }, [salesWindow]);
 
   useEffect(() => {
     if (!order || !isActiveReservation(order)) return;
@@ -300,7 +318,8 @@ function ReservationCard({
       busyRef.current ||
       active ||
       checking ||
-      quoting
+      quoting ||
+      (salesBlock && !uncertain)
     )
       return;
     if (typedCoupon && !appliedCoupon) {
@@ -425,7 +444,8 @@ function ReservationCard({
           )}
         </View>
       )}
-      {!active && availability && limits && (
+      {!active && salesBlock ? <Notice message={salesBlock} /> : null}
+      {!active && availability && limits && (!salesBlock || uncertain) && (
         <>
           <Notice
             message={`${availability.availableNumbers} títulos disponíveis · Mínimo: ${limits.min}`}

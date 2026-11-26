@@ -2,6 +2,7 @@ import type {
   Purchase,
   Ticket,
 } from "../../../../packages/contracts/src/mobile";
+import type { CampaignSalesWindow } from "../../../../packages/contracts/src/campaign-sales-window";
 import { ApiError, type SortexClient } from "../api/client";
 
 export type Availability = {
@@ -11,6 +12,7 @@ export type Availability = {
   reservedNumbers: number;
   soldNumbers: number;
   reservationSeconds: number;
+  salesWindow?: CampaignSalesWindow;
   selectionMode: "MANUAL" | "RANDOM";
   minimumPurchase: number;
   maximumPurchasePerBuyer: number | null;

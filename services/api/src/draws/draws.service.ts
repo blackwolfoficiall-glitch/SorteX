@@ -1,3 +1,4 @@
+import { campaignDrawInstant } from '../campaigns/campaign-sales-window';
 import {
   BadRequestException,
   ConflictException,
@@ -805,9 +806,11 @@ export class DrawsService {
     this.assertOwner(campaign.organizerId, user);
     if (campaign.status !== CampaignStatus.PUBLISHED)
       throw new BadRequestException('A campanha precisa estar publicada.');
-    if (strict && (!campaign.drawDate || campaign.drawDate > new Date()))
+    const scheduledDrawAt = campaignDrawInstant(campaign);
+    const now = new Date();
+    if (strict && (!scheduledDrawAt || scheduledDrawAt > now))
       throw new BadRequestException('A data do sorteio ainda não chegou.');
-    if (strict && campaign.salesEndAt && campaign.salesEndAt > new Date())
+    if (strict && campaign.salesEndAt && campaign.salesEndAt > now)
       throw new BadRequestException('As vendas ainda não foram encerradas.');
     const lottery = await this.getLotteryDraw(lotteryId);
     if (

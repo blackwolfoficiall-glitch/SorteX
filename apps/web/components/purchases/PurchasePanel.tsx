@@ -12,7 +12,13 @@ import {
 } from "@/lib/purchases/client";
 import type { Ticket as TicketType } from "@/lib/purchases/types";
 
-export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
+export default function PurchasePanel({
+  campaign,
+  salesBlock,
+}: {
+  campaign: Campaign;
+  salesBlock?: string;
+}) {
   const router = useRouter();
   const [quantity, setQuantity] = useState(campaign.minimumPurchase || 1);
   const [quantityText, setQuantityText] = useState(
@@ -44,7 +50,7 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
   const accent = campaignAccent(campaign);
 
   useEffect(() => {
-    if (campaign.numberSelectionMode !== "MANUAL") return;
+    if (campaign.numberSelectionMode !== "MANUAL" || salesBlock) return;
     const params = new URLSearchParams({ page: String(page), limit: "100" });
     getNumbers(campaign.slug, params)
       .then((result) => setNumbers(result.items))
@@ -55,7 +61,7 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
             : "Falha ao consultar títulos.",
         ),
       );
-  }, [campaign.numberSelectionMode, campaign.slug, page]);
+  }, [campaign.numberSelectionMode, campaign.slug, page, salesBlock]);
 
   const promotion = campaign.promotions.find((item) => item.id === promotionId);
   const effectiveQuantity =
@@ -123,7 +129,7 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
   }
 
   async function startPurchase() {
-    if (loading) return;
+    if (loading || (salesBlock && !idempotencyKey.current)) return;
     if (!canReserve) {
       setError("Escolha uma quantidade válida para continuar.");
       return;
@@ -335,6 +341,9 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
         );
     }
   }
+
+  if (salesBlock && !idempotencyKey.current)
+    return <p className="text-sm font-semibold" role="status" data-purchase-panel>{salesBlock}</p>;
 
   return (
     <div className="space-y-5" data-purchase-panel>

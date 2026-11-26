@@ -753,7 +753,7 @@ export default function CampaignWizard({
               )}
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Data do sorteio">
+              <Field label="Data do sorteio (Brasília para novas datas)">
                 <Input
                   className={inputClass}
                   type="date"
@@ -761,7 +761,7 @@ export default function CampaignWizard({
                   onChange={(e) => set("drawDate", e.target.value)}
                 />
               </Field>
-              <Field label="Horário">
+              <Field label="Horário do sorteio (Brasília para novas datas)">
                 <Input
                   className={inputClass}
                   type="time"

@@ -24,6 +24,10 @@ import { CrmSyncService } from '../crm/crm-sync.service';
 import { reservationPricing } from './reservation-pricing';
 import { releaseUnusedCouponCapacity } from './coupon-release';
 import { serializableReservationTransition } from './reservation-transaction';
+import {
+  campaignSalesBlockMessage,
+  campaignSalesWindow,
+} from '../campaigns/campaign-sales-window';
 
 const activeStatuses: PurchaseStatus[] = [
   PurchaseStatus.RESERVED,
@@ -402,6 +406,7 @@ export class PurchasesService {
       reservedNumbers,
       soldNumbers,
       reservationSeconds,
+      salesWindow: campaignSalesWindow(campaign),
       selectionMode: campaign.numberSelectionMode,
       minimumPurchase: campaign.minimumPurchase,
       maximumPurchasePerBuyer: campaign.maximumPurchasePerBuyer,
@@ -582,6 +587,8 @@ export class PurchasesService {
       salesStartAt: Date | null;
       salesEndAt: Date | null;
       drawDate: Date | null;
+      drawTime?: string | null;
+      drawTimeZone?: string | null;
       purchasesBlocked: boolean;
       organizer?: {
         organizerProfile?: {
@@ -605,13 +612,8 @@ export class PurchasesService {
       throw new BadRequestException(
         'As vendas deste organizador estão temporariamente bloqueadas.',
       );
-    const now = new Date();
-    if (campaign.salesStartAt && campaign.salesStartAt > now)
-      throw new BadRequestException('As vendas ainda não começaram.');
-    if (campaign.salesEndAt && campaign.salesEndAt <= now)
-      throw new BadRequestException('As vendas foram encerradas.');
-    if (campaign.drawDate && campaign.drawDate <= now)
-      throw new BadRequestException('O sorteio desta campanha já ocorreu.');
+    const salesBlock = campaignSalesBlockMessage(campaign);
+    if (salesBlock) throw new BadRequestException(salesBlock);
     if (
       campaign.organizerId === user.id &&
       process.env.ALLOW_SELF_PURCHASE !== 'true'

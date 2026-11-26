@@ -1,3 +1,4 @@
+import { campaignSalesBlockMessage } from '../campaigns/campaign-sales-window';
 import {
   BadRequestException,
   ForbiddenException,
@@ -480,6 +481,8 @@ export class GrowthService {
       throw new BadRequestException(
         'A quantidade não está disponível para esta compra.',
       );
+    const salesBlock = campaignSalesBlockMessage(campaign);
+    if (salesBlock) throw new BadRequestException(salesBlock);
     const pricing = await reservationPricing(this.prisma, campaign, d);
     return {
       subtotal: Number(pricing.subtotal),
