@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Header } from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -11,6 +11,7 @@ export class DashboardController {
   constructor(private readonly service: OrganizerPlatformService) {}
 
   @Get()
+  @Header('Cache-Control', 'private, no-store')
   getDashboard(@CurrentUser() user: AuthenticatedUser) {
     return this.service.dashboard(user);
   }

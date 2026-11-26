@@ -67,11 +67,12 @@ export class OrganizerPlatformService {
             id: true,
             title: true,
             status: true,
+            publicationBlocked: true,
             soldNumbers: true,
             totalNumbers: true,
             grossRevenue: true,
           },
-          orderBy: { updatedAt: 'desc' },
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         }),
         this.prisma.purchase.aggregate({
           where: paidWhere,
@@ -112,8 +113,10 @@ export class OrganizerPlatformService {
         grossRevenue,
         revenueToday: Number(todayTotals._sum.total ?? 0),
         revenueMonth: Number(monthTotals._sum.total ?? 0),
-        activeCampaigns: campaigns.filter((campaign) =>
-          ['PUBLISHED', 'SOLD_OUT'].includes(campaign.status),
+        activeCampaigns: campaigns.filter(
+          (campaign) =>
+            !campaign.publicationBlocked &&
+            ['PUBLISHED', 'SOLD_OUT'].includes(campaign.status),
         ).length,
         soldTickets: totals._sum.quantity ?? 0,
         participants: participants.length,

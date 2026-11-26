@@ -6,5 +6,7 @@ import {
 
 export async function GET() {
   const response = await authenticatedApiFetch("/dashboard");
-  return jsonFromUpstream(await readJson(response), response.status);
+  return jsonFromUpstream(await readJson(response), response.status, {
+    "Cache-Control": "private, no-store",
+  });
 }

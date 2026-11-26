@@ -31,6 +31,7 @@ import {
 } from "./src/components/ui";
 import { LocationPicker } from "./src/components/LocationPicker";
 import { NativeOrganizerDraft } from "./src/components/NativeOrganizerDraft";
+import { OrganizerDashboardHome } from "./src/organizer/NativeOrganizerDashboard";
 import { NativeOrganizerFinance } from "./src/organizer/NativeOrganizerFinance";
 import { organizerFinanceSession } from "./src/organizer/finance";
 import { NativeOrganizerDraftPrizes } from "./src/components/NativeOrganizerDraftPrizes";
@@ -514,57 +515,34 @@ function CampaignCard({
   );
 }
 function Home({ navigation }: any) {
-  const auth = useSyncExternalStore(client.subscribe, client.snapshot),
-    organizer = auth.user?.role === "ORGANIZER";
-  const state = useData<any>(organizer ? "/dashboard" : "/buyer/home");
+  const auth = useSyncExternalStore(client.subscribe, client.snapshot);
+  const greeting = `Olá, ${auth.user?.name.split(" ")[0] || ""}`;
+  return auth.user?.role === "ORGANIZER" ? (
+    <OrganizerDashboardHome
+      greeting={greeting}
+      onCampaigns={() => navigation.navigate("Campaigns")}
+      onFinance={() => navigation.navigate("OrganizerFinance")}
+      onCampaign={(item) => navigation.navigate("Campaign", { item })}
+    />
+  ) : (
+    <BuyerHome greeting={greeting} navigation={navigation} />
+  );
+}
+
+function BuyerHome({ greeting, navigation }: { greeting: string; navigation: any }) {
+  const state = useData<{ featured: Campaign[] }>("/buyer/home");
   return (
-    <Page title={`Olá, ${auth.user?.name.split(" ")[0] || ""}`}>
+    <Page title={greeting}>
       <Notice message="Desenvolvimento · somente dados sintéticos" />
-      {auth.user?.role === "BUYER" && (
-        <Button secondary title="Notificações"
-          onPress={() => navigation.navigate("BuyerInbox")} />
-      )}
-      {auth.user?.role === "BUYER" && (
-        <Button secondary title="Favoritos"
-          onPress={() => navigation.navigate("BuyerFavorites")} />
-      )}
-      {organizer && (
-        <Button
-          secondary
-          title="Consultar financeiro e extrato"
-          onPress={() => navigation.navigate("OrganizerFinance")}
-        />
-      )}
+      <Button secondary title="Notificações"
+        onPress={() => navigation.navigate("BuyerInbox")} />
+      <Button secondary title="Favoritos"
+        onPress={() => navigation.navigate("BuyerFavorites")} />
       <Load state={state}>
-        {organizer ? (
-          <>
-            <View style={s.card}>
-              <Text style={s.label}>Vendas confirmadas</Text>
-              <Text style={s.title}>
-                {money(state.data?.summary?.grossRevenue)}
-              </Text>
-              <Text style={s.text}>
-                {state.data?.summary?.activeCampaigns || 0} campanhas ativas ·{" "}
-                {state.data?.summary?.participants || 0} participantes
-              </Text>
-              <Text style={s.muted}>
-                {state.data?.summary?.soldTickets || 0} títulos vendidos
-              </Text>
-            </View>
-            {(state.data?.campaigns || []).slice(0, 3).map((item: Campaign) => (
-              <CampaignCard key={item.id} item={item} navigation={navigation} />
-            ))}
-          </>
-        ) : (
-          <>
-            {(state.data?.featured || []).map((item: Campaign) => (
-              <CampaignCard key={item.id} item={item} navigation={navigation} />
-            ))}
-            {!state.data?.featured?.length && (
-              <Notice message="Confira a aba Campanhas." />
-            )}
-          </>
-        )}
+        {(state.data?.featured || []).map((item) => (
+          <CampaignCard key={item.id} item={item} navigation={navigation} />
+        ))}
+        {!state.data?.featured?.length && <Notice message="Confira a aba Campanhas." />}
       </Load>
       <Button secondary title="Atualizar painel" onPress={state.retry} />
     </Page>
