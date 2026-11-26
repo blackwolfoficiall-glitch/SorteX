@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { installPhysicalQaRelease } from './iphone-release.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const app = path.join(root, 'apps/mobile');
@@ -12,7 +13,8 @@ const qaApi = 'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-eas
 const usage = 'Uso: node .github/mobile/iphone.mjs check | go [--tunnel|--lan] | xcode | prepare-release | release --device <UDID> [--profile reservations-sandbox|checkout-sandbox]';
 const qaBranch = 'homologacao/web-ios-integrada';
 const optionalProfiles = ['reservations-sandbox', 'checkout-sandbox'];
-const releaseEnvKeys = /\b(?:EXPO_PUBLIC_\w+|EXPO_NO_DOTENV|SKIP_BUNDLING|FORCE_BUNDLING)\b/;
+const customBundleKeys = ['SKIP_BUNDLING', 'FORCE_BUNDLING', 'BUNDLE_COMMAND', 'ENTRY_FILE', 'CLI_PATH'];
+const releaseEnvKeys = new RegExp(`\\b(?:EXPO_PUBLIC_\\w+|EXPO_NO_DOTENV|${customBundleKeys.join('|')})\\b`);
 export function parseMode(args) {
   const [mode = 'go', flag, value, ...rest] = args;
   if (mode === 'release' && flag === '--device' &&
@@ -45,17 +47,21 @@ export function assertQaRelease(branch, dirty, env = process.env) {
     fail('Release QA exige um clone limpo na branch homologacao/web-ios-integrada. Não altere seu checkout de trabalho.');
   if (env.EXPO_PUBLIC_API_URL && env.EXPO_PUBLIC_API_URL.replace(/\/$/, '') !== qaApi)
     fail('Release QA recusado: a API configurada não é a QA isolada.');
-  if (env.SKIP_BUNDLING || env.FORCE_BUNDLING)
+  if (customBundleKeys.some((key) => env[key]))
     fail('Remova os ajustes de empacotamento da sessão antes da Release QA.');
 }
 export function ensureDevice(devices, udid) {
-  if (!Array.isArray(devices) || !devices.some((device) =>
+  const detected = Array.isArray(devices) && devices.find((device) =>
     typeof device?.identifier === 'string' &&
     device.identifier.toUpperCase() === udid.toUpperCase() &&
     device.simulator === false && device.available === true &&
     device.platform === 'com.apple.platform.iphoneos' &&
-    /^iPhone/.test(device.modelCode || device.modelName || '')))
+    /^iPhone/.test(device.modelCode || device.modelName || ''));
+  if (!detected)
     fail('O identificador não corresponde a um iPhone físico disponível. Conecte por cabo, desbloqueie e confira o Xcode.');
+  const major = Number.parseInt(detected.operatingSystemVersion, 10);
+  if (Number.isFinite(major) && major < 17)
+    fail('A instalação por devicectl exige iOS 17 ou posterior.');
 }
 export function qaIsReady(status, body) {
   return status === 200 && body?.status === 'ready' && body.database === 'up';
@@ -191,7 +197,7 @@ async function main() {
     }
     if (mode === 'prepare-release') {
       console.log('No target SorteXTeste, ajuste Automatically manage signing e selecione só seu Personal Team.');
-      console.log('Não use Product → Run agora. Conecte o iPhone e localize o Identifier no Xcode.');
+      console.log('Conecte o iPhone, selecione-o no Xcode e conclua a assinatura de desenvolvimento. Não inicie Metro.');
       console.log('Após a API QA ficar pronta: node .github/mobile/iphone.mjs release --device <UDID>');
       run('open', [workspace]);
       return;
@@ -207,8 +213,9 @@ async function main() {
       'checkout-sandbox': 'Perfil Checkout Sandbox: somente QA isolada. Não escaneie nem pague Pix.',
     };
     console.log(description[profile ?? 'core']);
-    console.log('Release QA assinada para desenvolvimento, com JavaScript embutido. Nenhuma distribuição ou cobrança.');
-    run('npx', ['--no-install', 'expo', 'run:ios', '--scheme', 'SorteXTeste', '--configuration', 'Release', '--no-bundler', '--no-install', '--device', udid]);
+    console.log('Compilando a Release QA com a assinatura de desenvolvimento já configurada no Xcode.');
+    const installed = installPhysicalQaRelease({ workspace, udid, api, run, capture });
+    console.log(`Instalação e lançamento confirmados pelo Xcode: ${installed.bundleId}, build ${installed.build}, JS SHA-256 ${installed.bundleSha256}.`);
     console.log('Confirme no aparelho a abertura pelo ícone com o Mac desconectado, sem iniciar Metro.');
     return;
   }

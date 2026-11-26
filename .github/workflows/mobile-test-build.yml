@@ -8,7 +8,8 @@ permissions:
   contents: read
 concurrency:
   group: mobile-test-${{ github.ref }}
-  cancel-in-progress: true
+  # Preserve the running QA Xcode build; the latest QA candidate queues behind it.
+  cancel-in-progress: ${{ github.ref == 'refs/heads/feat/mobile-expo' }}
 jobs:
   android:
     if: github.ref == 'refs/heads/feat/mobile-expo' && github.event.repository.private == false

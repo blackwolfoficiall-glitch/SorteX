@@ -6,7 +6,7 @@ A candidata é a branch `homologacao/web-ios-integrada`, não `feat/mobile-expo`
 
 ## 1. Preparar no Mac, mesmo antes de a API estar pronta
 
-Requisitos: Node 22.13+, 24.3+ ou outra linha par suportada pelo iniciador; Xcode completo 26.4+ selecionado em **Xcode → Settings → Locations → Command Line Tools**; CocoaPods já instalado; iPhone com iOS 16.4+ e versão reconhecida pelo Xcode. Se o Xcode pedir instalação de componentes, login ou aceite de licença, o proprietário decide e faz isso diretamente. O iniciador não providencia credenciais, não aceita contratos e não compra nada.
+Requisitos: Node 22.13+, 24.3+ ou outra linha par suportada pelo iniciador; Xcode completo 26.4+ selecionado em **Xcode → Settings → Locations → Command Line Tools**; CocoaPods já instalado; iPhone com iOS 17+ reconhecido pelo Xcode para instalação pelo CoreDevice (`devicectl`). O SDK Expo 58 aceita iOS 16.4+, mas isso não garante suporte ao mesmo iniciador nesses aparelhos. Se o Xcode pedir instalação de componentes, login ou aceite de licença, o proprietário decide e faz isso diretamente. O iniciador não providencia credenciais, não aceita contratos e não compra nada.
 
 Depois que o commit com `prepare-release` estiver na branch remota, no **Terminal do Mac**:
 
@@ -24,7 +24,7 @@ Se a pasta de destino já existir, dê outro nome à cópia. Não mude branches,
 1. Conecte o iPhone por cabo, desbloqueie e confirme **Confiar neste computador**. Prossiga com **Modo de Desenvolvedor** se o Xcode/iOS pedir; é uma decisão do proprietário no aparelho.
 2. No Xcode, autentique a Apple Account em **Settings → Accounts**, se necessário. Não envie senha, código ou chave.
 3. O iniciador abre `SorteXTeste.xcworkspace`. No target **SorteXTeste → Signing & Capabilities**, selecione **Automatically manage signing** e seu **Personal Team** gratuito. Não use certificado, identificador ou equipe de distribuição. O bundle ID de teste é `br.com.sortex.development`; se o Xcode disser que não pertence à equipe, pare e registre o erro. Não renomeie o identificador nem regenere às cegas para contornar a assinatura.
-4. No Xcode, localize **Devices and Simulators** / **Device Hub**, abra os detalhes do iPhone físico e copie o **Identifier** para usar apenas no Terminal. Não aperte Run, não inicie Metro e não publique pelo Xcode.
+4. Selecione o iPhone físico no Xcode e deixe a assinatura de desenvolvimento ficar pronta. Se aparecer **Register** ou uma confirmação no iPhone, conclua pessoalmente antes de continuar. No **Devices and Simulators** / **Device Hub**, abra os detalhes do aparelho e copie o **Identifier** para usar apenas no Terminal. Não inicie Metro nem publique pelo Xcode.
 
 ## 2. Compilar e instalar quando a QA estiver pronta
 
@@ -35,11 +35,11 @@ node .github/mobile/iphone.mjs check
 node .github/mobile/iphone.mjs release --device IDENTIFIER_DO_IPHONE
 ```
 
-Substitua `IDENTIFIER_DO_IPHONE` pelo valor mostrado no Xcode, sem colchetes. O comando verifica o dispositivo físico, a revisão da pasta nativa, a API QA e a disponibilidade do banco antes de chamar Expo CLI com configuração Release e `--no-bundler`. O build exclui configurações locais conflitantes, não usa outro servidor como fallback e desativa reserva e Pix na primeira validação do aparelho. Se a prontidão falhar, preserve o clone preparado e não aponte o app para outro ambiente. O Personal Team gratuito tem limite de dispositivos e expiração de perfis em sete dias; para continuar depois, pode ser necessário reconstruir e reinstalar.
+Substitua `IDENTIFIER_DO_IPHONE` pelo valor mostrado no Xcode, sem colchetes. O comando verifica o dispositivo físico, a revisão da pasta nativa, a API QA e a disponibilidade do banco antes de compilar com `xcodebuild` em Release para esse iPhone. Só instala pelo `devicectl` se a assinatura for de desenvolvimento e o app contiver `main.jsbundle` com a URL QA e o identificador `br.com.sortex.development`. A abertura é solicitada por esse identificador, sem deep link de desenvolvimento nem Expo CLI. O iniciador não registra dispositivo nem renova a assinatura automaticamente. Se ainda faltar provisionamento, volte ao Xcode com o proprietário em vez de usar assinatura de distribuição ou apontar o app para outro ambiente. Reserva e Pix continuam desativados na primeira validação. O Personal Team gratuito tem limite de dispositivos e expiração de perfis em sete dias; para continuar depois, pode ser necessário reconstruir e reinstalar.
 
 ## 3. Evidência que separa instalação de integração
 
-1. Registre o hash do Git, versão iOS, hora e resultado da compilação. Não inclua UDID, credenciais ou dados pessoais em prints.
+1. Registre o hash do Git, a versão iOS, a hora, o número do build e o SHA-256 do JavaScript que o iniciador imprime após a confirmação do Xcode. Essa confirmação é de instalação/lançamento, não de que uma tela ou jornada funcionou. Não inclua UDID, credenciais ou dados pessoais em prints.
 2. Feche o app, desconecte o cabo e abra pelo ícone, sem Metro. Registre o que abriu. Em seguida verifique login e restauração da sessão com conta sintética quando houver rede. A abertura off-line da interface não implica login off-line.
 3. Quando web e iOS apontarem para a mesma API QA, use a **mesma conta sintética** nas duas interfaces e confronte perfil e uma campanha de teste. Não valide compra ou Pix neste build inicial. Não confunda navegação no iPhone com homologação financeira.
 4. Já autenticado com contas sintéticas, abra **Campanhas** como comprador e **Pedidos** como organizador. Confirme que o resultado paginado (inclusive vazio) abre sem erro; se houver dados suficientes, avance uma página e volte. A captura da abertura no simulador não cobre essas telas.
@@ -84,4 +84,4 @@ node .github/mobile/iphone.mjs release --device IDENTIFIER_DO_IPHONE --profile r
 
 A [listagem brasileira da App Store](https://apps.apple.com/br/app/expo-go/id982107779) mostra que o Expo Go **58.0.5** acrescentou suporte ao SDK 58; instalações antigas, como 57.0.9, não atendem esta versão. Mesmo atualizado, Expo Go depende de Metro e não substitui o aplicativo SorteX com identidade nativa própria. Não se requer Expo Go, conta Expo, EAS Build, TestFlight ou plano pago para o caminho acima.
 
-Referências: [Expo SDK 58](https://docs.expo.dev/versions/v58.0.0/), [Expo CLI e build Release](https://docs.expo.dev/more/expo-cli/), [Apple Personal Team](https://developer.apple.com/help/account/basics/about-your-developer-account/) e [Modo de Desenvolvedor](https://developer.apple.com/documentation/xcode/enabling-developer-mode-on-a-device).
+Referências: [Expo SDK 58](https://docs.expo.dev/versions/v58.0.0/), [Apple Personal Team](https://developer.apple.com/help/account/basics/about-your-developer-account/), [Modo de Desenvolvedor](https://developer.apple.com/documentation/xcode/enabling-developer-mode-on-a-device) e [comandos da Apple para instalar e abrir pelo identificador](https://developer.apple.com/documentation/xcode/interacting-with-devices-using-the-command-line).

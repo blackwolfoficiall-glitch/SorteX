@@ -31,6 +31,8 @@ import {
 } from "./src/components/ui";
 import { LocationPicker } from "./src/components/LocationPicker";
 import { NativeOrganizerDraft } from "./src/components/NativeOrganizerDraft";
+import { NativeBuyerPrizes } from "./src/buyer/NativeBuyerPrizes";
+import { NativeBuyerDrawResults } from "./src/buyer/NativeBuyerDrawResults";
 import { NativePublicDrawProof } from "./src/components/NativePublicDrawProof";
 import { NativePublicCampaignCover } from "./src/components/NativePublicCampaignCover";
 import { publicCampaignCoverSource } from "./src/domain/public-campaign-cover";
@@ -913,85 +915,28 @@ function Profile() {
   );
 }
 function Results() {
-  const state = useData<Purchase[]>("/purchases/my");
-  const [results, setResults] = useState<any[]>([]),
-    [error, setError] = useState(""),
-    [loading, setLoading] = useState(false),
-    [version, setVersion] = useState(0);
-  useEffect(() => {
-    let active = true;
-    if (!state.data) return;
-    setLoading(true);
-    setError("");
-    const ids = [
-      ...new Set(
-        state.data.map((p: any) => p.campaign?.organizerId).filter(Boolean),
-      ),
-    ] as string[];
-    Promise.all(
-      ids.map((id) =>
-        client.publicRequest<any>(
-          `/public/campaigns/organizers/${encodeURIComponent(id)}/profile`,
-        ),
-      ),
-    )
-      .then((data) => {
-        if (active)
-          setResults(
-            data
-              .flatMap((x) => x.campaigns || [])
-              .filter((c: any) =>
-                c.draws?.some((d: any) => d.status === "CONFIRMED"),
-              ),
-          );
-      })
-      .catch((e) => {
-        if (active) setError(message(e));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [state.data, version]);
+  const auth = useSyncExternalStore(client.subscribe, client.snapshot);
+  const buyerId = auth.status === "signedIn" && auth.user?.role === "BUYER"
+    ? auth.user.id
+    : null;
+  return <BuyerResults key={buyerId ?? "signed-out"} buyerId={buyerId} />;
+}
+
+function BuyerResults({ buyerId }: { buyerId: string | null }) {
+  const focused = useIsFocused();
+  const [showPrizes, setShowPrizes] = useState(false);
   return (
     <Page title="Resultados">
+      {buyerId ? (
+        <>
+          <Button secondary title={showPrizes ? "Ocultar meus prêmios" : "Meus prêmios"} onPress={() => setShowPrizes((open) => !open)} />
+          {showPrizes && focused && <NativeBuyerPrizes client={client} accountId={buyerId} />}
+        </>
+      ) : null}
       <NativePublicDrawProof client={client} />
-      <Load state={state}>
-        {loading ? (
-          <ActivityIndicator />
-        ) : error ? (
-          <>
-            <Notice error message={error} />
-            <Button
-              title="Tentar novamente"
-              onPress={() => setVersion((x) => x + 1)}
-            />
-          </>
-        ) : results.length ? (
-          results.map((c) => (
-            <View key={c.id} style={s.card}>
-              <Text style={s.title}>{c.title}</Text>
-              {c.draws
-                .filter((d: any) => d.status === "CONFIRMED")
-                .map((d: any, i: number) => (
-                  <Text key={i} style={s.text}>
-                    Número apurado: {d.winningNumber}
-                  </Text>
-                ))}
-              {c.winners?.map((w: any) => (
-                <Text key={w.id} style={s.text}>
-                  {w.publicDisplayName || "Ganhador com divulgação restrita"} ·{" "}
-                  {w.prizeName}
-                </Text>
-              ))}
-            </View>
-          ))
-        ) : (
-          <Notice message="Nenhum resultado confirmado nas campanhas dos seus pedidos. Apenas divulgações autorizadas são exibidas." />
-        )}
-      </Load>
+      {buyerId && focused && (
+        <NativeBuyerDrawResults client={client} accountId={buyerId} />
+      )}
     </Page>
   );
 }
