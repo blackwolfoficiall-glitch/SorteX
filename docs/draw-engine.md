@@ -43,7 +43,19 @@ Após confirmação válida de pagamento, o detector compara somente títulos `S
 
 ## Auditoria e hash
 
-Eventos relevantes são registrados em `AuditLog`. O hash SHA-256 usa JSON canônico, snapshots, ticket, horário e a versão `sortex-draw-v1`. Ele é prova de integridade interna, não blockchain e não comprova sozinho a autenticidade da fonte externa.
+Eventos relevantes são registrados em `AuditLog`. Novas apurações usam
+`sortex-draw-v2`. O SHA-256 incorpora os identificadores da campanha e extração,
+a regra e o resultado registrados (incluindo o ID do título e os dados de
+origem quando presentes), os números de saída e o mesmo `executedAt` gravado
+no banco. O JSON é normalizado primeiro; datas entram em ISO e chaves de
+objetos são ordenadas sem depender do idioma do servidor. O replay lê apenas
+o registro persistido e não requer consultar novamente a CAIXA.
+
+A confirmação confere o hash antes de criar um ganhador. Apurações antigas
+continuam sem versão gravada; seus hashes não são recalculados ou tratados
+como verificáveis retroativamente. O v1 usava um horário separado que não foi
+gravado como parte da entrada do hash. Isso é controle de consistência interna,
+não assinatura digital, blockchain ou comprovação de autenticidade da fonte.
 
 ## Privacidade
 

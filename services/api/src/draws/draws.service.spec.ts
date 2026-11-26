@@ -1,6 +1,11 @@
-import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { TicketStatus, UserRole } from '@prisma/client';
 import { DrawsService } from './draws.service';
+import { AuditHashService } from './audit-hash.service';
 
 const user = {
   id: 'organizer-1',
@@ -167,5 +172,59 @@ describe('DrawsService winner lookup', () => {
         }),
       }),
     });
+  });
+});
+
+describe('DrawsService legacy audit proofs', () => {
+  it('não recalcula hashes antigos nem muda o caminho de confirmação legado', async () => {
+    const transaction = jest.fn().mockResolvedValue({ confirmed: true });
+    const draw = {
+      auditHashVersion: null,
+      auditHash: 'original-legacy-hash',
+      status: 'PENDING_CONFIRMATION',
+      campaign: campaign(),
+      resultSnapshot: { ticketId: 'ticket-1' },
+    };
+    const prisma = {
+      campaignDraw: { findUnique: jest.fn().mockResolvedValue(draw) },
+      $transaction: transaction,
+    };
+    const service = new DrawsService(
+      prisma as never,
+      {} as never,
+      new AuditHashService(),
+      {} as never,
+    );
+    await expect(service.confirmCampaign('campaign-1', user)).resolves.toEqual({
+      confirmed: true,
+    });
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(draw.auditHash).toBe('original-legacy-hash');
+  });
+
+  it('nega uma versão não reconhecida antes de escrever o ganhador', async () => {
+    const transaction = jest.fn();
+    const prisma = {
+      campaignDraw: {
+        findUnique: jest.fn().mockResolvedValue({
+          auditHashVersion: 'unknown-proof',
+          auditHash: 'anything',
+          status: 'PENDING_CONFIRMATION',
+          campaign: campaign(),
+          resultSnapshot: { ticketId: 'ticket-1' },
+        }),
+      },
+      $transaction: transaction,
+    };
+    const service = new DrawsService(
+      prisma as never,
+      {} as never,
+      new AuditHashService(),
+      {} as never,
+    );
+    await expect(
+      service.confirmCampaign('campaign-1', user),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(transaction).not.toHaveBeenCalled();
   });
 });

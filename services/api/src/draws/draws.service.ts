@@ -264,7 +264,7 @@ export class DrawsService {
       lottery: {
         id: lottery.id,
         extractionNumber: lottery.extractionNumber,
-        drawDate: lottery.drawDate,
+        drawDate: lottery.drawDate.toISOString(),
         prizes: this.prizes(lottery),
         ...(lottery.sourcePrizes && {
           sourcePrizes: lottery.sourcePrizes,
@@ -275,37 +275,38 @@ export class DrawsService {
       ticketId: ticket?.id ?? null,
       policy: campaign.unsoldNumberPolicy,
     };
-    const auditHash = this.hashes.create({
+    const facts = {
       campaignId: id,
       lotteryDrawId: lottery.id,
-      rule,
-      result: snapshot,
-      ticketId: ticket?.id ?? null,
-      executedAt: new Date().toISOString(),
+      ruleSnapshot: rule as unknown as Prisma.InputJsonValue,
+      resultSnapshot: snapshot,
+      winningNumber: result.rawResult,
+      normalizedWinningNumber: result.normalizedResult,
+      executedAt: new Date(),
+    };
+    const draw = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.campaignDraw.create({
+        data: {
+          ...facts,
+          ruleTemplateId: campaign.drawRuleTemplateId,
+          status: CampaignDrawStatus.PENDING_CONFIRMATION,
+          executedByUserId: user.id,
+          auditHash: this.hashes.drawHash(facts),
+          auditHashVersion: this.hashes.algorithmVersion,
+          notes: dto.notes,
+        },
+      });
+      await this.audit(
+        'CampaignDraw',
+        created.id,
+        'EXECUTED',
+        user,
+        undefined,
+        created,
+        tx,
+      );
+      return created;
     });
-    const draw = await this.prisma.campaignDraw.create({
-      data: {
-        campaignId: id,
-        lotteryDrawId: lottery.id,
-        ruleTemplateId: campaign.drawRuleTemplateId,
-        ruleSnapshot: rule as unknown as Prisma.InputJsonValue,
-        resultSnapshot: snapshot,
-        winningNumber: result.rawResult,
-        normalizedWinningNumber: result.normalizedResult,
-        status: CampaignDrawStatus.PENDING_CONFIRMATION,
-        executedByUserId: user.id,
-        auditHash,
-        notes: dto.notes,
-      },
-    });
-    await this.audit(
-      'CampaignDraw',
-      draw.id,
-      'EXECUTED',
-      user,
-      undefined,
-      draw,
-    );
     return { ...draw, preview: snapshot, requiresManualReview: !ticket };
   }
 
@@ -320,6 +321,16 @@ export class DrawsService {
       throw new ConflictException('Sorteio já confirmado.');
     if (draw.status !== CampaignDrawStatus.PENDING_CONFIRMATION)
       throw new BadRequestException('Execução não pode ser confirmada.');
+    // Existing v1 proofs did not persist their input timestamp; do not
+    // reinterpret or rewrite them as though they were reproducible.
+    if (
+      draw.auditHashVersion !== null &&
+      (draw.auditHashVersion !== this.hashes.algorithmVersion ||
+        this.hashes.drawHash(draw) !== draw.auditHash)
+    )
+      throw new ConflictException(
+        'A verificação de integridade da apuração falhou. Revise o registro antes de confirmar.',
+      );
     const snapshot = draw.resultSnapshot as Record<string, unknown>;
     const ticketId =
       typeof snapshot.ticketId === 'string' ? snapshot.ticketId : null;

@@ -2525,6 +2525,7 @@ model CampaignDraw {
   confirmedByUserId       String?
   confirmedAt             DateTime?
   auditHash               String             @unique
+  auditHashVersion        String?
   previousAuditHash       String?
   notes                   String?
   createdAt               DateTime           @default(now())
