@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { loadOrganizerFinanceDashboard } from "@/lib/finance/load-organizer-finance-dashboard";
 import {
   Area,
   AreaChart,
@@ -74,16 +75,15 @@ export default function FinanceDashboard() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      get<Overview>("/api/finance/overview"),
-      get<{ data: Entry[] }>("/api/finance/statement?limit=100"),
-      get<Campaign[]>("/api/finance/campaigns"),
-    ])
-      .then(([nextOverview, statement, nextCampaigns]) => {
-        if (!active) return;
-        setOverview(nextOverview);
-        setEntries(statement.data);
-        setCampaigns(nextCampaigns);
+    loadOrganizerFinanceDashboard<Overview, { data: Entry[] }, Campaign[]>(
+      get,
+      () => active,
+    )
+      .then((result) => {
+        if (!active || !result) return;
+        setOverview(result.overview);
+        setEntries(result.statement.data);
+        setCampaigns(result.campaigns);
       })
       .catch((cause) => {
         if (active)

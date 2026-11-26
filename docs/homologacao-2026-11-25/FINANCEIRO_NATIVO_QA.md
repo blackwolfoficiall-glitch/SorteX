@@ -41,10 +41,16 @@ respostas em voo mesmo se for a mesma conta que entrou de novo.
   bloqueado e a conta de outro organizador permanecem iguais; repetir o
   fluxo mantém uma única auditoria de liberação. Não é transferência, saque
   nem validação de gateway.
+- O painel Web aguarda o término da visão geral antes de pedir o extrato e as
+  campanhas em paralelo. A ordem anterior permitia ver saldo liberado e o
+  mesmo lançamento ainda pendente na primeira carga. A regressão de ordem
+  falhou com as três requisições paralelas; com a correção, o primeiro extrato
+  retornado pelo BFF já mostra o mesmo ID como disponível. O teste preserva os
+  cabeçalhos privados sem cache e comprova que não houve liberação duplicada.
 
 Rodada local de 26/11/2026: **52/52** testes do app e TypeScript aprovados;
-**1/1** Nest HTTP + PostgreSQL 18.7 descartável, incluindo comparação pelo
-BFF compilado do Next. BFF e cliente móvel retornaram os mesmos valores e
+**4/4** na suíte financeira (duas regressões de Web e dois cenários Nest HTTP
++ PostgreSQL 18.7 descartável, incluindo o BFF compilado do Next). BFF e cliente móvel retornaram os mesmos valores e
 16 lançamentos em duas páginas, com cache desabilitado. Sessão ausente
 recebeu 401, comprador recebeu 403, outro organizador viu apenas os próprios
 dados. A consulta não alterou lançamento pendente nem abriu conta. Essa

@@ -7,12 +7,87 @@ import {
   loadOrganizerFinance,
   organizerFinanceSession,
 } from '../../../apps/mobile/src/organizer/finance';
+import { loadOrganizerFinanceDashboard } from '../../../apps/web/lib/finance/load-organizer-finance-dashboard';
 import { createApplication } from '../src/application';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 const database = process.env.SORTEX_FINANCE_E2E_DATABASE_URL;
 const web = process.env.SORTEX_FINANCE_E2E_WEB_URL;
 const isolated = database ? describe : describe.skip;
+
+function gate() {
+  let open!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return { waiting, open };
+}
+
+describe('Web organizer finance dashboard request order', () => {
+  it('waits for the overview before fetching statement and campaign data', async () => {
+    const overview = gate();
+    const paths: string[] = [];
+    async function get<T>(path: string): Promise<T> {
+      paths.push(path);
+      if (path === '/api/finance/overview') await overview.waiting;
+      return path as T;
+    }
+
+    const load = loadOrganizerFinanceDashboard<string, string, string>(
+      get,
+      () => true,
+    );
+    const early = [...paths];
+    overview.open();
+
+    await expect(load).resolves.toEqual({
+      overview: '/api/finance/overview',
+      statement: '/api/finance/statement?limit=100',
+      campaigns: '/api/finance/campaigns',
+    });
+    expect(early).toEqual(['/api/finance/overview']);
+    expect(paths).toEqual([
+      '/api/finance/overview',
+      '/api/finance/statement?limit=100',
+      '/api/finance/campaigns',
+    ]);
+  });
+
+  it('preserves request errors and drops responses after leaving the page', async () => {
+    const overview = gate();
+    const error = new Error('Erro financeiro.');
+    const paths: string[] = [];
+    let active = true;
+    async function get<T>(path: string): Promise<T> {
+      paths.push(path);
+      await overview.waiting;
+      return path as T;
+    }
+    const abandoned = loadOrganizerFinanceDashboard(get, () => active);
+    active = false;
+    overview.open();
+    await expect(abandoned).resolves.toBeUndefined();
+    expect(paths).toEqual(['/api/finance/overview']);
+
+    await expect(
+      loadOrganizerFinanceDashboard(
+        async () => {
+          throw error;
+        },
+        () => true,
+      ),
+    ).rejects.toBe(error);
+    await expect(
+      loadOrganizerFinanceDashboard(
+        async <T>(path: string) => {
+          if (path.endsWith('campaigns')) throw error;
+          return path as T;
+        },
+        () => true,
+      ),
+    ).rejects.toBe(error);
+  });
+});
 
 isolated(
   'Organizer finance snapshots and existing Web overview against isolated PostgreSQL',
@@ -318,7 +393,7 @@ isolated(
 
     const withWeb = web ? it : it.skip;
     withWeb(
-      'reflects one due internal credit released by the actual Web finance overview in a later native refresh',
+      'shows one released internal credit in the first Web statement and later native refresh',
       async () => {
         const owner = await account(UserRole.ORGANIZER);
         const other = await account(UserRole.ORGANIZER);
@@ -394,9 +469,24 @@ isolated(
         ).toBe(0);
 
         const headers = await webSession(owner.email, owner.id);
-        async function webOverview() {
-          // FinanceDashboard uses this real Next BFF path on entry.
-          const response = await fetch(web + '/api/finance/overview', {
+        const requests: string[] = [];
+        const overviewPath = '/api/finance/overview';
+        const statementPath = '/api/finance/statement?limit=100';
+        const campaignsPath = '/api/finance/campaigns';
+        const overviewWaiting = gate();
+        const allowOverview = gate();
+        type WebOverview = {
+          account: { id: string };
+          balance: Record<string, number>;
+        };
+        type WebStatement = { data: { id: string; status: LedgerStatus }[] };
+        async function get<T>(path: string): Promise<T> {
+          requests.push(path);
+          if (path === overviewPath) {
+            overviewWaiting.open();
+            await allowOverview.waiting;
+          }
+          const response = await fetch(web + path, {
             headers,
             redirect: 'error',
           });
@@ -404,12 +494,32 @@ isolated(
           expect(response.headers.get('cache-control')).toBe(
             'private, no-store',
           );
-          return (await response.json()) as {
-            account: { id: string };
-            balance: Record<string, number>;
-          };
+          return (await response.json()) as T;
         }
-        const website = await webOverview();
+        function loadWebDashboard() {
+          return loadOrganizerFinanceDashboard<
+            WebOverview,
+            WebStatement,
+            unknown[]
+          >(get, () => true);
+        }
+
+        const opening = loadWebDashboard();
+        let startedBeforeOverview: string[];
+        try {
+          await overviewWaiting.waiting;
+          startedBeforeOverview = [...requests];
+        } finally {
+          allowOverview.open();
+        }
+        const dashboard = await opening;
+        expect(startedBeforeOverview).toEqual([overviewPath]);
+        expect(requests).toEqual([overviewPath, statementPath, campaignsPath]);
+        expect(dashboard?.statement.data).toMatchObject([
+          { id: own.due.id, status: LedgerStatus.AVAILABLE },
+        ]);
+        expect(dashboard?.campaigns).toEqual([]);
+        const website = dashboard!.overview;
         expect(website.account.id).toBe(own.account.id);
         expect(website.balance).toMatchObject({
           available: 18,
@@ -431,20 +541,10 @@ isolated(
             })),
           },
         });
-        const webStatement = await fetch(
-          web + '/api/finance/statement?limit=100',
-          {
-            headers,
-            redirect: 'error',
-          },
-        );
-        expect(webStatement.status).toBe(200);
-        expect(await webStatement.json()).toMatchObject({
-          data: [{ id: own.due.id, status: LedgerStatus.AVAILABLE }],
-        });
-
         // Repeat the visit and the native refresh: no double release or audit.
-        expect((await webOverview()).balance).toEqual(website.balance);
+        expect((await loadWebDashboard())?.overview.balance).toEqual(
+          website.balance,
+        );
         expect(await loadOrganizerFinance(native, ownSession, 1)).toEqual(
           after,
         );
