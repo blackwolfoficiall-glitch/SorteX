@@ -7,6 +7,7 @@ on:
     branches: [infra/netlify-northflank-neon]
     paths:
       - .github/workflows/homologacao-web-ios.yml
+      - .github/qa/**
       - apps/web/**
       - apps/mobile/**
       - packages/contracts/**
@@ -55,6 +56,8 @@ jobs:
             services/api/package-lock.json
             apps/web/package-lock.json
             apps/mobile/package-lock.json
+      - name: Verificar a barreira da prévia privada (sem abrir túnel)
+        run: node --test .github/qa/sortex-pin-preview.test.mjs
       - name: Aplicar migrações e testar a API
         working-directory: services/api
         run: |
