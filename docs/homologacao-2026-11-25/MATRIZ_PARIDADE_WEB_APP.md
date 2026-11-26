@@ -12,7 +12,7 @@ Portal indica link para o site dentro do aplicativo. Restrito indica exclusão i
 | Sessões e permissões | login, admin/login | Main, SecureStore | auth/guards | AuthSession | Rotação HTTP no Neon QA; 27 mobile | Persistência em SecureStore ainda não exercitada no iPhone; portal abre sessão distinta | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Dashboard | dashboard | Home | dashboard | Campaign/Payment | dashboard.spec | Comparar totais por ID e período | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Criar campanhas | dashboard/campanhas/nova | Criar rascunho nativo; portal para edição avançada | campaigns | Campaign | BFF↔cliente no Neon QA | Mesmo ID de rascunho por HTTP; interface e publicação ainda não verificadas no iPhone | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
-| Editar campanhas | dashboard/campanhas/[id]/editar | Editar rascunho nativo; portal para edição avançada | campaigns | Campaign | BFF↔cliente no Neon QA | Alteração sincronizada por HTTP; repetir na interface física | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
+| Editar campanhas | dashboard/campanhas/[id]/editar | Rascunho nativo; edição limitada de título/resumo/descrição de publicada ou pausada; portal para edição avançada | campaigns | Campaign | BFF↔cliente no Neon QA para rascunhos; jornada HTTP/PG e Chromium local para publicada | Repetir na interface física | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Gerenciar campanhas e publicações | dashboard/campanhas | Campaigns, Campaign; portal | campaigns | Campaign | campaigns.spec | Publicação e bloqueios no dispositivo | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Prêmios e fotos | editor de campanha | Portal | campaigns, media | CampaignImage | media, DTO | Upload e releitura no telefone | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Promoções e cupons | dashboard/promocoes | Portal | campaigns,purchases | CampaignPromotion | purchases, DTO | Aplicar desconto no checkout móvel | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
@@ -65,14 +65,14 @@ Portal indica link para o site dentro do aplicativo. Restrito indica exclusão i
 | # | Cenário obrigatório | Evidência atual | Falta para aceitar |
 |---|---|---|---|
 | 1 | Criar na web, ver no iPhone | Mesmo ID de rascunho no Next e cliente móvel por HTTP no Neon QA | Site privado e interface física; distinguir rascunho de publicação |
-| 2 | Editar no iPhone, ver na web | Rascunho editado pelo cliente móvel e relido no Next por HTTP no Neon QA | Edição pela interface física e releitura visual |
+| 2 | Editar no iPhone, ver na web | Rascunho editado e relido no Neon QA; resumo de campanha publicada editado no cliente móvel e exibido no Chromium em ensaio local | Edição pela interface física e releitura visual |
 | 3 | Cadastro web e login no app | IDs, papéis, login e rotação conferidos por HTTP no Neon QA | Acesso no iPhone e sessão preservada após reabrir |
 | 4 | Reservar e comprar cotas de teste | Reserva e reaproveitamento de cota exercitados com PostgreSQL isolado | Compra sintética em ambiente Teste do provedor e interface física |
-| 5 | Confirmação via webhook | Teste local com resposta de provedor controlada | Ordem rastreada no Mercado Pago Teste e webhook assinado entregue pelo provedor |
-| 6 | Títulos, ganhadores e saldo | Testes locais separados de emissão/estorno e auditoria de apuração | Os três resultados na mesma jornada QA por web e iOS |
+| 5 | Confirmação via webhook | Teste local confirma reentrega assinada após vínculo tardio do pedido, sem duplicar título ou crédito; provedor simulado | Ordem rastreada no Mercado Pago Teste e webhook assinado entregue pelo provedor |
+| 6 | Títulos, ganhadores e saldo | Testes locais de emissão/estorno e apuração; a prova pública desaparece após invalidação, sem apagar o histórico | Os três resultados na mesma jornada QA por web e iOS |
 | 7 | Impedir duplicidade de cotas | Corrida em PostgreSQL isolado: uma reserva vencedora; a outra recebe conflito | Corrida web/iOS e reentrega do webhook sem novo título ou lançamento |
 | 8 | Isolamento dos organizadores | Isolamento de leitura/alteração passou no Neon QA por HTTP | Conferir com duas identidades na web privada e iPhone |
-| 9 | Permissões administrativas | Ações isoladas testadas; painel administrativo não pertence ao app comprador/organizador | Matriz de papéis no QA, ações permitidas/bloqueadas no site e o app sem acesso administrativo |
+| 9 | Permissões administrativas | 11 casos HTTP/PG locais: seis perfis, negação a compradores/organizadores, revogação e filtros de auditoria | Matriz de papéis no QA, ações permitidas/bloqueadas no site e o app sem acesso administrativo |
 
 Seguimento: quando houver acesso ao Mac, testar login e campanhas no Release Core com pagamentos desligados. A prévia Next e o app devem confirmar a mesma revisão de API; o site precisa negar acesso anônimo antes de compartilhar seu link. Para a etapa financeira, usar somente credenciais atestadas na aba Teste do provedor, campanha e identidades sintéticas; uma confirmação local ou simulada não conta como entrega do webhook. Produção e App Store fora desta rodada.
 
