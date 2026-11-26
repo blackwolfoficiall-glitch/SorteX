@@ -6,6 +6,10 @@ on:
       expected-api-sha:
         required: true
         type: string
+      check-draft-cover:
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       expected-api-sha:
@@ -31,6 +35,7 @@ jobs:
       SORTEX_PARITY_MODE: hosted-qa-synthetic
       SORTEX_PARITY_EXPECTED_API_SHA: ${{ inputs.expected-api-sha }}
       SORTEX_HOMOLOGATION_API_URL: https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech
+      SORTEX_PARITY_CHECK_DRAFT_COVER: ${{ inputs.check-draft-cover && 'yes' || 'no' }}
       NEXT_TELEMETRY_DISABLED: "1"
       EXPO_NO_TELEMETRY: "1"
     steps:

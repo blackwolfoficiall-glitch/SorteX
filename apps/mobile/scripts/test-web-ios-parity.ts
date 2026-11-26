@@ -23,6 +23,8 @@ function loopback(name: string): string {
 const web = loopback("SORTEX_PARITY_WEB");
 const hostedQa = process.env.SORTEX_PARITY_MODE === "hosted-qa-synthetic";
 const hostedRevision = process.env.SORTEX_PARITY_EXPECTED_API_SHA ?? "";
+const checkDraftCover = process.env.SORTEX_PARITY_CHECK_DRAFT_COVER === "yes";
+assert.ok(!checkDraftCover || hostedQa, "O teste de mídia usa apenas a QA hospedada isolada.");
 if (hostedQa) {
   assert.equal(process.env.GITHUB_REPOSITORY, "blackwolfoficiall-glitch/SorteX");
   assert.equal(process.env.GITHUB_REF, "refs/heads/homologacao/web-ios-integrada");
@@ -67,14 +69,14 @@ function mobileClient() {
 
 function browserSession() {
   const cookies = new Map<string, string>();
-  return async function request<T>(path: string, expected: number | number[], method = "GET", data?: unknown): Promise<T> {
+  async function raw(path: string, expected: number | number[], method = "GET", data?: unknown): Promise<Response> {
     const response = await fetch(`${web}/api${path}`, {
       method, redirect: "error", signal: AbortSignal.timeout(30_000),
       headers: {
         ...(cookies.size ? { Cookie: [...cookies].map(([k, v]) => `${k}=${v}`).join("; ") } : {}),
-        ...(data === undefined ? {} : { "Content-Type": "application/json" }),
+        ...(data === undefined || data instanceof FormData ? {} : { "Content-Type": "application/json" }),
       },
-      ...(data === undefined ? {} : { body: JSON.stringify(data) }),
+      ...(data === undefined ? {} : { body: data instanceof FormData ? data : JSON.stringify(data) }),
     });
     assert.ok([expected].flat().includes(response.status), `${method} ${path} HTTP ${response.status}`);
     for (const raw of response.headers.getSetCookie()) {
@@ -86,8 +88,11 @@ function browserSession() {
       if (val) cookies.set(key, val);
       else cookies.delete(key);
     }
-    return (await response.json()) as T;
-  };
+    return response;
+  }
+  const request = async <T>(path: string, expected: number | number[], method = "GET", data?: unknown) =>
+    (await (await raw(path, expected, method, data)).json()) as T;
+  return Object.assign(request, { raw });
 }
 
 async function main() {
@@ -110,6 +115,7 @@ async function main() {
     assert.equal(appHealth.environment, "development");
   }
   assert.equal(ready.database, "up");
+  if (checkDraftCover) assert.equal(ready.storage, "up", "Storage privado da QA não confirmou prontidão.");
   const organizerA = registration("orga", "ORGANIZER");
   const organizerB = registration("orgb", "ORGANIZER");
   const webRegistration = await reqA<Identity>("/auth/register", 201, "POST", organizerA);
@@ -162,6 +168,39 @@ async function main() {
     mainPrizeName: "Prêmio sintético", numberPrice: "0,12", totalNumbers: "500",
   });
   assert.equal((await reqB<Campaign>(`/campaigns/${nativeDraft.id}`, 200)).id, nativeDraft.id);
+  if (checkDraftCover) {
+    const bytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jVssAAAAASUVORK5CYII=", "base64",
+    );
+    const upload = new FormData();
+    upload.set("target", "COVER");
+    upload.set("files", new Blob([bytes], { type: "image/png" }), "qa-capa-sintetica.png");
+    const owned = `/campaigns/${draft.id}/media/cover`;
+    const publicPath = `/public/campaigns/media/${draft.id}/cover`;
+    await (await reqA.raw(`/campaigns/${draft.id}/images`, 201, "POST", upload)).body?.cancel();
+    const direct = (path: string, accessToken?: string) => fetch(api + path, {
+      redirect: "error", cache: "no-store", signal: AbortSignal.timeout(20_000),
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+    });
+    const outsider = await mB.publicRequest<Refresh>("/auth/login", "POST", {
+      email: organizerB.email, password,
+    });
+    const [webCover, directCover, webOther, directOther, directPublic, webPublic] = await Promise.all([
+      reqA.raw(owned, 200), direct(owned, renewed.accessToken),
+      reqB.raw(owned, [403, 404]), direct(owned, outsider.accessToken),
+      direct(publicPath), browserSession().raw(`/public/campaign-media/${draft.id}/cover`, [403, 404]),
+    ]);
+    for (const response of [webCover, directCover]) {
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("content-type"), "image/png");
+      assert.match(response.headers.get("cache-control") ?? "", /no-store/);
+      assert.ok(Buffer.from(await response.arrayBuffer()).equals(bytes), "Os bytes da capa privada divergiram.");
+    }
+    for (const response of [webOther, directOther, directPublic, webPublic]) {
+      assert.ok([403, 404].includes(response.status), "A capa do rascunho não foi protegida.");
+      await response.body?.cancel();
+    }
+  }
   await mA.logout();
   assert.notEqual(mA.snapshot().status, "signedIn");
   await mB.logout();
@@ -172,6 +211,7 @@ async function main() {
     webToMobile: a, mobileToWeb: b, draftCampaignId: draft.id, nativeDraftCampaignId: nativeDraft.id,
     sameRoles: true, draftSyncedInBothDirections: true, organizerIsolation: true,
     refreshTokenRotated: true,
+    ...(checkDraftCover ? { draftCoverSameBytesAndPrivate: true } : {}),
   }, null, 2));
 }
 

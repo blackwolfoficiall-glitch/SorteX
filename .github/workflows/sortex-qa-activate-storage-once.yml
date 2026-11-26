@@ -1,0 +1,36 @@
+name: Habilitar uma vez mídia privada da SorteX QA
+on:
+  push:
+    branches: [homologacao/web-ios-integrada]
+    paths: [.github/workflows/sortex-qa-activate-storage-once.yml]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate-window:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event.repository.private == false && github.run_attempt == '1' && github.event.head_commit.message == 'Enable private cover storage in isolated QA once'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Impedir reexecuções fora da janela autorizada
+        shell: bash
+        run: |
+          set -euo pipefail
+          now="$(date -u +%s)"
+          test "$now" -ge "$(date -u -d '2026-11-26T15:16:00Z' +%s)"
+          test "$now" -lt "$(date -u -d '2026-11-26T16:10:00Z' +%s)"
+  enable:
+    needs: validate-window
+    uses: ./.github/workflows/sortex-qa-activate-storage.yml
+    with:
+      expected-api-sha: 8f1c947c9197928c08e20716cc88cf406bae0722
+      expected-api-deployment: '6'
+      validated-code-sha: 8f1c947c9197928c08e20716cc88cf406bae0722
+      validated-ci-run: '45847126208'
+      confirm-bucket: sortex-qa-media
+  check-draft-cover:
+    needs: enable
+    uses: ./.github/workflows/sortex-hosted-qa-smoke.yml
+    with:
+      expected-api-sha: 8f1c947c9197928c08e20716cc88cf406bae0722
+      check-draft-cover: true
