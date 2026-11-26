@@ -1,2 +1,5 @@
-import DrawWorkspace from '@/components/draws/DrawWorkspace';
-export default function Page(){return <DrawWorkspace mode="buyer"/>;}
+import BuyerPrizes from "@/components/comprador/BuyerPrizes";
+
+export default function Page() {
+  return <BuyerPrizes />;
+}

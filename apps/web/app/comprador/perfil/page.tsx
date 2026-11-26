@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Heart, Bell, LifeBuoy, ShieldCheck } from "lucide-react";
+import { LogOut, Heart, Bell, LifeBuoy, ShieldCheck, Trophy } from "lucide-react";
 import { authRequest } from "@/lib/auth/client";
 import { getBuyerProfile, updateBuyerProfile } from "@/lib/buyer/client";
 import type { BuyerProfile } from "@/lib/buyer/types";
@@ -97,6 +97,7 @@ export default function Perfil() {
         {saved && <p className="text-sm text-green-700">Dados atualizados.</p>}
       </form>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <Item href="/comprador/meus-premios" icon={<Trophy />} label="Meus prêmios" />
         <Item href="/comprador/favoritos" icon={<Heart />} label="Favoritos" />
         <Item
           href="/comprador/notificacoes"
