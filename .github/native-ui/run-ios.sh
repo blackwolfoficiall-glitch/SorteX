@@ -1,14 +1,26 @@
 #!/usr/bin/env bash
 set -euo pipefail
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+refuse() {
+  printf 'Native UI launcher refused: %s\n' "$1" >&2
+  exit 64
+}
+
+# Explicit denial is required; do not rely on errexit for compound tests on
+# the system macOS Bash or for callers using different shell options.
 [[ "${RUNNER_OS:-}" == macOS && "${GITHUB_REPOSITORY:-}" == blackwolfoficiall-glitch/SorteX &&
-  "${GITHUB_REF:-}" == refs/heads/homologacao/web-ios-integrada && "${GITHUB_EVENT_NAME:-}" == push ]]
-[[ "${SORTEX_IOS_UI_SCOPE:-}" == disposable-loopback && "${SORTEX_IOS_UI_API:-}" == http://127.0.0.1:3338 ]]
-[[ "${EXPO_PUBLIC_API_URL:-}" == "$SORTEX_IOS_UI_API" && "${EXPO_PUBLIC_ALLOW_LOCAL_API:-}" == 1 ]]
-[[ "${SORTEX_SIMULATOR_ID:-}" =~ ^[0-9A-Fa-f-]{36}$ && "${SORTEX_IOS_UI_BUYER_PASSWORD:-}" =~ ^[0-9a-f]{48}$ ]]
-: "${RUNNER_TEMP:?}"
-: "${GITHUB_SHA:?}"
-: "${MAESTRO_BIN:?}"
+  "${GITHUB_REF:-}" == refs/heads/homologacao/web-ios-integrada && "${GITHUB_EVENT_NAME:-}" == push ]] ||
+  refuse execution-context
+[[ "${SORTEX_IOS_UI_SCOPE:-}" == disposable-loopback && "${SORTEX_IOS_UI_API:-}" == http://127.0.0.1:3338 ]] ||
+  refuse fixture-scope
+[[ "${EXPO_PUBLIC_API_URL:-}" == "$SORTEX_IOS_UI_API" && "${EXPO_PUBLIC_ALLOW_LOCAL_API:-}" == 1 ]] ||
+  refuse api-destination
+[[ "${SORTEX_SIMULATOR_ID:-}" =~ ^[[:xdigit:]]{8}(-[[:xdigit:]]{4}){3}-[[:xdigit:]]{12}$ &&
+  "${SORTEX_IOS_UI_BUYER_PASSWORD:-}" =~ ^[0-9a-f]{48}$ ]] ||
+  refuse synthetic-inputs
+[[ -d "${RUNNER_TEMP:-}" && -n "${GITHUB_SHA:-}" && -x "${MAESTRO_BIN:-}" ]] ||
+  refuse runner-prerequisites
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # The password is for this disposable localhost account, never the QA account.
 # Mask it anyway; retain no CLI logs or screenshots captured at the login fields.
 printf '::add-mask::%s\n' "$SORTEX_IOS_UI_BUYER_PASSWORD"
@@ -19,19 +31,24 @@ export MAESTRO_DRIVER_STARTUP_TIMEOUT=60000
 unset MAESTRO_CLOUD_API_KEY
 cd "$root/apps/mobile"
 plist=ios/SorteXTeste/Info.plist
-[[ -f "$plist" ]]
+[[ -f "$plist" ]] || refuse missing-generated-plist
 plistbuddy=/usr/libexec/PlistBuddy
-[[ "$("$plistbuddy" -c 'Print :NSAppTransportSecurity:NSAllowsArbitraryLoads' "$plist")" == false ]]
+[[ "$("$plistbuddy" -c 'Print :NSAppTransportSecurity:NSAllowsArbitraryLoads' "$plist")" == false ]] ||
+  refuse unsafe-generated-plist
 # Expo prebuild initially allows local networking for its dev launcher. The
 # disposable build narrows that to the fixture host; no tracked plist changes.
 "$plistbuddy" -c 'Set :NSAppTransportSecurity:NSAllowsLocalNetworking false' "$plist"
 "$plistbuddy" -c 'Add :NSAppTransportSecurity:NSExceptionDomains dict' "$plist"
 "$plistbuddy" -c 'Add :NSAppTransportSecurity:NSExceptionDomains:127.0.0.1 dict' "$plist"
 "$plistbuddy" -c 'Add :NSAppTransportSecurity:NSExceptionDomains:127.0.0.1:NSExceptionAllowsInsecureHTTPLoads bool true' "$plist"
-bash "$root/.github/mobile/ios-simulator-release.sh"
-app="$(xcrun simctl get_app_container "$SORTEX_SIMULATOR_ID" br.com.sortex.development app)"
-[[ "$("$plistbuddy" -c 'Print :NSAppTransportSecurity:NSAllowsLocalNetworking' "$app/Info.plist")" == false ]]
-[[ "$("$plistbuddy" -c 'Print :NSAppTransportSecurity:NSExceptionDomains:127.0.0.1:NSExceptionAllowsInsecureHTTPLoads' "$app/Info.plist")" == true ]]
+bash "$root/.github/mobile/ios-simulator-release.sh" || refuse standalone-build
+app="$(xcrun simctl get_app_container "$SORTEX_SIMULATOR_ID" br.com.sortex.development app)" ||
+  refuse no-installed-app
+[[ "$("$plistbuddy" -c 'Print :NSAppTransportSecurity:NSAllowsArbitraryLoads' "$app/Info.plist")" == false &&
+  "$("$plistbuddy" -c 'Print :NSAppTransportSecurity:NSAllowsLocalNetworking' "$app/Info.plist")" == false ]] ||
+  refuse unsafe-installed-plist
+[[ "$("$plistbuddy" -c 'Print :NSAppTransportSecurity:NSExceptionDomains:127.0.0.1:NSExceptionAllowsInsecureHTTPLoads' "$app/Info.plist")" == true ]] ||
+  refuse missing-installed-loopback-exception
 
 # Apply Maestro's password-entry workaround only to the disposable simulator,
 # if this runtime has the current configuration-profile schema. The app
@@ -51,7 +68,8 @@ trap 'rm -rf -- "$debug"' EXIT
 # Only this selected local iPhone simulator; no cloud commands or upload.
 "$MAESTRO_BIN" --device "$SORTEX_SIMULATOR_ID" test \
   --debug-output "$debug" --test-output-dir "$debug" \
-  -e "BUYER_PASSWORD=$SORTEX_IOS_UI_BUYER_PASSWORD" "$root/.github/native-ui/buyer-session.yaml"
+  -e "BUYER_PASSWORD=$SORTEX_IOS_UI_BUYER_PASSWORD" "$root/.github/native-ui/buyer-session.yaml" ||
+  refuse ui-flow-not-passed
 evidence="$RUNNER_TEMP/sortex-native-ui-evidence"
 mkdir -m 700 "$evidence"
 xcrun simctl io "$SORTEX_SIMULATOR_ID" screenshot "$evidence/signed-out.png"
