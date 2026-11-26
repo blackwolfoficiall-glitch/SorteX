@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { eligibleEmail, isSha, ownTunnel, cloudflaredReady, validGate, verifyGate } from './sortex-pin-preview.mjs';
+import { eligibleEmail, isSha, ownTunnel, cloudflaredReady, validGate, verifyGate, verifyQaUpstream } from './sortex-pin-preview.mjs';
 
 const origin = 'https://a-private-qa.trycloudflare.com';
 const login = 'https://login.trycloudflare.com/authorize?hostname=a-private-qa.trycloudflare.com&state=fixture';
@@ -52,4 +52,73 @@ test('requires public paths to redirect and anonymous BFF POST to be rejected', 
   assert.deepEqual(trace.sort(), ['/','/api/auth/login','/api/health/ready','/robots.txt']);
   assert.equal(await verifyGate(origin,(url,init)=>new URL(url).pathname==='/robots.txt'?new Response(null,{status:200}):accept(url,init)),false);
   assert.equal(await verifyGate(origin,(url,init)=>init.method==='POST'?new Response(null,{status:200}):accept(url,init)),false);
+});
+
+const qaApi = 'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech';
+const selectedSha = 'a'.repeat(40);
+const staleSha = 'b'.repeat(40);
+const goodHealth = { version: selectedSha };
+const goodReady = { status: 'ready', database: 'up' };
+
+test('accepts only responses from both pinned routes, with no delay while healthy', async () => {
+  const requests = [];
+  await verifyQaUpstream(selectedSha, (url, options) => {
+    requests.push(url);
+    assert.equal(options.redirect, 'error');
+    assert.equal(options.headers['Cache-Control'], 'no-store');
+    assert.ok(options.signal instanceof AbortSignal);
+    return Response.json(url.endsWith('/ready') ? goodReady : goodHealth);
+  }, () => assert.fail('a healthy QA must not wait for a retry'));
+  assert.deepEqual(requests, [qaApi + '/health', qaApi + '/health/ready']);
+});
+
+test('rechecks both signals together after timeout and a partial rollout', async () => {
+  const attempts = new Map();
+  const waits = [];
+  await verifyQaUpstream(selectedSha, (url, options) => {
+    if (!attempts.has(options.signal)) attempts.set(options.signal, []);
+    attempts.get(options.signal).push(url);
+    const round = attempts.size;
+    if (url.endsWith('/ready')) return Response.json(goodReady);
+    if (round === 1) throw new DOMException('upstream timeout', 'TimeoutError');
+    return Response.json(round === 2 ? { version: staleSha } : goodHealth);
+  }, ms => waits.push(ms));
+  assert.deepEqual([...attempts.values()], Array.from({ length: 3 }, () => [qaApi + '/health', qaApi + '/health/ready']));
+  assert.deepEqual(waits, [1_000, 2_000]);
+});
+
+test('fails closed after three attempts: valid data from different rounds is never combined', async () => {
+  const signals = new Set();
+  const waits = [];
+  let requests = 0;
+  await assert.rejects(verifyQaUpstream(selectedSha, (url, options) => {
+    requests++;
+    signals.add(options.signal);
+    const round = signals.size;
+    if (url.endsWith('/ready')) {
+      if (round === 1) return Response.json({ status: 'ready', database: 'down' });
+      if (round === 3) return Response.json(goodReady, { status: 503 });
+      return Response.json(goodReady);
+    }
+    return Response.json(round === 2 ? { version: staleSha } : goodHealth);
+  }, ms => waits.push(ms)), /não confirmou o SHA e o banco esperados após três tentativas/);
+  assert.equal(signals.size, 3);
+  assert.equal(requests, 6);
+  assert.deepEqual(waits, [1_000, 2_000]);
+});
+
+test('retries missing or malformed readiness and does not log response bodies', async () => {
+  const rounds = new Set();
+  await assert.rejects(verifyQaUpstream(selectedSha, (url, options) => {
+    rounds.add(options.signal);
+    if (url.endsWith('/ready'))
+      return new Response(rounds.size === 1 ? 'not-json' : '{"status":"starting","notice":"not-for-console"}');
+    return Response.json(goodHealth);
+  }, () => {}), error => /não confirmou o SHA e o banco/.test(error.message) &&
+    !/not-for-console|not-json/.test(error.message));
+  assert.equal(rounds.size, 3);
+});
+
+test('does not send requests for an incomplete SHA', async () => {
+  await assert.rejects(verifyQaUpstream('a'.repeat(7), () => assert.fail('no network')), /SHA/);
 });

@@ -14,6 +14,10 @@ const branch = 'homologacao/web-ios-integrada';
 const api = 'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech';
 const windowMs = 30 * 60_000;
 const checkUntil = 100_000;
+// Try the warm path first, then allow time for a sleepy QA service or a rollout.
+const preflightTimeouts = [8_000, 26_000, 26_000];
+const preflightDelays = [1_000, 2_000];
+const preflightFailure = 'A API exclusiva do Neon não confirmou o SHA e o banco esperados após três tentativas.';
 const children = new Set();
 let stopping = false;
 
@@ -84,14 +88,31 @@ async function retry(check, maxMs, fail, live = () => true) {
   throw new Error(fail);
 }
 
-async function getJson(url) {
-  const response = await fetch(url, {
+async function getJson(url, request = fetch, signal = AbortSignal.timeout(8_000)) {
+  const response = await request(url, {
     headers: { 'Cache-Control': 'no-store' },
     redirect: 'error',
-    signal: AbortSignal.timeout(8_000),
+    signal,
   });
   if (!response.ok) throw new Error('Serviço indisponível.');
   return response.json();
+}
+
+export async function verifyQaUpstream(expectedSha, request = fetch, delay = wait) {
+  if (!isSha(expectedSha)) throw new Error(preflightFailure);
+  for (let attempt = 0; attempt < preflightTimeouts.length; attempt++) {
+    const signal = AbortSignal.timeout(preflightTimeouts[attempt]);
+    // Both replies must be from this attempt; never reuse one from a failed round.
+    const [health, ready] = await Promise.allSettled([
+      getJson(api + '/health', request, signal),
+      getJson(api + '/health/ready', request, signal),
+    ]);
+    if (health.status === 'fulfilled' && ready.status === 'fulfilled' &&
+        health.value?.version === expectedSha &&
+        ready.value?.status === 'ready' && ready.value.database === 'up') return;
+    if (attempt < preflightDelays.length) await delay(preflightDelays[attempt]);
+  }
+  throw new Error(preflightFailure);
 }
 
 export async function verifyGate(origin, request = fetch) {
@@ -164,9 +185,7 @@ async function main() {
   process.once('SIGTERM', () => terminate('SIGTERM'));
   try {
     // No tunnel or checkout while the upstream is unavailable or points to a different revision.
-    const [health, ready] = await Promise.all([getJson(api + '/health'), getJson(api + '/health/ready')]);
-    if (health.version !== expectedApiSha || ready.status !== 'ready' || ready.database !== 'up')
-      throw new Error('A API exclusiva do Neon não confirmou o SHA e o banco esperados.');
+    await verifyQaUpstream(expectedApiSha);
     const version = await run('cloudflared', ['--version'], cf, 'cloudflared não instalado.');
     const help = await run('cloudflared', ['tunnel', '--help'], cf, 'Não consegui validar o suporte ao PIN.');
     if (!cloudflaredReady(version, help)) throw new Error('Use cloudflared 2026.11.2+ com suporte a --allowed-mail.');
