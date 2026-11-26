@@ -20,13 +20,11 @@ test('startup Maestro probes real login view without typing or receiving credent
   assert.doesNotMatch(flow, /tapOn|inputText|runScript|runFlow|BUYER_PASSWORD|optional:|point:/);
 });
 
-test('credentialed Maestro flow uses the same technical selectors and still exercises login and logout', () => {
+test('credentialed flow keeps strict login selectors and only the login phase enters input', () => {
   const flow = readFileSync(resolve(dir, 'buyer-session.yaml'), 'utf8');
   assert.match(flow, /extendedWaitUntil:\s+visible:\s+id: sortex-login-email\s+timeout: 45000/);
   assert.match(flow, /tapOn:\s+id: sortex-login-password\n- inputText: \$\{BUYER_PASSWORD\}/);
   assert.match(flow, /tapOn:\s+id: sortex-login-submit\n- extendedWaitUntil:\s+visible: "Olá, CompradorIOS"/);
-  assert.match(flow, /tapOn: "Sair da conta"\n- extendedWaitUntil:\s+visible:\s+id: sortex-login-email/);
-  assert.match(flow, /stopApp: br\.com\.sortex\.development\n- launchApp\n- extendedWaitUntil:\s+visible:\s+id: sortex-login-email/);
   assert.doesNotMatch(flow, /id: sortex-login-submit\s+text:|optional:|point:/);
 });
 

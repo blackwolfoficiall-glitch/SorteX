@@ -27,13 +27,15 @@ publicada é dado de fixture, não evidência de publicação por organizador.
 
 O fluxo pressiona a interface real: entrar com e-mail, abrir Campanhas,
 ver prêmio e regulamento da campanha, encerrar o processo e relançar logado,
-sair, encerrar novamente e relançar deslogado. A aprovação requer também
+sair, encerrar novamente e relançar deslogado. Cada fase é executada e
+confirmada separadamente no mesmo build e simulador, sem limpar a sessão.
+Apenas a fase de login recebe a senha local. A aprovação requer também
 requisições reais ordenadas no Nest, exatamente uma sessão revogada no
 PostgreSQL e zero pagamentos. O CI guarda somente o SHA, runtime, hash do
 bundle, escopo e uma captura final sem sessão. A prontidão usa os identificadores separados dos campos e do botão,
 rolando até o botão quando necessário. Se os controles de entrada não
-forem verificados, não é iniciada a etapa de login: o único
-artefato de falha é o status e uma captura do simulador descartável
+forem verificados, não é iniciada a etapa de login: nesse caso, um
+diagnóstico adicional contém o status e uma captura do simulador descartável
 anterior à digitação de quaisquer credenciais. O job não exporta logs
 brutos, hierarquia do Maestro, capturas durante o login ou o binário. Na
 falha de inicialização, o resumo inclui somente uma categoria allowlisted
@@ -41,6 +43,15 @@ do Keychain quando os logs do sistema correlacionam o erro a este app,
 e uma categoria allowlisted do Maestro quando seu diagnóstico indica
 falha de seletor, driver ou configuração. O resumo não inclui texto bruto.
 `not-observed` não comprova que o Keychain funcionou.
+
+Quando uma etapa falha, o artefato `sortex-ios-phase-diagnostic-<sha>` contém
+somente o SHA, a etapa GitHub que falhou e a última fase confirmada. O
+resumo funciona também antes de iniciar o cenário, inclusive se o checkout
+falhar. Depois da prontidão, o CLI usa scratch local efêmero: seu stdout
+e stderr são descartados e a pasta é removida ao encerrar cada fase.
+A saída após o login nunca inclui screenshots intermediários, transcrições
+ou hierarquia; a única captura após o login é a evidência de reabertura
+sem sessão, publicada somente se o servidor também confirmar a revogação.
 
 Para verificar só a infraestrutura e os mesmos contratos do cliente, sem
 Xcode, instale as dependências já travadas dos dois projetos, gere o cliente

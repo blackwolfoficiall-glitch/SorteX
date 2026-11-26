@@ -2,6 +2,8 @@
 # Runs the named local test entry point while a loopback-only fixture exists.
 set -euo pipefail
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$root/.github/native-ui/checkpoint.sh"
+checkpoint fixture-entered
 : "${SORTEX_IOS_UI_PG_BIN:?Set PostgreSQL 18 binary directory}"
 : "${RUNNER_TEMP:?Set an isolated temporary directory}"
 : "${1:?Specify the local test entry point}"
@@ -34,6 +36,7 @@ rm -f -- "$tmp/pg.password"
 "$pg/pg_ctl" -D "$tmp/db" -l "$tmp/postgres.log" \
   -o "-h 127.0.0.1 -p 55478 -c unix_socket_directories=''" -w start >/dev/null
 db_started=1
+checkpoint postgres-started
 PGPASSWORD="$db_password" "$pg/createdb" -h 127.0.0.1 -p 55478 -U sortex_ios_ui sortex_ios_ui
 export DATABASE_URL="postgresql://sortex_ios_ui:$db_password@127.0.0.1:55478/sortex_ios_ui"
 unset db_password
@@ -55,7 +58,9 @@ isolated=(
 (cd "$root/services/api"
   "${isolated[@]}" node node_modules/prisma/build/index.js migrate deploy
 )
+checkpoint migrations-applied
 "${isolated[@]}" node "$root/.github/native-ui/fixture.cjs" seed
+checkpoint fixture-seeded
 "${isolated[@]}" node "$root/.github/native-ui/fixture.cjs" serve >"$SORTEX_IOS_UI_API_LOG" 2>&1 &
 api_pid=$!
 ready=0
@@ -72,7 +77,9 @@ if [[ "$ready" != 1 ]]; then
   echo 'Disposable Nest API never reported ready with database up and storage disabled.' >&2
   exit 1
 fi
+checkpoint api-ready
 # The UI/test subprocess needs only its disposable buyer password and loopback API.
 export -n DATABASE_URL
 "$@"
 "${isolated[@]}" node "$root/.github/native-ui/fixture.cjs" verify "$SORTEX_IOS_UI_API_LOG"
+checkpoint server-verification-complete

@@ -26,6 +26,8 @@ export MAESTRO_CLI_NO_ANALYTICS=true
 export MAESTRO_DISABLE_UPDATE_CHECK=true
 export MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
 export MAESTRO_DRIVER_STARTUP_TIMEOUT=60000
+source "$root/.github/native-ui/checkpoint.sh"
+checkpoint launcher-validated
 unset MAESTRO_CLOUD_API_KEY
 cd "$root/apps/mobile"
 plist=ios/SorteXTeste/Info.plist
@@ -48,6 +50,8 @@ app="$(xcrun simctl get_app_container "$SORTEX_SIMULATOR_ID" br.com.sortex.devel
 [[ "$("$plistbuddy" -c 'Print :NSAppTransportSecurity:NSExceptionDomains:127.0.0.1:NSExceptionAllowsInsecureHTTPLoads' "$app/Info.plist")" == true ]] ||
   refuse missing-installed-loopback-exception
 
+checkpoint release-installed
+
 # Apply Maestro's password-entry workaround only to the disposable simulator,
 # if this runtime has the current configuration-profile schema. The app
 # retains its genuine secureTextEntry and SecureStore implementation.
@@ -64,17 +68,14 @@ done
 # Run and capture failures from a separate input-free probe. If it fails,
 # never start the flow that has access to synthetic credentials.
 bash "$root/.github/native-ui/startup-probe.sh" || refuse login-startup-not-verified
+checkpoint startup-controls-verified
 
-# The password is for this disposable localhost account, never the QA account.
-# Mask it anyway; retain no CLI logs or screenshots captured during login.
-printf '::add-mask::%s\n' "$SORTEX_IOS_UI_BUYER_PASSWORD"
-debug="$(mktemp -d "$RUNNER_TEMP/sortex-ui-debug.XXXXXX")"
-trap 'rm -rf -- "$debug"' EXIT
-# Only this selected local iPhone simulator; no cloud commands or upload.
-"$MAESTRO_BIN" --device "$SORTEX_SIMULATOR_ID" test \
-  --debug-output "$debug" --test-output-dir "$debug" \
-  -e "BUYER_PASSWORD=$SORTEX_IOS_UI_BUYER_PASSWORD" "$root/.github/native-ui/buyer-session.yaml" ||
-  refuse ui-flow-not-passed
+# Each flow is strict. They use the same installed app and simulator. A
+# non-login flow never receives the synthetic password.
+for phase in login campaign signed-in-relaunch logout signed-out-relaunch; do
+  bash "$root/.github/native-ui/run-buyer-phase.sh" "$phase" || refuse "${phase}-flow-not-passed"
+  checkpoint "${phase}-verified"
+done
 evidence="$RUNNER_TEMP/sortex-native-ui-evidence"
 mkdir -m 700 "$evidence"
 xcrun simctl io "$SORTEX_SIMULATOR_ID" screenshot "$evidence/signed-out.png"
@@ -86,3 +87,4 @@ xcrun simctl io "$SORTEX_SIMULATOR_ID" screenshot "$evidence/signed-out.png"
   printf 'ios_runtime=%s\n' "$(xcrun simctl list devices available --json | node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{const entry=Object.entries(JSON.parse(s).devices).find(([,rows])=>rows.some(x=>x.udid===process.argv[1]));if(!entry)process.exit(1);console.log(entry[0]);});' "$SORTEX_SIMULATOR_ID")"
   printf 'bundle_sha256=%s\n' "$(shasum -a 256 "$app/main.jsbundle" | cut -d ' ' -f1)"
 } > "$evidence/native-ui.txt"
+checkpoint signed-out-evidence-saved

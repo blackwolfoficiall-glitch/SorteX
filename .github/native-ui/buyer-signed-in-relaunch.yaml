@@ -1,0 +1,10 @@
+appId: br.com.sortex.development
+name: Reabertura com sessão (PostgreSQL local)
+---
+- stopApp: br.com.sortex.development
+- launchApp
+- extendedWaitUntil:
+    visible: "Olá, CompradorIOS"
+    timeout: 45000
+- assertNotVisible:
+    id: sortex-login-email

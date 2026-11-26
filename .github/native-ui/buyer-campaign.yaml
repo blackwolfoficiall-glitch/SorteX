@@ -1,0 +1,12 @@
+appId: br.com.sortex.development
+name: Consulta da campanha (PostgreSQL local)
+---
+- launchApp:
+    stopApp: false
+- tapOn:
+    text: "^Campanhas(,.*)?$"
+- assertVisible: "Campanha sintetica iOS"
+- tapOn: "Ver campanha"
+- assertVisible: "Detalhes da campanha"
+- assertVisible: "Prêmio: Premio sintetico iOS"
+- assertVisible: "Regulamento sintetico da campanha iOS."

@@ -1,5 +1,5 @@
 appId: br.com.sortex.development
-name: Sessão nativa e leitura de campanha (PostgreSQL local)
+name: Login nativo (PostgreSQL local)
 ---
 - launchApp:
     stopApp: false
@@ -23,35 +23,3 @@ name: Sessão nativa e leitura de campanha (PostgreSQL local)
 - extendedWaitUntil:
     visible: "Olá, CompradorIOS"
     timeout: 45000
-- tapOn:
-    text: "^Campanhas(,.*)?$"
-- assertVisible: "Campanha sintetica iOS"
-- tapOn: "Ver campanha"
-- assertVisible: "Detalhes da campanha"
-- assertVisible: "Prêmio: Premio sintetico iOS"
-- assertVisible: "Regulamento sintetico da campanha iOS."
-- stopApp: br.com.sortex.development
-- launchApp
-- extendedWaitUntil:
-    visible: "Olá, CompradorIOS"
-    timeout: 45000
-- assertNotVisible:
-    id: sortex-login-email
-- tapOn:
-    text: "^Perfil(,.*)?$"
-- scrollUntilVisible:
-    element:
-      text: "Sair da conta"
-    direction: DOWN
-- tapOn: "Sair da conta"
-- extendedWaitUntil:
-    visible:
-      id: sortex-login-email
-    timeout: 45000
-- stopApp: br.com.sortex.development
-- launchApp
-- extendedWaitUntil:
-    visible:
-      id: sortex-login-email
-    timeout: 45000
-- assertNotVisible: "Olá, CompradorIOS"
