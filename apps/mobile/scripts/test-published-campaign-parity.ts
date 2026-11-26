@@ -100,13 +100,21 @@ async function main() {
     salesStartAt: new Date(Date.now() - 60_000).toISOString(),
   });
   const path = `/campaigns/${original.id}`, publicPath = `/public/campaigns/${original.slug}`;
+  // Two locally generated RGB PNGs with valid PNG checksums (2×2 and 3×2).
   const coverBytes = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Y9Zt9sAAAAASUVORK5CYII=", "base64",
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGPgVbYBIgYIBQALIgGxC6q83wAAAABJRU5ErkJggg==", "base64",
   );
-  const cover = new FormData();
-  cover.set("target", "COVER");
-  cover.set("files", new Blob([coverBytes], { type: "image/png" }), "synthetic.png");
-  await request(`${path}/images`, 201, "POST", cover);
+  const replacementBytes = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAAEElEQVR4nGNI0bgDQQxwFgBRpAhx0roQKQAAAABJRU5ErkJggg==", "base64",
+  );
+  assert.notDeepEqual(coverBytes, replacementBytes);
+  function uploadCover(bytes: Buffer, name: string) {
+    const cover = new FormData();
+    cover.set("target", "COVER");
+    cover.set("files", new Blob([new Uint8Array(bytes)], { type: "image/png" }), name);
+    return request<Campaign>(`${path}/images`, 201, "POST", cover);
+  }
+  await uploadCover(coverBytes, "original-sintetica.png");
 
   const ownedMedia = `${path}/media/cover`;
   const publicMedia = `/public/campaigns/media/${original.id}/cover`;
@@ -125,11 +133,11 @@ async function main() {
     if (checkCache && !noStore(result)) failures.push(`${check}: recusa sem no-store`);
     await result.body?.cancel();
   }
-  async function exactCover(check: string, response: Promise<Response>) {
+  async function exactCover(check: string, response: Promise<Response>, expected = coverBytes) {
     const result = await response;
     assert.equal(result.status, 200, check);
     assert.match(result.headers.get("content-type") ?? "", /^image\/png(?:;|$)/i, check);
-    assert.deepEqual(Buffer.from(await result.arrayBuffer()), coverBytes, check);
+    assert.deepEqual(Buffer.from(await result.arrayBuffer()), expected, check);
     if (!noStore(result)) failures.push(`${check}: resposta cacheável (${result.headers.get("cache-control") ?? ""})`);
   }
   async function publicDenied(status: string) {
@@ -158,6 +166,24 @@ async function main() {
   await denied("PUBLISHED privado outro organizador direto", direct(ownedMedia, otherToken), 403);
   await denied("PUBLISHED privado outro organizador Next", webOther(ownedMedia), 403);
 
+  // Upload via the authenticated web BFF without changing status, ID, or URL.
+  const replaced = await uploadCover(replacementBytes, "nova-capa-sintetica.png");
+  assert.equal(replaced.id, original.id);
+  assert.equal(replaced.status, "PUBLISHED");
+  assert.equal(replaced.coverImageUrl, publicMedia);
+  for (const campaign of await Promise.all([
+    app.publicRequest<Campaign>(publicPath),
+    request<Campaign>(publicPath, 200),
+  ])) {
+    assert.equal(campaign.id, original.id);
+    assert.equal(campaign.status, "PUBLISHED");
+    assert.equal(campaign.coverImageUrl, publicMedia);
+  }
+  // Re-read the warmed URLs as-is: don't bypass stale caches with a query string.
+  await exactCover("PUBLISHED substituída direto (URL informada ao aplicativo)", direct(publicMedia), replacementBytes);
+  await exactCover("PUBLISHED substituída público Next", webAnonymous(webPublicMedia), replacementBytes);
+  await exactCover("PUBLISHED substituída dono Next", webOwner(ownedMedia), replacementBytes);
+
   const initial = await app.request<Campaign>(path);
   const description = `Descrição sintética atualizada ${run}`;
   const shortDescription = `Resumo sintético atualizado ${run}`;
@@ -184,12 +210,13 @@ async function main() {
   const paused = await app.request<Campaign>(path);
   assert.equal(paused.status, "PAUSED");
   await publicDenied("PAUSED");
-  await exactCover("PAUSED dono Next", webOwner(ownedMedia));
+  await exactCover("PAUSED dono Next mantém a nova capa", webOwner(ownedMedia), replacementBytes);
+  await exactCover("PAUSED dono direto mantém a nova capa", direct(ownedMedia, ownerToken), replacementBytes);
   await saveOrganizerCampaign(app, { ...draftFields(paused), title: `Título revisto ${run}` }, paused);
   assert.equal((await request<Campaign>(path, 200)).title, `Título revisto ${run}`);
   await request(`${path}/finish`, 201, "POST");
   await publicDenied("FINISHED");
-  await exactCover("FINISHED dono direto", direct(ownedMedia, ownerToken));
+  await exactCover("FINISHED dono direto mantém a nova capa", direct(ownedMedia, ownerToken), replacementBytes);
   await assert.rejects(saveOrganizerCampaign(app, { ...draftFields(paused), title: "Não reabrir" }, paused),
     (error) => error instanceof ApiError && error.status === 400);
   assert.deepEqual(failures, [], "Política de acesso/cache da capa");
@@ -203,6 +230,12 @@ async function main() {
       draftPrivate: true, publishedPublic: true, publishedOwnerRouteIsolated: true,
       pausedAndFinishedPublicDenied: true, storedBytesRetainedForOwner: true,
       responsesNotCacheable: true,
+      replacement: {
+        sha256: createHash("sha256").update(replacementBytes).digest("hex"),
+        bytes: replacementBytes.length, sameCampaignStillPublished: true,
+        samePublicUrlsReturnOnlyReplacement: true,
+        replacementRemainsPrivateAfterPauseAndFinish: true,
+      },
     },
   }));
 }

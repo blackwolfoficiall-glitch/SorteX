@@ -10,7 +10,7 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test tests/core.test.ts tests/organizer-draft.test.ts tests/buyer-purchases.test.ts tests/public-draw-proof.test.ts tests/hosted-smoke-preflight.test.ts",
+    "test": "node --import tsx --test tests/core.test.ts tests/organizer-draft.test.ts tests/buyer-purchases.test.ts tests/public-draw-proof.test.ts tests/hosted-smoke-preflight.test.ts tests/public-campaign-cover.test.ts",
     "export:test": "expo export --platform android --platform ios",
     "test:api": "node --import tsx scripts/test-api.ts"
   },

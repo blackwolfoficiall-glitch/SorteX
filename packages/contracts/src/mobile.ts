@@ -53,6 +53,7 @@ export interface Campaign {
   description?: string | null;
   regulation?: string | null;
   mainPrizeName?: string | null;
+  coverImageUrl?: string | null;
   numberPrice: number;
   totalNumbers: number;
   soldNumbers: number;

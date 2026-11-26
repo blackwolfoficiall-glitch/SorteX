@@ -32,18 +32,18 @@ test("comprador vê a capa publicada carregada no card do sorteio", async ({ pag
   ).toBeGreaterThan(0);
 });
 
-test("capa privada aparece para o dono, torna-se pública e deixa de ser pública ao pausar", async ({ page, browser, baseURL }) => {
+test("capa privada publica, troca no mesmo endereço e volta a ser privada ao pausar", async ({ page, browser, baseURL }) => {
   const campaign = await createSyntheticCampaign(page.request, "Capa com visibilidade por status");
   const ownedPath = `/api/campaigns/${campaign.id}/media/cover`;
   const publicPath = `/api/public/campaign-media/${campaign.id}/cover`;
   const ownedImage = page.getByRole("img", { name: campaign.title, exact: true });
-  async function showsOwnerCover(status: "DRAFT" | "PAUSED") {
+  async function showsOwnerCover(status: "DRAFT" | "PAUSED", width: number) {
     await page.goto(`/dashboard/campanhas?status=${status}`);
     await expect(ownedImage).toHaveAttribute("src", ownedPath);
-    await expect.poll(() => ownedImage.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+    await expect.poll(() => ownedImage.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(width);
   }
 
-  await showsOwnerCover("DRAFT");
+  await showsOwnerCover("DRAFT", 2);
   const draft = await page.request.get(ownedPath);
   expect(draft.status()).toBe(200);
   expect(draft.headers()["cache-control"]).toContain("no-store");
@@ -60,12 +60,38 @@ test("capa privada aparece para o dono, torna-se pública e deixa de ser públic
     await storefront.goto(`/campanha/${campaign.slug}`);
     const publicImage = storefront.getByRole("img", { name: campaign.title, exact: true });
     await expect(publicImage).toHaveAttribute("src", publicPath);
-    await expect.poll(() => publicImage.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
+    await expect.poll(() => publicImage.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(2);
     const media = await guest.request.get(publicPath);
     expect(media.status()).toBe(200);
     expect(media.headers()["content-type"]).toContain("image/png");
     expect(media.headers()["cache-control"]).toContain("no-store");
     expect(await media.body()).toEqual(draftBytes);
+
+    // 3×2 differs from the original 2×2 fixture; no cache-busting changes to the src.
+    const replacement = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAAEElEQVR4nGNI0bgDQQxwFgBRpAhx0roQKQAAAABJRU5ErkJggg==",
+      "base64",
+    );
+    expect(replacement).not.toEqual(draftBytes);
+    const uploaded = await page.request.post(`/api/campaigns/${campaign.id}/images`, {
+      multipart: {
+        target: "COVER",
+        files: { name: "nova-capa-sintetica.png", mimeType: "image/png", buffer: replacement },
+      },
+    });
+    expect(uploaded.status()).toBe(201);
+    expect(await uploaded.json()).toMatchObject({ id: campaign.id, status: "PUBLISHED" });
+    const changedMedia = storefront.waitForResponse((response) =>
+      new URL(response.url()).pathname === publicPath && response.request().resourceType() === "image",
+    );
+    await storefront.reload();
+    await expect(publicImage).toHaveAttribute("src", publicPath);
+    await expect.poll(() => publicImage.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(3);
+    const reloaded = await changedMedia;
+    expect(reloaded.status()).toBe(200);
+    expect(reloaded.headers()["content-type"]).toContain("image/png");
+    expect(reloaded.headers()["cache-control"]).toContain("no-store");
+    expect(await reloaded.body()).toEqual(replacement);
 
     const paused = await page.request.post(`/api/campaigns/${campaign.id}/pause`);
     expect(paused.status()).toBe(201);
@@ -75,7 +101,11 @@ test("capa privada aparece para o dono, torna-se pública e deixa de ser públic
     await storefront.reload();
     await expect(storefront.getByText("Campanha não encontrada.", { exact: true })).toBeVisible();
     await expect(publicImage).toHaveCount(0);
-    await showsOwnerCover("PAUSED");
+    await showsOwnerCover("PAUSED", 3);
+    const privateMedia = await page.request.get(ownedPath);
+    expect(privateMedia.status()).toBe(200);
+    expect(privateMedia.headers()["cache-control"]).toContain("no-store");
+    expect(await privateMedia.body()).toEqual(replacement);
   } finally {
     await guest.close();
   }

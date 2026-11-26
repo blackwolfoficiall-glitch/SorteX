@@ -17,7 +17,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { recoveryTokenFromUrl } from "./src/auth/callback";
 import { StatusBar } from "expo-status-bar";
-import { client } from "./src/auth/runtime";
+import { API_URL, client } from "./src/auth/runtime";
 import {
   Button,
   Choice,
@@ -32,6 +32,8 @@ import {
 import { LocationPicker } from "./src/components/LocationPicker";
 import { NativeOrganizerDraft } from "./src/components/NativeOrganizerDraft";
 import { NativePublicDrawProof } from "./src/components/NativePublicDrawProof";
+import { NativePublicCampaignCover } from "./src/components/NativePublicCampaignCover";
+import { publicCampaignCoverSource } from "./src/domain/public-campaign-cover";
 import { isEditableOrganizerCampaign } from "./src/domain/organizer-draft";
 import { NativeBuyerOrder, NativeBuyerReservation } from "./src/buyer/NativeBuyerPurchase";
 import {
@@ -593,11 +595,20 @@ function CampaignDetail({ route, navigation }: any) {
       : `/public/campaigns/${encodeURIComponent(item.slug)}`,
   );
   const { shortDescription, description } = state.data ?? {};
+  const publicDetail = focused && !organizer && state.data?.id === item.id &&
+    state.data?.slug === item.slug && state.data?.status === "PUBLISHED" ? state.data : null;
+  const cover = publicDetail && publicCampaignCoverSource(
+    API_URL, publicDetail, process.env.EXPO_PUBLIC_ALLOW_LOCAL_API === "1",
+  );
   return (
     <Page title="Detalhes da campanha">
       <Load state={state}>
         <Text style={s.title}>{state.data?.title}</Text>
         <Notice message={status(state.data?.status || "")} />
+        {publicDetail && (
+          <NativePublicCampaignCover key={cover?.uri ?? publicDetail.id}
+            source={cover} title={publicDetail.title} />
+        )}
         <View style={s.card}>
           <Text style={s.text}>
             {(organizer ? description || shortDescription : shortDescription || description) ||
