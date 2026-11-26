@@ -8,7 +8,7 @@ permissions:
   actions: read
 jobs:
   validate-window:
-    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event.repository.private == false && github.run_attempt == '1' && github.event.head_commit.message == 'Retry QA cover storage after missing workflow secret'
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event.repository.private == false && github.run_attempt == '1' && github.event.head_commit.message == 'Enable QA storage after checked rollback'
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
@@ -30,7 +30,7 @@ jobs:
     timeout-minutes: 10
     env:
       EXPECTED_API_SHA: 8f1c947c9197928c08e20716cc88cf406bae0722
-      EXPECTED_API_DEPLOYMENT: '6'
+      EXPECTED_API_DEPLOYMENT: '8'
       VALIDATED_CODE_SHA: 8f1c947c9197928c08e20716cc88cf406bae0722
       VALIDATED_CI_RUN: '45847126208'
       CONFIRM_STORAGE_BUCKET: sortex-qa-media

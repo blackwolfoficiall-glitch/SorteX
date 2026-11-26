@@ -29,6 +29,7 @@ function harness(controls = {}) {
   const receipts = [];
   let id = 5;
   let failures = 0;
+  let activationSamples = 0;
   const origin = slug => `https://${branch}-${slug}.compute.c-16.us-east-1.aws.neon.tech`;
   const fn = (slug, id, environment, current = id, status = 'completed') => ({ function: {
     slug, invocation_url: origin(slug), active_deployment:{id,status:'completed',environment},
@@ -92,7 +93,7 @@ function harness(controls = {}) {
       assert.equal(pathname, cwd + '/functions/sortexqa');
       if (id === 6 && opts.lostMetadata) throw Error('control plane timeout');
       const names = id === 6 ? [...next, ...(opts.afterNames ?? [])] : [...old, ...(opts.oldNames ?? [])];
-      const current = id === 6 && opts.takeover && failures >= 3 ? 7 : (opts.current ?? id);
+      const current = id === 6 && opts.takeover && failures >= 15 ? 7 : (opts.current ?? id);
       return json(fn('sortexqa', id, names, current, id === 6 && opts.failedDeployment ? 'failed' : 'completed'));
     }
     assert.equal(url.origin, origin('sortexqa'));
@@ -106,6 +107,8 @@ function harness(controls = {}) {
       failures++;
       return json({statusCode:503,code:'HTTP_503',path:'/health/ready',message:'Serviço ainda não está pronto.'},503);
     }
+    if (id === 6 && ++activationSamples <= (opts.staleReadySamples ?? 0))
+      return json({status:'ready',database:'up',storage:'disabled'});
     return json({status:'ready',database:'up',storage:id === 6 ? 'up' : 'disabled'});
   }
   return { request, writes, receipts, requests,
@@ -151,7 +154,7 @@ test('wrong plan, branch, privacy, baseline SHA/ID, or injected overrides do not
     assert.deepEqual(h.writes,[]);
   }
 });
-test('reverts only flags after three genuine same-SHA app 503 responses', async () => {
+test('reverts only flags after three genuine same-SHA app 503 responses after the settling interval', async () => {
   const h = harness({app503:true});
   assert.deepEqual(await h.execute(), {status:'rolled-back',id:7});
   assert.deepEqual(h.writes,[activate,rollback]);
@@ -171,5 +174,11 @@ test('never performs another POST after a lost/invalid receipt or ambiguous live
 test('never rolls back if the active/current slot moved since the objective failure', async () => {
   const h = harness({app503:true,takeover:true});
   await assert.rejects(h.execute(), /simultaneamente ativa/);
+  assert.deepEqual(h.writes,[activate]);
+});
+
+test('waits for old runtime responses to settle before considering reversal', async () => {
+  const h = harness({ staleReadySamples: 11 });
+  assert.deepEqual(await h.execute(), {status:'enabled',id:6});
   assert.deepEqual(h.writes,[activate]);
 });

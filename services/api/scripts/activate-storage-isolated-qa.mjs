@@ -40,7 +40,7 @@ function environmentNames(deployment) {
 }
 
 export async function activateStorage({ env = process.env, request = fetch, sleep = delay,
-  report = () => {} } = {}) {
+  report = () => {}, observe = () => {} } = {}) {
   const apiSha = env.EXPECTED_API_SHA;
   const baseId = Number(env.EXPECTED_API_DEPLOYMENT);
   const ci = { id: Number(env.VALIDATED_CI_RUN), sha: env.VALIDATED_CODE_SHA, path: ciPath };
@@ -180,7 +180,13 @@ export async function activateStorage({ env = process.env, request = fetch, slee
 
   async function verify(id, names, expected, mayRollback) {
     let failures = 0;
-    for (let i = 0; i < 12; i++) {
+    let successes = 0;
+    let lastObserved;
+    // A config-only update keeps APP_VERSION. Old instances can legitimately still
+    // respond "disabled" after Neon marks the new deployment active.
+    const settlingSamples = 12;
+    const totalSamples = 28;
+    for (let i = 0; i < totalSamples; i++) {
       // A metadata failure/mismatch after a write is uncertain and never authorizes another.
       const f = await inspect();
       guard(f.current_deployment?.id === id && f.current_deployment.status !== 'failed',
@@ -189,19 +195,25 @@ export async function activateStorage({ env = process.env, request = fetch, slee
         guard(equal(environmentNames(f.active_deployment), names),
           'Nomes de ambiente divergiram depois da publicação. Nenhuma nova gravação.');
         const observed = await runtime().catch(() => 'unknown');
-        if (observed === expected) {
+        if (observed !== lastObserved) {
+          observe(i + 1, observed);
+          lastObserved = observed;
+        }
+        successes = observed === expected ? successes + 1 : 0;
+        if (successes >= 2) {
           const confirmed = await inspect();
           assertStable(confirmed, id);
           guard(equal(environmentNames(confirmed.active_deployment), names),
             'Nomes de ambiente mudaram durante prontidão. Nenhuma nova gravação.');
           return true;
         }
-        failures = ['disabled', 'not-initialized', 'app-not-ready'].includes(observed) ? failures + 1 : 0;
+        failures = i >= settlingSamples && ['disabled', 'not-initialized', 'app-not-ready'].includes(observed) ? failures + 1 : 0;
         if (mayRollback && failures >= 3) return false;
       } else {
         failures = 0;
+        successes = 0;
       }
-      if (i < 11) await sleep(5_000);
+      if (i < totalSamples - 1) await sleep(5_000);
     }
     throw Error('Prontidão não confirmada; estado incerto, nenhuma nova gravação.');
   }
@@ -214,7 +226,10 @@ export async function activateStorage({ env = process.env, request = fetch, slee
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  activateStorage({ report: id => console.log('Recibo de configuração QA: ' + id) })
+  activateStorage({
+    report: id => console.log('Recibo de configuração QA: ' + id),
+    observe: (sample, state) => console.log('Prontidão QA, amostra ' + sample + ': ' + state),
+  })
     .then(result => {
       console.log(result.status === 'enabled'
         ? 'Storage privado QA ativo; mesma revisão, DB e HeadBucket confirmados.'
