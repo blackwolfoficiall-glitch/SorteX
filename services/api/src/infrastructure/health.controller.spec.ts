@@ -21,9 +21,11 @@ describe('HealthController readiness', () => {
         database: 'up',
         storage: 'disabled',
       });
-      for (const table of [db.user, db.campaign, db.payment]) {
-        expect(table.findFirst).toHaveBeenCalledWith({ select: { id: true } });
-      }
+      expect(db.user.findFirst).toHaveBeenCalledWith({ select: { id: true } });
+      expect(db.campaign.findFirst).toHaveBeenCalledWith({
+        select: { id: true, drawTimeZone: true },
+      });
+      expect(db.payment.findFirst).toHaveBeenCalledWith({ select: { id: true } });
       expect(db.$transaction).toHaveBeenCalledTimes(1);
     } finally {
       if (previous === undefined) delete process.env.UPLOADS_DISABLED;
@@ -31,9 +33,12 @@ describe('HealthController readiness', () => {
     }
   });
 
-  it('returns a generic 503 when SQL reaches a database lacking the schema', async () => {
+  it.each([
+    'relation does not exist',
+    'column Campaign.drawTimeZone does not exist',
+  ])('returns a generic 503 for %s', async (errorDetail) => {
     const db = mockDb();
-    db.$transaction.mockRejectedValue(new Error('relation does not exist'));
+    db.$transaction.mockRejectedValue(new Error(errorDetail));
     const health = new HealthController(db as unknown as PrismaService);
     const error: unknown = await health.ready().catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ServiceUnavailableException);
