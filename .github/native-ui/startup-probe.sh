@@ -25,6 +25,16 @@ if xcrun simctl io "$SORTEX_SIMULATOR_ID" screenshot "$out/startup.png"; then
 else
   rm -f "$out/startup.png"
 fi
-printf 'sha=%s\nstage=pre-credential-login-view-not-verified\nscreenshot=%s\n' \
-  "$GITHUB_SHA" "$capture" > "$out/startup.txt"
+# Query only this app's recent Keychain errors and export an allowlisted
+# category. A lack of correlated log lines is not proof of a healthy Keychain.
+keychain=not-observed
+if observed="$(
+  xcrun simctl spawn "$SORTEX_SIMULATOR_ID" log show --last 3m --style compact \
+    --predicate '(process == "securityd" OR process == "secd") AND (eventMessage CONTAINS "SorteXTeste" OR eventMessage CONTAINS "br.com.sortex.development")' \
+    2>/dev/null | node "$root/.github/native-ui/keychain-status.cjs"
+)"; then
+  keychain="$observed"
+fi
+printf 'sha=%s\nstage=pre-credential-login-view-not-verified\nscreenshot=%s\nkeychain=%s\n' \
+  "$GITHUB_SHA" "$capture" "$keychain" > "$out/startup.txt"
 exit 65

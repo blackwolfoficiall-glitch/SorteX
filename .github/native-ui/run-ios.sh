@@ -39,7 +39,7 @@ plistbuddy=/usr/libexec/PlistBuddy
 "$plistbuddy" -c 'Add :NSAppTransportSecurity:NSExceptionDomains dict' "$plist"
 "$plistbuddy" -c 'Add :NSAppTransportSecurity:NSExceptionDomains:127.0.0.1 dict' "$plist"
 "$plistbuddy" -c 'Add :NSAppTransportSecurity:NSExceptionDomains:127.0.0.1:NSExceptionAllowsInsecureHTTPLoads bool true' "$plist"
-bash "$root/.github/mobile/ios-simulator-release.sh" || refuse standalone-build
+SORTEX_SIMULATOR_KEYCHAIN=1 bash "$root/.github/mobile/ios-simulator-release.sh" || refuse standalone-build
 app="$(xcrun simctl get_app_container "$SORTEX_SIMULATOR_ID" br.com.sortex.development app)" ||
   refuse no-installed-app
 [[ "$("$plistbuddy" -c 'Print :NSAppTransportSecurity:NSAllowsArbitraryLoads' "$app/Info.plist")" == false &&
@@ -80,6 +80,7 @@ mkdir -m 700 "$evidence"
 xcrun simctl io "$SORTEX_SIMULATOR_ID" screenshot "$evidence/signed-out.png"
 {
   printf 'sha=%s\n' "$GITHUB_SHA"
+  printf 'signature=local-adhoc-verified\n'
   printf 'scope=ios-simulator; synthetic; loopback API and migrated PostgreSQL; no Metro\n'
   printf 'scenario=buyer login; campaign detail; stop/relaunch; logout; stop/relaunch signed out\n'
   printf 'ios_runtime=%s\n' "$(xcrun simctl list devices available --json | node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{const entry=Object.entries(JSON.parse(s).devices).find(([,rows])=>rows.some(x=>x.udid===process.argv[1]));if(!entry)process.exit(1);console.log(entry[0]);});' "$SORTEX_SIMULATOR_ID")"

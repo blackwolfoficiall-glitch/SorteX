@@ -15,7 +15,7 @@ const web = process.env.SORTEX_FINANCE_E2E_WEB_URL;
 const isolated = database ? describe : describe.skip;
 
 isolated(
-  'Organizer finance read-only snapshots with isolated PostgreSQL',
+  'Organizer finance snapshots and existing Web overview against isolated PostgreSQL',
   () => {
     jest.setTimeout(30_000);
     let app: INestApplication | undefined;
@@ -101,6 +101,31 @@ isolated(
       });
       await client.login(email, password);
       return client;
+    }
+
+    async function webSession(email: string, userId: string) {
+      // Check the exact local Nest instance before sending fixture credentials.
+      const health = await fetch(web + '/api/health', { redirect: 'error' });
+      expect(health.status).toBe(200);
+      expect(((await health.json()) as { version: string }).version).toBe(
+        version,
+      );
+      const login = await fetch(web + '/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+        redirect: 'error',
+      });
+      expect(login.status).toBe(200);
+      expect(((await login.json()) as { user: { id: string } }).user.id).toBe(
+        userId,
+      );
+      const cookie = login.headers
+        .getSetCookie()
+        .map((value) => value.split(';')[0])
+        .join('; ');
+      expect(cookie).not.toBe('');
+      return { cookie };
     }
 
     it('loads truthful, paginated internal values for the owner without mutating the ledger', async () => {
@@ -230,33 +255,14 @@ isolated(
       expect(statement.headers.get('cache-control')).toBe('private, no-store');
       expect(await statement.json()).toEqual(a.statement);
       if (web) {
-        const health = await fetch(web + '/api/health', { redirect: 'error' });
-        expect(health.status).toBe(200);
-        expect(((await health.json()) as { version: string }).version).toBe(
-          version,
-        );
-        const webLogin = await fetch(web + '/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: owner.email, password }),
-          redirect: 'error',
-        });
-        expect(webLogin.status).toBe(200);
-        expect(
-          ((await webLogin.json()) as { user: { id: string } }).user.id,
-        ).toBe(owner.id);
-        const cookie = webLogin.headers
-          .getSetCookie()
-          .map((value) => value.split(';')[0])
-          .join('; ');
-        expect(cookie).not.toBe('');
+        const headers = await webSession(owner.email, owner.id);
         for (const [suffix, expected] of [
           ['/balance/snapshot', a.balance],
           ['/statement/snapshot?page=1&limit=15', a.statement],
           ['/statement/snapshot?page=2&limit=15', b.statement],
         ] as const) {
           const result = await fetch(web + '/api/finance' + suffix, {
-            headers: { cookie },
+            headers,
             redirect: 'error',
           });
           expect(result.status).toBe(200);
@@ -309,5 +315,165 @@ isolated(
         ).status,
       ).toBe(LedgerStatus.PENDING);
     });
+
+    const withWeb = web ? it : it.skip;
+    withWeb(
+      'reflects one due internal credit released by the actual Web finance overview in a later native refresh',
+      async () => {
+        const owner = await account(UserRole.ORGANIZER);
+        const other = await account(UserRole.ORGANIZER);
+        async function seed(organizerId: string, label: string) {
+          const account = await prisma!.financialAccount.create({
+            data: {
+              ownerType: 'ORGANIZER',
+              ownerId: organizerId,
+              availableBalance: '8.00',
+              pendingBalance: '10.00',
+              blockedBalance: '2.00',
+              lifetimeGrossRevenue: '22.00',
+              lifetimeNetRevenue: '20.00',
+              lifetimePlatformFees: '1.29',
+              lifetimeGatewayFees: '0.71',
+            },
+          });
+          const due = await prisma!.ledgerEntry.create({
+            data: {
+              accountId: account.id,
+              type: 'ORGANIZER_NET_REVENUE',
+              direction: 'CREDIT',
+              status: 'PENDING',
+              amount: '10.00',
+              balanceBefore: '8.00',
+              balanceAfter: '8.00',
+              availableAt: new Date('2020-01-01T00:00:00.000Z'),
+              reference: `synthetic-finance-web-overview-${label}`,
+              description:
+                'Synthetic local due credit; no provider transaction',
+            },
+          });
+          return { account, due };
+        }
+        const own = await seed(owner.id, 'owner');
+        const foreign = await seed(other.id, 'other');
+        const native = await mobile(owner.email);
+        const otherNative = await mobile(other.email);
+        const ownSession = organizerFinanceSession(native)!;
+        const otherSession = organizerFinanceSession(otherNative)!;
+        const before = await loadOrganizerFinance(native, ownSession, 1);
+        const foreignBefore = await loadOrganizerFinance(
+          otherNative,
+          otherSession,
+          1,
+        );
+        if (before.kind !== 'ok' || foreignBefore.kind !== 'ok')
+          throw new Error('Synthetic original snapshot unavailable.');
+        expect(before.balance).toMatchObject({
+          available: '8.00',
+          pending: '10.00',
+          blocked: '2.00',
+          platformFees: '1.29',
+          gatewayFees: '0.71',
+        });
+        expect(before.statement.data).toEqual([
+          expect.objectContaining({
+            id: own.due.id,
+            amount: '10.00',
+            status: LedgerStatus.PENDING,
+          }),
+        ]);
+        expect(foreignBefore.statement.data).toEqual([
+          expect.objectContaining({
+            id: foreign.due.id,
+            status: LedgerStatus.PENDING,
+          }),
+        ]);
+        expect(
+          await prisma!.auditLog.count({
+            where: { action: 'BALANCE_RELEASED' },
+          }),
+        ).toBe(0);
+
+        const headers = await webSession(owner.email, owner.id);
+        async function webOverview() {
+          // FinanceDashboard uses this real Next BFF path on entry.
+          const response = await fetch(web + '/api/finance/overview', {
+            headers,
+            redirect: 'error',
+          });
+          expect(response.status).toBe(200);
+          expect(response.headers.get('cache-control')).toBe(
+            'private, no-store',
+          );
+          return (await response.json()) as {
+            account: { id: string };
+            balance: Record<string, number>;
+          };
+        }
+        const website = await webOverview();
+        expect(website.account.id).toBe(own.account.id);
+        expect(website.balance).toMatchObject({
+          available: 18,
+          pending: 0,
+          blocked: 2,
+          platformFees: 1.29,
+          gatewayFees: 0.71,
+        });
+
+        const after = await loadOrganizerFinance(native, ownSession, 1);
+        expect(after).toEqual({
+          kind: 'ok',
+          balance: { ...before.balance, available: '18.00', pending: '0.00' },
+          statement: {
+            ...before.statement,
+            data: before.statement.data.map((row) => ({
+              ...row,
+              status: LedgerStatus.AVAILABLE,
+            })),
+          },
+        });
+        const webStatement = await fetch(
+          web + '/api/finance/statement?limit=100',
+          {
+            headers,
+            redirect: 'error',
+          },
+        );
+        expect(webStatement.status).toBe(200);
+        expect(await webStatement.json()).toMatchObject({
+          data: [{ id: own.due.id, status: LedgerStatus.AVAILABLE }],
+        });
+
+        // Repeat the visit and the native refresh: no double release or audit.
+        expect((await webOverview()).balance).toEqual(website.balance);
+        expect(await loadOrganizerFinance(native, ownSession, 1)).toEqual(
+          after,
+        );
+        expect(
+          await loadOrganizerFinance(otherNative, otherSession, 1),
+        ).toEqual(foreignBefore);
+        const audits = await prisma!.auditLog.findMany({
+          where: { action: 'BALANCE_RELEASED' },
+        });
+        expect(audits).toHaveLength(1);
+        expect(audits[0]).toMatchObject({
+          entityId: own.due.id,
+          entityType: 'LedgerEntry',
+          metadata: { actor: 'SYSTEM_BALANCE_RELEASE' },
+          newData: { accountId: own.account.id },
+        });
+        expect(
+          await prisma!.ledgerEntry.findUnique({
+            where: { id: foreign.due.id },
+          }),
+        ).toEqual(foreign.due);
+        expect(
+          await prisma!.financialAccount.findUnique({
+            where: { id: foreign.account.id },
+          }),
+        ).toEqual(foreign.account);
+        expect(await prisma!.payment.count()).toBe(0);
+        expect(await prisma!.payoutRequest.count()).toBe(0);
+      },
+    );
   },
 );

@@ -11,7 +11,11 @@ altere a `main` para habilitar acionamento manual.
 GitHub Actions prepara um simulador e compila o bundle Release que já é
 usado no teste de abertura (sem Metro). Só este bundle descartável tem
 uma exceção ATS para o loopback, sem carregamentos arbitrários. Não é
-distribuído. O teste usa o CLI Maestro local
+distribuído. Só o workflow de interface isolada usa a assinatura ad hoc
+local do Xcode para conservar o acesso nativo ao Keychain. O job verifica a
+integridade da assinatura e o identificador do bundle antes de instalar;
+não usa certificado, perfil de dispositivo, time Apple ou modo alternativo
+de armazenar a sessão. O teste usa o CLI Maestro local
 [2.12.1](https://github.com/mobile-dev-inc/Maestro/releases/tag/cli-2.12.1),
 verificado por SHA-256, sem Maestro Cloud, telemetria ou análise externa.
 
@@ -30,7 +34,10 @@ bundle, escopo e uma captura final sem sessão. Se a tela de entrada não
 for verificada em 45 segundos, não é iniciada a etapa de login: o único
 artefato de falha é o status e uma captura do simulador descartável
 anterior à digitação de quaisquer credenciais. O job não exporta logs
-brutos, hierarquia do Maestro, capturas durante o login ou o binário.
+brutos, hierarquia do Maestro, capturas durante o login ou o binário. Na
+falha de inicialização, o resumo inclui somente uma categoria allowlisted
+do Keychain, quando os logs do sistema correlacionam o erro a este app.
+`not-observed` não comprova que o Keychain funcionou.
 
 Para verificar só a infraestrutura e os mesmos contratos do cliente, sem
 Xcode, instale as dependências já travadas dos dois projetos, gere o cliente

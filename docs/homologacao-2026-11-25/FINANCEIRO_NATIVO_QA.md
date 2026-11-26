@@ -33,6 +33,14 @@ respostas em voo mesmo se for a mesma conta que entrou de novo.
   `SORTEX_FINANCE_E2E_WEB_URL` (URL local do Next) e
   `SORTEX_FINANCE_E2E_API_PORT` (porta fixa desse Nest). Antes do login
   sintético, a suíte confirma que o BFF aponta para a instância descartável.
+  Além de comparar as rotas de consulta, a suíte lê o saldo pelo cliente
+  móvel, abre pelo BFF a rota `/api/finance/overview` usada pelo painel web
+  e relê no cliente móvel. A rota web libera um crédito interno já vencido:
+  o mesmo lançamento passa de pendente para disponível, com saldo disponível
+  de R$ 8,00 para R$ 18,00 e pendente de R$ 10,00 para R$ 0,00. Taxas, saldo
+  bloqueado e a conta de outro organizador permanecem iguais; repetir o
+  fluxo mantém uma única auditoria de liberação. Não é transferência, saque
+  nem validação de gateway.
 
 Rodada local de 26/11/2026: **52/52** testes do app e TypeScript aprovados;
 **1/1** Nest HTTP + PostgreSQL 18.7 descartável, incluindo comparação pelo

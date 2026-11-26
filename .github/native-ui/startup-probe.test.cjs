@@ -42,8 +42,12 @@ exit "$PROBE_EXIT"
 `, { mode: 0o700 });
     writeFileSync(join(tmp, 'xcrun'), `#!/bin/sh
 set -eu
-[ "$1 $2 $4" = "simctl io screenshot" ] || exit 95
 [ -z "\${SORTEX_IOS_UI_BUYER_PASSWORD-}\${BUYER_PASSWORD-}\${MAESTRO_CLOUD_API_KEY-}" ] || exit 96
+if [ "$1 $2 $4 $5" = "simctl spawn log show" ]; then
+  printf 'securityd: SorteXTeste NSOSStatus code=-34018 sensitive-raw-string\n'
+  exit 0
+fi
+[ "$1 $2 $4" = "simctl io screenshot" ] || exit 95
 printf 'synthetic-pixel' > "$5"
 exit "$SCREENSHOT_EXIT"
 `, { mode: 0o700 });
@@ -79,7 +83,24 @@ exit "$SCREENSHOT_EXIT"
     assert.deepEqual(readdirSync(output).sort(),
       screenshotFails ? ['startup.txt'] : ['startup.png', 'startup.txt']);
     assert.match(readFileSync(join(output, 'startup.txt'), 'utf8'), /stage=pre-credential-login-view-not-verified/);
-    assert.match(readFileSync(join(output, 'startup.txt'), 'utf8'),
-      screenshotFails ? /screenshot=unavailable/ : /screenshot=before-credential-entry/);
+    const diagnostic = readFileSync(join(output, 'startup.txt'), 'utf8');
+    assert.match(diagnostic, screenshotFails ? /screenshot=unavailable/ : /screenshot=before-credential-entry/);
+    assert.match(diagnostic, /keychain=missing-entitlement-observed/);
+    assert.doesNotMatch(diagnostic, /sensitive-raw-string/);
+  });
+}
+
+for (const [input, expected] of [
+  ['securityd: AnotherApp code=-34018', 'not-observed'],
+  ['securityd: SorteXTeste code=-340189', 'not-observed'],
+  ['secd: br.com.sortex.development errSecInteractionNotAllowed hidden', 'interaction-not-allowed-observed'],
+  ['securityd: SorteXTeste NSOSStatus Code=-34018 private event data', 'missing-entitlement-observed'],
+]) {
+  test(`Keychain diagnostic emits only the expected category: ${expected}`, () => {
+    const result = spawnSync(process.execPath, [resolve(dir, 'keychain-status.cjs')], {
+      encoding: 'utf8', input,
+    });
+    assert.equal(result.status, 0);
+    assert.equal(result.stdout.trim(), expected);
   });
 }
