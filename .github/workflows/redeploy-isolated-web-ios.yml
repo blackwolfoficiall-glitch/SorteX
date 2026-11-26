@@ -16,9 +16,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      SORTEX_QA_CODE_SHA: 9f02e217c4effb0ffa0b85b6b767bf2e6782478f
-      SORTEX_QA_BASE_SHA: cc66e241a24f8c26c277b48f0759b7ad266e0747
-      SORTEX_QA_BASE_DEPLOYMENT: "10"
+      SORTEX_QA_CODE_SHA: 950214d6030ab89728888fcbcd216f248e40d3cf
+      SORTEX_QA_BASE_SHA: 9f02e217c4effb0ffa0b85b6b767bf2e6782478f
+      SORTEX_QA_BASE_DEPLOYMENT: "11"
       SORTEX_QA_EXPECTED_STORAGE: private-neon-s3
     steps:
       - uses: actions/checkout@v4
@@ -26,7 +26,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@v4
         with:
-          ref: 9f02e217c4effb0ffa0b85b6b767bf2e6782478f
+          ref: 950214d6030ab89728888fcbcd216f248e40d3cf
           path: validated-candidate
           persist-credentials: false
       - uses: actions/setup-node@v4
@@ -53,5 +53,5 @@ jobs:
     needs: update
     uses: ./.github/workflows/sortex-hosted-qa-smoke.yml
     with:
-      expected-api-sha: 9f02e217c4effb0ffa0b85b6b767bf2e6782478f
+      expected-api-sha: 950214d6030ab89728888fcbcd216f248e40d3cf
       check-draft-cover: true

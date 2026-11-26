@@ -15,7 +15,7 @@ on:
       expected-api-sha:
         required: true
         type: string
-        default: 9f02e217c4effb0ffa0b85b6b767bf2e6782478f
+        default: 950214d6030ab89728888fcbcd216f248e40d3cf
 
 permissions:
   contents: read
