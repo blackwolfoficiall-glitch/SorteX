@@ -4,7 +4,8 @@ import { client } from "../auth/runtime";
 import {
   draftFields,
   emptyOrganizerDraft,
-  saveOrganizerDraft,
+  isEditableOrganizerCampaign,
+  saveOrganizerCampaign,
   type OrganizerDraftFields,
   type OrganizerDraftRecord,
 } from "../domain/organizer-draft";
@@ -37,7 +38,7 @@ export function NativeOrganizerDraft({
       client.request<OrganizerDraftRecord>(`/campaigns/${encodeURIComponent(campaignId)}`)
         .then((item) => {
           if (!alive || client.snapshot().user?.id !== organizerId) return;
-          if (item.status !== "DRAFT") throw new Error("Este editor salva somente rascunhos.");
+          if (!isEditableOrganizerCampaign(item.status)) throw new Error("Esta campanha não pode mais ser editada.");
           setDraft(item);
           setFields(draftFields(item));
         })
@@ -50,28 +51,37 @@ export function NativeOrganizerDraft({
   const update = (field: keyof OrganizerDraftFields) => (value: string) =>
     setFields((prev) => ({ ...prev, [field]: value }));
   if (loading) return (
-    <Page title="Carregando rascunho">
+    <Page title="Carregando campanha">
       <ActivityIndicator accessibilityLabel="Carregando" color={colors.purple} />
     </Page>
   );
 
   const editable = !campaignId || Boolean(draft);
+  const copyOnly = draft && draft.status !== "DRAFT";
+  const title = !campaignId ? "Nova campanha" : copyOnly ? "Editar campanha" : "Editar rascunho";
   return (
-    <Page title={campaignId ? "Editar rascunho" : "Nova campanha"}>
-      <Notice message="Somente rascunho. As opções completas e a publicação permanecem no painel web." />
+    <Page title={title}>
+      {editable && <Notice message={copyOnly
+        ? "Aqui você pode editar o título, o resumo público e a descrição. As demais opções permanecem no painel web."
+        : "As opções completas e a publicação permanecem no painel web."} />}
       {!!error && <Notice error message={error} />}
       {editable && <>
         <Field label="Título" value={fields.title} onChangeText={update("title")} maxLength={120} />
-        <Field label="Descrição" value={fields.description} onChangeText={update("description")} multiline />
-        <Field label="Prêmio principal" value={fields.mainPrizeName} onChangeText={update("mainPrizeName")} />
-        <Field label="Quantidade de cotas" value={fields.totalNumbers} onChangeText={update("totalNumbers")} keyboardType="number-pad" />
-        <Field label="Valor da cota" value={fields.numberPrice} onChangeText={update("numberPrice")} keyboardType="decimal-pad" />
-        <Button title="Salvar rascunho" busy={busy} onPress={() => {
+        <Field label="Resumo público" value={fields.shortDescription ?? ""} onChangeText={update("shortDescription")} multiline />
+        <Field label="Descrição completa" value={fields.description} onChangeText={update("description")} multiline />
+        {!copyOnly && (
+          <>
+            <Field label="Prêmio principal" value={fields.mainPrizeName} onChangeText={update("mainPrizeName")} />
+            <Field label="Quantidade de cotas" value={fields.totalNumbers} onChangeText={update("totalNumbers")} keyboardType="number-pad" />
+            <Field label="Valor da cota" value={fields.numberPrice} onChangeText={update("numberPrice")} keyboardType="decimal-pad" />
+          </>
+        )}
+        <Button title={copyOnly ? "Salvar campanha" : "Salvar rascunho"} busy={busy} onPress={() => {
           if (saving.current || !sameAccount()) return;
           saving.current = true;
           setBusy(true);
           setError("");
-          const save = async () => saveOrganizerDraft(client, fields, draft);
+          const save = async () => saveOrganizerCampaign(client, fields, draft);
           void save()
             .then(() => { if (active.current && sameAccount()) onSaved(); })
             .catch((e: unknown) => { if (active.current && sameAccount()) setError(errorMessage(e)); })

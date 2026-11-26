@@ -31,6 +31,7 @@ import {
 } from "./src/components/ui";
 import { LocationPicker } from "./src/components/LocationPicker";
 import { NativeOrganizerDraft } from "./src/components/NativeOrganizerDraft";
+import { isEditableOrganizerCampaign } from "./src/domain/organizer-draft";
 import { NativeBuyerOrder, NativeBuyerReservation } from "./src/buyer/NativeBuyerPurchase";
 import {
   initial,
@@ -590,6 +591,7 @@ function CampaignDetail({ route, navigation }: any) {
       ? `/campaigns/${encodeURIComponent(item.id)}`
       : `/public/campaigns/${encodeURIComponent(item.slug)}`,
   );
+  const { shortDescription, description } = state.data ?? {};
   return (
     <Page title="Detalhes da campanha">
       <Load state={state}>
@@ -597,10 +599,12 @@ function CampaignDetail({ route, navigation }: any) {
         <Notice message={status(state.data?.status || "")} />
         <View style={s.card}>
           <Text style={s.text}>
-            {state.data?.description ||
-              state.data?.shortDescription ||
+            {(organizer ? description || shortDescription : shortDescription || description) ||
               "Sem descrição adicional."}
           </Text>
+          {!organizer && shortDescription && description && description !== shortDescription && (
+            <Text style={s.text}>{description}</Text>
+          )}
           <Text style={s.text}>Título: {money(state.data?.numberPrice)}</Text>
           <Text style={s.text}>
             Prêmio: {state.data?.mainPrizeName || "Consulte o regulamento"}
@@ -608,8 +612,9 @@ function CampaignDetail({ route, navigation }: any) {
         </View>
         <Text style={s.label}>Regulamento</Text>
         <Text style={s.text}>{state.data?.regulation || "Não informado."}</Text>
-        {organizer && state.data?.status === "DRAFT" && (
-          <Button secondary title="Editar rascunho" onPress={() => navigation.navigate("OrganizerDraft", { campaignId: item.id })} />
+        {organizer && isEditableOrganizerCampaign(state.data?.status) && (
+          <Button secondary title={state.data?.status === "DRAFT" ? "Editar rascunho" : "Editar campanha"}
+            onPress={() => navigation.navigate("OrganizerDraft", { campaignId: item.id })} />
         )}
         {organizer ? (
           <Button
@@ -1087,7 +1092,7 @@ export default function App() {
                 <Stack.Screen
                   name="OrganizerDraft"
                   component={OrganizerDraftScreen}
-                  options={{ title: "Rascunho" }}
+                  options={{ title: "Editor de campanha" }}
                 />
                 <Stack.Screen
                   name="CampaignOrders"
