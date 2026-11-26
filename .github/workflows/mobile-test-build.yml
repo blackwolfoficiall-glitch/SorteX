@@ -80,7 +80,7 @@ jobs:
           node-version: 24
       - run: npm ci --no-audit --no-fund
       - name: Verify QA launcher modes and physical-device guards
-        run: node --test ../../.github/mobile/iphone.test.mjs
+        run: node --test ../../.github/mobile/iphone.test.mjs ../../.github/mobile/ios-simulator-release.test.mjs
       - name: Select an available iPhone simulator explicitly
         run: |
           # Expo CLI writes its device-tool cache here on a fresh runner.
@@ -92,7 +92,11 @@ jobs:
         run: |
           npx expo prebuild --platform ios --no-install
           node scripts/check-native-config.cjs
-      - name: Build and launch iOS simulator without Apple enrollment
+      - name: Build and launch standalone QA Release on iPhone simulator
+        if: github.ref == 'refs/heads/homologacao/web-ios-integrada'
+        run: bash ../../.github/mobile/ios-simulator-release.sh
+      - name: Build and launch legacy iOS simulator without Apple enrollment
+        if: github.ref == 'refs/heads/feat/mobile-expo'
         run: npx expo run:ios --configuration Release --no-bundler --device "$SORTEX_SIMULATOR_ID"
       - name: Capture native launch
         run: |
