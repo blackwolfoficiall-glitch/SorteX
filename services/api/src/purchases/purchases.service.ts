@@ -326,18 +326,31 @@ export class PurchasesService {
   async availability(slug: string) {
     const campaign = await this.publicCampaign(slug);
     await this.expiration.expireDue(campaign.id);
-    const occupied = await this.prisma.ticket.count({
+    // Count inventory from one post-expiry snapshot. The campaign returned by
+    // publicCampaign predates expiration and its cached counters can be stale.
+    const inventory = await this.prisma.ticket.groupBy({
+      by: ['status'],
       where: {
         campaignId: campaign.id,
         status: { in: [TicketStatus.RESERVED, TicketStatus.SOLD] },
       },
+      _count: { _all: true },
     });
+    const reservedNumbers =
+      inventory.find(({ status }) => status === TicketStatus.RESERVED)?._count
+        ._all ?? 0;
+    const soldNumbers =
+      inventory.find(({ status }) => status === TicketStatus.SOLD)?._count
+        ._all ?? 0;
     return {
       campaignId: campaign.id,
       totalNumbers: campaign.totalNumbers,
-      availableNumbers: Math.max(0, campaign.totalNumbers - occupied),
-      reservedNumbers: campaign.reservedNumbers,
-      soldNumbers: campaign.soldNumbers,
+      availableNumbers: Math.max(
+        0,
+        campaign.totalNumbers - reservedNumbers - soldNumbers,
+      ),
+      reservedNumbers,
+      soldNumbers,
       reservationSeconds,
       selectionMode: campaign.numberSelectionMode,
       minimumPurchase: campaign.minimumPurchase,

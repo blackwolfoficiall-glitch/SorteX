@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { Order } from 'mercadopago';
@@ -48,6 +48,13 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       imports: [AppModule],
     }).compile();
     app = module.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     await app.init();
     prisma = app.get(PrismaService);
   });
@@ -443,5 +450,169 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       process.env = env;
       sdk.mockRestore();
     }
+  });
+  it('libera somente a cota sem pagamento após expiração e admite um único comprador na nova disputa', async () => {
+    const run = randomUUID();
+    const password = 'isolated-reservation-test-password';
+    const [owner, previous, competitorA, competitorB] = await Promise.all(
+      (['ORGANIZER', 'BUYER', 'BUYER', 'BUYER'] as const).map(
+        async (role, index) =>
+          prisma.user.create({
+            data: {
+              name: 'Conta sintética',
+              email: `reuse-${run}-${index}@example.test`,
+              password: await hash(password, 4),
+              role,
+            },
+          }),
+      ),
+    );
+    const accessTokens = await Promise.all(
+      [previous, competitorA, competitorB].map(async ({ email }) => {
+        const { body } = await request(app.getHttpServer())
+          .post('/auth/login')
+          .send({ email, password })
+          .expect(201);
+        return (body as { accessToken: string }).accessToken;
+      }),
+    );
+    await prisma.organizerProfile.create({
+      data: {
+        userId: owner.id,
+        fullName: 'Responsável sintético',
+        cpf: '00000000000',
+        phone: '00000000000',
+        verificationStatus: 'VERIFIED',
+      },
+    });
+    const campaign = await prisma.campaign.create({
+      data: {
+        title: 'Campanha sintética de expiração',
+        slug: `reuse-${run}`,
+        organizerId: owner.id,
+        totalNumbers: 10,
+        numberPrice: 1,
+        numberSelectionMode: 'MANUAL',
+        status: 'PUBLISHED',
+      },
+    });
+    const reserve = (token: string, number: number) =>
+      request(app.getHttpServer())
+        .post('/purchases/reserve-manual')
+        .auth(token, { type: 'bearer' })
+        .send({
+          campaignId: campaign.id,
+          numbers: [number],
+          idempotencyKey: randomUUID(),
+        });
+    const { body: old } = await reserve(accessTokens[0], 2).expect(201);
+    const { body: pending } = await reserve(accessTokens[0], 3).expect(201);
+    const oldId = (old as { id: string }).id;
+    const pendingId = (pending as { id: string }).id;
+    const expiredAt = new Date(Date.now() - 30_000);
+    const pendingPayment = await prisma.payment.create({
+      data: {
+        buyerId: previous.id,
+        campaignId: campaign.id,
+        organizerId: owner.id,
+        purchaseId: pendingId,
+        activePurchaseKey: pendingId,
+        externalReference: `fixture-pending-${run}`,
+        provider: 'MERCADO_PAGO',
+        method: 'PIX',
+        status: 'PENDING',
+        amount: 1,
+        netAmount: 1,
+        expiresAt: expiredAt,
+      },
+    });
+    // Backdate only records in this disposable database; no sleeps or provider calls.
+    await prisma.$transaction([
+      prisma.purchase.updateMany({
+        where: { id: { in: [oldId, pendingId] } },
+        data: { expiresAt: expiredAt },
+      }),
+      prisma.ticket.updateMany({
+        where: { purchaseId: { in: [oldId, pendingId] } },
+        data: { reservedUntil: expiredAt },
+      }),
+    ]);
+    const publicPath = '/public/campaigns/' + campaign.slug;
+    await request(app.getHttpServer())
+      .get(publicPath + '/availability')
+      .expect(200)
+      .expect(({ body }) => {
+        expect(body).toMatchObject({
+          availableNumbers: 9,
+          reservedNumbers: 1,
+          soldNumbers: 0,
+        });
+      });
+    for (const [number, status] of [
+      [2, 'AVAILABLE'],
+      [3, 'RESERVED'],
+    ] as const) {
+      await request(app.getHttpServer())
+        .get(publicPath + '/numbers')
+        .query({ search: number })
+        .expect(200)
+        .expect(({ body }) => expect(body.items).toEqual([{ number, status }]));
+    }
+
+    const responses = await Promise.all([
+      reserve(accessTokens[1], 2),
+      reserve(accessTokens[2], 2),
+    ]);
+    expect(responses.map(({ status }) => status).sort()).toEqual([201, 409]);
+    const winner = responses.find(({ status }) => status === 201)!.body as {
+      id: string;
+      buyerId: string;
+    };
+    expect([competitorA.id, competitorB.id]).toContain(winner.buyerId);
+
+    const [purchases, tickets, after] = await Promise.all([
+      prisma.purchase.findMany({
+        where: { campaignId: campaign.id },
+        select: { id: true, status: true },
+      }),
+      prisma.ticket.findMany({
+        where: { campaignId: campaign.id },
+        orderBy: { number: 'asc' },
+        select: { number: true, purchaseId: true, buyerId: true, status: true },
+      }),
+      prisma.campaign.findUniqueOrThrow({ where: { id: campaign.id } }),
+    ]);
+    expect(purchases).toHaveLength(3);
+    expect(purchases).toEqual(
+      expect.arrayContaining([
+        { id: oldId, status: 'EXPIRED' },
+        { id: pendingId, status: 'AWAITING_PAYMENT' },
+        { id: winner.id, status: 'AWAITING_PAYMENT' },
+      ]),
+    );
+    expect(tickets).toEqual([
+      {
+        number: 2,
+        purchaseId: winner.id,
+        buyerId: winner.buyerId,
+        status: 'RESERVED',
+      },
+      {
+        number: 3,
+        purchaseId: pendingId,
+        buyerId: previous.id,
+        status: 'RESERVED',
+      },
+    ]);
+    expect(after).toMatchObject({ reservedNumbers: 2, soldNumbers: 0 });
+    expect(
+      await prisma.payment.findMany({
+        where: { campaignId: campaign.id },
+        select: { id: true, status: true },
+      }),
+    ).toEqual([{ id: pendingPayment.id, status: 'PENDING' }]);
+    expect(
+      await prisma.ledgerEntry.count({ where: { campaignId: campaign.id } }),
+    ).toBe(0);
   });
 });
