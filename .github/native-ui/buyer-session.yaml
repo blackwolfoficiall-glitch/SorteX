@@ -1,0 +1,44 @@
+appId: br.com.sortex.development
+name: Sessão nativa e leitura de campanha (PostgreSQL local)
+---
+- launchApp
+- assertVisible: "Entrar com e-mail"
+- tapOn:
+    id: sortex-login-email
+- inputText: sortex-ios-ui@example.test
+- tapOn:
+    id: sortex-login-password
+- inputText: ${BUYER_PASSWORD}
+- scrollUntilVisible:
+    element:
+      text: "Entrar com e-mail"
+    direction: DOWN
+- tapOn: "Entrar com e-mail"
+- extendedWaitUntil:
+    visible: "Olá, CompradorIOS"
+    timeout: 45000
+- tapOn:
+    text: "^Campanhas(,.*)?$"
+- assertVisible: "Campanha sintetica iOS"
+- tapOn: "Ver campanha"
+- assertVisible: "Detalhes da campanha"
+- assertVisible: "Prêmio: Premio sintetico iOS"
+- assertVisible: "Regulamento sintetico da campanha iOS."
+- stopApp: br.com.sortex.development
+- launchApp
+- extendedWaitUntil:
+    visible: "Olá, CompradorIOS"
+    timeout: 45000
+- assertNotVisible: "Entrar com e-mail"
+- tapOn:
+    text: "^Perfil(,.*)?$"
+- scrollUntilVisible:
+    element:
+      text: "Sair da conta"
+    direction: DOWN
+- tapOn: "Sair da conta"
+- assertVisible: "Entrar com e-mail"
+- stopApp: br.com.sortex.development
+- launchApp
+- assertVisible: "Entrar com e-mail"
+- assertNotVisible: "Olá, CompradorIOS"

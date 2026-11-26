@@ -1,0 +1,93 @@
+name: Interface nativa iOS (PostgreSQL local)
+on:
+  # First opted-in change on the QA branch triggers exactly this smoke.
+  # Does not modify or trigger the isolated hosted API/preview deploy.
+  push:
+    branches: [homologacao/web-ios-integrada]
+    paths:
+      - '.github/native-ui/**'
+      - '.github/workflows/mobile-native-ui.yml'
+permissions:
+  contents: read
+concurrency:
+  group: sortex-ios-native-ui-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  buyer-session:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event_name == 'push' && github.event.repository.private == false
+    runs-on: macos-latest
+    timeout-minutes: 70
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_NO_DOTENV: '1'
+      EXPO_PUBLIC_API_URL: http://127.0.0.1:3338
+      EXPO_PUBLIC_ALLOW_LOCAL_API: '1'
+      EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS: '0'
+      MAESTRO_CLI_NO_ANALYTICS: 'true'
+      MAESTRO_DISABLE_UPDATE_CHECK: 'true'
+      MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: 'true'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            apps/mobile/package-lock.json
+            services/api/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Verificar as barreiras do cenário isolado
+        run: node --test .github/native-ui/fixture-guards.test.cjs
+      - name: Instalar PostgreSQL local e Maestro CLI verificado
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install postgresql@18
+          echo "SORTEX_IOS_UI_PG_BIN=$(brew --prefix postgresql@18)/bin" >> "$GITHUB_ENV"
+          archive="$RUNNER_TEMP/maestro.zip"
+          # Upstream GitHub release cli-2.12.1 asset SHA-256.
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            --retry 2 --connect-timeout 15 --max-time 300 \
+            https://github.com/mobile-dev-inc/maestro/releases/download/cli-2.12.1/maestro.zip -o "$archive"
+          printf '%s  %s\n' 54dbb0716425626604973cbb374c585ca30272375d9ce15177a1152765ddd9d7 "$archive" | shasum -a 256 -c -
+          unzip -q "$archive" -d "$RUNNER_TEMP"
+          test -x "$RUNNER_TEMP/maestro/bin/maestro"
+          echo "MAESTRO_BIN=$RUNNER_TEMP/maestro/bin/maestro" >> "$GITHUB_ENV"
+      - name: Preparar API Nest local
+        working-directory: services/api
+        run: |
+          npm ci --no-audit --no-fund
+          npx --no-install prisma generate
+          npm run build
+      - name: Preparar o aplicativo nativo
+        working-directory: apps/mobile
+        run: |
+          npm ci --no-audit --no-fund
+          npx expo prebuild --platform ios --no-install
+          node scripts/check-native-config.cjs
+      - name: Inicializar um iPhone virtual
+        shell: bash
+        run: |
+          set -euo pipefail
+          simulator_id="$(xcrun simctl list devices available --json | node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{const rows=Object.entries(JSON.parse(s).devices).filter(([runtime])=>runtime.includes("iOS")).flatMap(([,devices])=>devices);const d=rows.find(x=>x.isAvailable&&x.name.startsWith("iPhone")&&x.state==="Booted")||rows.find(x=>x.isAvailable&&x.name.startsWith("iPhone"));if(!d)process.exit(1);console.log(d.udid);});')"
+          xcrun simctl bootstatus "$simulator_id" -b
+          echo "SORTEX_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+      - name: Compilar Release, testar na interface e confirmar revogação
+        shell: bash
+        run: bash .github/native-ui/with-fixture.sh bash .github/native-ui/run-ios.sh
+      - name: Guardar somente evidências aprovadas e sem credenciais
+        uses: actions/upload-artifact@v4
+        with:
+          name: sortex-ios-native-ui-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/sortex-native-ui-evidence/native-ui.txt
+            ${{ runner.temp }}/sortex-native-ui-evidence/signed-out.png
+          if-no-files-found: error
+          retention-days: 1
