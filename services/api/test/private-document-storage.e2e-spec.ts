@@ -195,6 +195,33 @@ isolated(
       expect(response.body).toEqual(syntheticDocument);
     });
 
+    it('preserves a private document across an API restart on the same database and upload root', async () => {
+      const { storageKey } = await prisma.organizerDocument.findUniqueOrThrow({
+        where: { id: documentId },
+      });
+
+      await app.close();
+      app = await createApplication();
+      await app.init();
+      prisma = app.get(PrismaService);
+
+      await request(app.getHttpServer())
+        .get('/health/ready')
+        .expect(200, { status: 'ready', database: 'up', storage: 'up' });
+      expect(
+        await prisma.organizerDocument.findUniqueOrThrow({
+          where: { id: documentId },
+          select: { storageKey: true },
+        }),
+      ).toEqual({ storageKey });
+      await download().expect(401);
+      const response = await download()
+        .auth(ownerToken, { type: 'bearer' })
+        .expect('Cache-Control', 'private, no-store')
+        .expect(200);
+      expect(response.body).toEqual(syntheticDocument);
+    });
+
     it('enforces permission and tenant boundaries and audits approved reviewer access', async () => {
       await download().expect(401);
       const other = await seed('other', UserRole.ORGANIZER);

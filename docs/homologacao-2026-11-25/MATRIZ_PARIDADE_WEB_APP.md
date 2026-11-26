@@ -60,7 +60,7 @@ Portal indica link para o site dentro do aplicativo. Restrito indica exclusão i
 
 ## Evidências dos nove cenários • 26/11/2026
 
-**Aceite formal: 0/9.** A API de homologação está ativa na revisão `a51eb9a`, com 21 migrações no Neon. O [teste HTTP nessa revisão hospedada](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45796571324) exercitou o Next no executor e a lógica HTTP do app sem hardware. A [CI compilou e abriu o aplicativo Release no simulador](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45788086936), não em um iPhone. O [iniciador da prévia privada](PREVIA_PRIVADA_MAC.md) tolera atrasos transitórios sem trocar o destino da API nem abrir túnel antes de confirmar o SHA e o banco. Não há link privado do site ou instalação física verificados nesta rodada.
+**Aceite formal: 0/9.** A API de homologação está ativa na revisão `a51eb9a`, com 21 migrações no Neon. O [teste HTTP nessa revisão hospedada](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45796571324) exercitou o Next no executor e a lógica HTTP do app sem hardware. A [CI compilou e abriu o aplicativo Release no simulador](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45814383189), não em um iPhone. O [iniciador da prévia privada](PREVIA_PRIVADA_MAC.md) tolera atrasos transitórios sem trocar o destino da API nem abrir túnel antes de confirmar o SHA e o banco. Não há link privado do site ou instalação física verificados nesta rodada.
 
 | # | Cenário obrigatório | Evidência atual | Falta para aceitar |
 |---|---|---|---|
