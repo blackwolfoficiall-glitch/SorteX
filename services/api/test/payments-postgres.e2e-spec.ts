@@ -565,11 +565,18 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       const get = jest
         .spyOn(Order.prototype, 'get')
         .mockRejectedValue(new Error('Consulta externa bloqueada no teste.'));
-      const cancellationStarted = Promise.withResolvers<void>();
-      const releaseCancellation = Promise.withResolvers<void>();
-      const firstApprovalStarted = Promise.withResolvers<void>();
-      const secondApprovalStarted = Promise.withResolvers<void>();
-      const releaseApprovals = Promise.withResolvers<void>();
+      const gate = () => {
+        let open!: () => void;
+        const promise = new Promise<void>((resolve) => {
+          open = resolve;
+        });
+        return { promise, resolve: open };
+      };
+      const cancellationStarted = gate();
+      const releaseCancellation = gate();
+      const firstApprovalStarted = gate();
+      const secondApprovalStarted = gate();
+      const releaseApprovals = gate();
       const inFlight: Promise<unknown>[] = [];
       const awaitAdapter = (
         started: Promise<void>,
