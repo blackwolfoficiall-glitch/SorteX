@@ -117,18 +117,21 @@ export function Page({
 export function Button({
   title,
   onPress,
+  testID,
   busy = false,
   secondary = false,
   disabled = false,
 }: {
   title: string;
   onPress: () => void;
+  testID?: string;
   busy?: boolean;
   secondary?: boolean;
   disabled?: boolean;
 }) {
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityState={{ disabled: busy || disabled, busy }}

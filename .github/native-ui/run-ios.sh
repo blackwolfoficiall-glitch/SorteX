@@ -22,9 +22,6 @@ simulator_id_re='^[[:xdigit:]]{8}(-[[:xdigit:]]{4}){3}-[[:xdigit:]]{12}$'
   refuse runner-prerequisites
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-# The password is for this disposable localhost account, never the QA account.
-# Mask it anyway; retain no CLI logs or screenshots captured at the login fields.
-printf '::add-mask::%s\n' "$SORTEX_IOS_UI_BUYER_PASSWORD"
 export MAESTRO_CLI_NO_ANALYTICS=true
 export MAESTRO_DISABLE_UPDATE_CHECK=true
 export MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
@@ -64,6 +61,13 @@ do
   fi
 done
 
+# Run and capture failures from a separate input-free probe. If it fails,
+# never start the flow that has access to synthetic credentials.
+bash "$root/.github/native-ui/startup-probe.sh" || refuse login-startup-not-verified
+
+# The password is for this disposable localhost account, never the QA account.
+# Mask it anyway; retain no CLI logs or screenshots captured during login.
+printf '::add-mask::%s\n' "$SORTEX_IOS_UI_BUYER_PASSWORD"
 debug="$(mktemp -d "$RUNNER_TEMP/sortex-ui-debug.XXXXXX")"
 trap 'rm -rf -- "$debug"' EXIT
 # Only this selected local iPhone simulator; no cloud commands or upload.

@@ -1,8 +1,13 @@
 appId: br.com.sortex.development
 name: Sessão nativa e leitura de campanha (PostgreSQL local)
 ---
-- launchApp
-- assertVisible: "Entrar com e-mail"
+- launchApp:
+    stopApp: false
+- extendedWaitUntil:
+    visible:
+      id: sortex-login-submit
+      text: "Entrar com e-mail"
+    timeout: 45000
 - tapOn:
     id: sortex-login-email
 - inputText: sortex-ios-ui@example.test
@@ -11,9 +16,11 @@ name: Sessão nativa e leitura de campanha (PostgreSQL local)
 - inputText: ${BUYER_PASSWORD}
 - scrollUntilVisible:
     element:
-      text: "Entrar com e-mail"
+      id: sortex-login-submit
     direction: DOWN
-- tapOn: "Entrar com e-mail"
+- tapOn:
+    id: sortex-login-submit
+    text: "Entrar com e-mail"
 - extendedWaitUntil:
     visible: "Olá, CompradorIOS"
     timeout: 45000

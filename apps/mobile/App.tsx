@@ -153,6 +153,7 @@ function Login({ navigation }: any) {
       {!!error && <Notice error message={error} />}
       <Button
         title="Entrar com e-mail"
+        testID="sortex-login-submit"
         busy={busy}
         onPress={() => {
           setBusy(true);

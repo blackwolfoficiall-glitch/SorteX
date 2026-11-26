@@ -26,8 +26,11 @@ ver prêmio e regulamento da campanha, encerrar o processo e relançar logado,
 sair, encerrar novamente e relançar deslogado. A aprovação requer também
 requisições reais ordenadas no Nest, exatamente uma sessão revogada no
 PostgreSQL e zero pagamentos. O CI guarda somente o SHA, runtime, hash do
-bundle, escopo e uma captura final sem sessão; não expõe logs brutos, os
-campos de login ou o binário.
+bundle, escopo e uma captura final sem sessão. Se a tela de entrada não
+for verificada em 45 segundos, não é iniciada a etapa de login: o único
+artefato de falha é o status e uma captura do simulador descartável
+anterior à digitação de quaisquer credenciais. O job não exporta logs
+brutos, hierarquia do Maestro, capturas durante o login ou o binário.
 
 Para verificar só a infraestrutura e os mesmos contratos do cliente, sem
 Xcode, instale as dependências já travadas dos dois projetos, gere o cliente

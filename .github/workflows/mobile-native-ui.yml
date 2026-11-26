@@ -44,7 +44,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Verificar as barreiras do cenário isolado
-        run: node --test .github/native-ui/fixture-guards.test.cjs
+        run: node --test .github/native-ui/fixture-guards.test.cjs .github/native-ui/startup-probe.test.cjs
       - name: Instalar PostgreSQL local e Maestro CLI verificado
         shell: bash
         run: |
@@ -80,8 +80,19 @@ jobs:
           xcrun simctl bootstatus "$simulator_id" -b
           echo "SORTEX_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
       - name: Compilar Release, testar na interface e confirmar revogação
+        id: native-e2e
         shell: bash
         run: bash .github/native-ui/with-fixture.sh bash .github/native-ui/run-ios.sh
+      - name: Guardar apenas o diagnóstico de inicialização sem credenciais
+        if: ${{ failure() && steps.native-e2e.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sortex-ios-startup-diagnostic-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/sortex-native-startup-failure/startup.txt
+            ${{ runner.temp }}/sortex-native-startup-failure/startup.png
+          if-no-files-found: ignore
+          retention-days: 1
       - name: Guardar somente evidências aprovadas e sem credenciais
         uses: actions/upload-artifact@v4
         with:
