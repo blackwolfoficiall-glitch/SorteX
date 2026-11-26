@@ -30,13 +30,16 @@ ver prêmio e regulamento da campanha, encerrar o processo e relançar logado,
 sair, encerrar novamente e relançar deslogado. A aprovação requer também
 requisições reais ordenadas no Nest, exatamente uma sessão revogada no
 PostgreSQL e zero pagamentos. O CI guarda somente o SHA, runtime, hash do
-bundle, escopo e uma captura final sem sessão. Se a tela de entrada não
-for verificada em 45 segundos, não é iniciada a etapa de login: o único
+bundle, escopo e uma captura final sem sessão. A prontidão usa os identificadores separados dos campos e do botão,
+rolando até o botão quando necessário. Se os controles de entrada não
+forem verificados, não é iniciada a etapa de login: o único
 artefato de falha é o status e uma captura do simulador descartável
 anterior à digitação de quaisquer credenciais. O job não exporta logs
 brutos, hierarquia do Maestro, capturas durante o login ou o binário. Na
 falha de inicialização, o resumo inclui somente uma categoria allowlisted
-do Keychain, quando os logs do sistema correlacionam o erro a este app.
+do Keychain quando os logs do sistema correlacionam o erro a este app,
+e uma categoria allowlisted do Maestro quando seu diagnóstico indica
+falha de seletor, driver ou configuração. O resumo não inclui texto bruto.
 `not-observed` não comprova que o Keychain funcionou.
 
 Para verificar só a infraestrutura e os mesmos contratos do cliente, sem

@@ -11,9 +11,10 @@ trap 'rm -rf -- "$debug"' EXIT
 # screenshot command, and keep the raw Maestro output off public artifacts.
 unset SORTEX_IOS_UI_BUYER_PASSWORD BUYER_PASSWORD MAESTRO_CLOUD_API_KEY
 [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 64
-if "$MAESTRO_BIN" --device "$SORTEX_SIMULATOR_ID" test \
+if "$MAESTRO_BIN" --no-ansi --device "$SORTEX_SIMULATOR_ID" test \
    --debug-output "$debug" --test-output-dir "$debug" \
-   "$root/.github/native-ui/buyer-startup.yaml"; then
+   "$root/.github/native-ui/buyer-startup.yaml" >"$debug/stdout.log" 2>&1; then
+  echo "Native login controls detected before credentials."
   exit 0
 fi
 
@@ -35,6 +36,11 @@ if observed="$(
 )"; then
   keychain="$observed"
 fi
-printf 'sha=%s\nstage=pre-credential-login-view-not-verified\nscreenshot=%s\nkeychain=%s\n' \
-  "$GITHUB_SHA" "$capture" "$keychain" > "$out/startup.txt"
+maestro=unclassified
+if observed="$(node "$root/.github/native-ui/startup-status.cjs" <"$debug/stdout.log")"; then
+  maestro="$observed"
+fi
+printf 'sha=%s\nstage=pre-credential-login-view-not-verified\nscreenshot=%s\nkeychain=%s\nmaestro=%s\n' \
+  "$GITHUB_SHA" "$capture" "$keychain" "$maestro" > "$out/startup.txt"
+printf 'Pre-credential Maestro startup check failed (%s).\n' "$maestro" >&2
 exit 65

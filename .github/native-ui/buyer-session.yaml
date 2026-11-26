@@ -5,8 +5,7 @@ name: Sessão nativa e leitura de campanha (PostgreSQL local)
     stopApp: false
 - extendedWaitUntil:
     visible:
-      id: sortex-login-submit
-      text: "Entrar com e-mail"
+      id: sortex-login-email
     timeout: 45000
 - tapOn:
     id: sortex-login-email
@@ -14,13 +13,13 @@ name: Sessão nativa e leitura de campanha (PostgreSQL local)
 - tapOn:
     id: sortex-login-password
 - inputText: ${BUYER_PASSWORD}
+- hideKeyboard
 - scrollUntilVisible:
     element:
       id: sortex-login-submit
     direction: DOWN
 - tapOn:
     id: sortex-login-submit
-    text: "Entrar com e-mail"
 - extendedWaitUntil:
     visible: "Olá, CompradorIOS"
     timeout: 45000
@@ -36,7 +35,8 @@ name: Sessão nativa e leitura de campanha (PostgreSQL local)
 - extendedWaitUntil:
     visible: "Olá, CompradorIOS"
     timeout: 45000
-- assertNotVisible: "Entrar com e-mail"
+- assertNotVisible:
+    id: sortex-login-email
 - tapOn:
     text: "^Perfil(,.*)?$"
 - scrollUntilVisible:
@@ -44,8 +44,14 @@ name: Sessão nativa e leitura de campanha (PostgreSQL local)
       text: "Sair da conta"
     direction: DOWN
 - tapOn: "Sair da conta"
-- assertVisible: "Entrar com e-mail"
+- extendedWaitUntil:
+    visible:
+      id: sortex-login-email
+    timeout: 45000
 - stopApp: br.com.sortex.development
 - launchApp
-- assertVisible: "Entrar com e-mail"
+- extendedWaitUntil:
+    visible:
+      id: sortex-login-email
+    timeout: 45000
 - assertNotVisible: "Olá, CompradorIOS"

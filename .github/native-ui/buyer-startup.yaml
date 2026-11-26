@@ -1,13 +1,18 @@
 appId: br.com.sortex.development
 name: Inicialização nativa sem credenciais
 ---
-- launchApp
+- launchApp:
+    stopApp: false
 - extendedWaitUntil:
     visible:
-      id: sortex-login-submit
-      text: "Entrar com e-mail"
+      id: sortex-login-email
     timeout: 45000
 - assertVisible:
-    id: sortex-login-email
-- assertVisible:
     id: sortex-login-password
+- scrollUntilVisible:
+    element:
+      id: sortex-login-submit
+    direction: DOWN
+    timeout: 10000
+- assertVisible:
+    id: sortex-login-submit
