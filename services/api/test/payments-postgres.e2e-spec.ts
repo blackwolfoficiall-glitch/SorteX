@@ -28,8 +28,29 @@ const isolated = isolatedUrl ? describe : describe.skip;
 isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
+  let buyers: { id: string; token: string }[];
   const secret = randomUUID();
   const initialEnv = process.env;
+
+  async function login(email: string, password: string) {
+    const result = await request(app.getHttpServer() as Server)
+      .post('/auth/login')
+      .send({ email, password })
+      .expect(201)
+      .expect('RateLimit-Limit', /^[1-9]\d*$/);
+    return (result.body as { accessToken: string }).accessToken;
+  }
+
+  async function organizerFixture(email: string, password?: string) {
+    return prisma.user.create({
+      data: {
+        name: 'Organizador sintético',
+        email,
+        password: password ? await hash(password, 4) : 'unusable-fixture-hash',
+        role: 'ORGANIZER',
+      },
+    });
+  }
 
   beforeAll(async () => {
     process.env = {
@@ -58,9 +79,28 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
         transform: true,
       }),
     );
+    prisma = app.get(PrismaService);
     // Keep one loopback listener for overlapping Supertest requests.
     await app.listen(0, '127.0.0.1');
-    prisma = app.get(PrismaService);
+    // Reuse real buyer sessions rather than consuming the shared loopback
+    // login budget in every case. Each case still owns its own campaign data;
+    // the competition test needs three distinct buyers on that one campaign.
+    const run = randomUUID();
+    const password = `synthetic-buyers-${run}`;
+    const passwordHash = await hash(password, 4);
+    buyers = await Promise.all(
+      [0, 1, 2].map(async (index) => {
+        const buyer = await prisma.user.create({
+          data: {
+            name: 'Comprador sintético',
+            email: `payment-fixture-${run}-${index}@example.test`,
+            password: passwordHash,
+            role: 'BUYER',
+          },
+        });
+        return { id: buyer.id, token: await login(buyer.email, password) };
+      }),
+    );
   });
 
   afterAll(async () => {
@@ -68,7 +108,12 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
     try {
       await app?.close();
     } finally {
-      process.env = initialEnv;
+      try {
+        // Nest does not disconnect this Prisma service on app.close().
+        await prisma?.$disconnect();
+      } finally {
+        process.env = initialEnv;
+      }
     }
   });
 
@@ -91,19 +136,12 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
   ])('$label', async ({ olderDraft, platformFee, netAmount, rule }) => {
     const server = app.getHttpServer() as Server;
     const run = randomUUID();
-    const password = 'synthetic-first-campaign-fee-password';
-    const [organizer, buyer] = await Promise.all(
-      (['ORGANIZER', 'BUYER'] as const).map(async (role) =>
-        prisma.user.create({
-          data: {
-            name: 'Conta sintética',
-            email: `fee-${role.toLowerCase()}-${run}@example.test`,
-            password: await hash(password, 4),
-            role,
-          },
-        }),
-      ),
+    const password = `synthetic-fee-${run}`;
+    const organizer = await organizerFixture(
+      `fee-organizer-${run}@example.test`,
+      password,
     );
+    const [{ token: buyerToken }] = buyers;
     await prisma.organizerProfile.create({
       data: {
         userId: organizer.id,
@@ -144,17 +182,7 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
         publishedAt: new Date(now),
       },
     });
-    async function login(email: string) {
-      const response = await request(server)
-        .post('/auth/login')
-        .send({ email, password })
-        .expect(201);
-      return (response.body as { accessToken: string }).accessToken;
-    }
-    const [buyerToken, organizerToken] = await Promise.all([
-      login(buyer.email),
-      login(organizer.email),
-    ]);
+    const organizerToken = await login(organizer.email, password);
     const reserve = await request(server)
       .post('/purchases/reserve-manual')
       .auth(buyerToken, { type: 'bearer' })
@@ -284,20 +312,10 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
   it('só libera a reserva após cancelamento confirmado e preserva a outra reserva em callbacks tardios', async () => {
     const run = randomUUID();
     const server = app.getHttpServer() as Server;
-    const password = 'isolated-cancel-fixture';
-    const passwordHash = await hash(password, 4);
-    const [owner, buyer, secondBuyer] = await Promise.all(
-      (['ORGANIZER', 'BUYER', 'BUYER'] as const).map((role, index) =>
-        prisma.user.create({
-          data: {
-            name: 'Conta sintética',
-            email: `cancel-${run}-${index}@example.test`,
-            password: passwordHash,
-            role,
-          },
-        }),
-      ),
+    const owner = await organizerFixture(
+      `cancel-organizer-${run}@example.test`,
     );
+    const [{ token }, { token: secondToken }] = buyers;
     await prisma.organizerProfile.create({
       data: {
         userId: owner.id,
@@ -318,15 +336,6 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
         status: 'PUBLISHED',
       },
     });
-    const [token, secondToken] = await Promise.all(
-      [buyer, secondBuyer].map(async ({ email }) => {
-        const response = await request(server)
-          .post('/auth/login')
-          .send({ email, password })
-          .expect(201);
-        return (response.body as { accessToken: string }).accessToken;
-      }),
-    );
     const reserve = (auth: string) =>
       request(server)
         .post('/purchases/reserve-manual')
@@ -488,20 +497,12 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
     async (winner) => {
       const run = randomUUID();
       const server = app.getHttpServer() as Server;
-      const password = 'isolated-payment-race-fixture';
-      const passwordHash = await hash(password, 4);
-      const [owner, buyer, competitor] = await Promise.all(
-        (['ORGANIZER', 'BUYER', 'BUYER'] as const).map((role, index) =>
-          prisma.user.create({
-            data: {
-              name: 'Conta sintética',
-              email: `race-${run}-${index}@example.test`,
-              password: passwordHash,
-              role,
-            },
-          }),
-        ),
+      const owner = await organizerFixture(
+        `race-organizer-${run}@example.test`,
       );
+      const [buyer, competitor] = buyers;
+      const { token } = buyer;
+      const { token: competitorToken } = competitor;
       await prisma.organizerProfile.create({
         data: {
           userId: owner.id,
@@ -522,15 +523,6 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
           status: 'PUBLISHED',
         },
       });
-      const [token, competitorToken] = await Promise.all(
-        [buyer, competitor].map(async ({ email }) => {
-          const response = await request(server)
-            .post('/auth/login')
-            .send({ email, password })
-            .expect(201);
-          return (response.body as { accessToken: string }).accessToken;
-        }),
-      );
       const reserve = (auth: string) =>
         request(server)
           .post('/purchases/reserve-manual')
@@ -1031,27 +1023,11 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
   });
   it('bloqueia Pix nativo sem prova e reutiliza a tentativa verificada do mesmo pedido', async () => {
     const run = randomUUID();
-    const password = 'sandbox-http-fixture-pw';
-    const [organizer, buyer, anotherBuyer] = await Promise.all(
-      (['ORGANIZER', 'BUYER', 'BUYER'] as const).map(async (role, index) =>
-        prisma.user.create({
-          data: {
-            name: 'Conta sintética',
-            email: `native-${run}-${index}@example.test`,
-            password: await hash(password, 4),
-            role,
-          },
-        }),
-      ),
+    const organizer = await organizerFixture(
+      `native-organizer-${run}@example.test`,
     );
-    async function access(email: string) {
-      const result = await request(app.getHttpServer())
-        .post('/auth/login')
-        .send({ email, password })
-        .expect(201);
-      return (result.body as { accessToken: string }).accessToken;
-    }
-
+    const [buyer, { token: secondToken }] = buyers;
+    const { token } = buyer;
     const campaign = await prisma.campaign.create({
       data: {
         title: 'Campanha de teste',
@@ -1151,8 +1127,6 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
           },
         };
       });
-    const token = await access(buyer.email);
-    const secondToken = await access(anotherBuyer.email);
     const nativeUrl = '/payments/native-sandbox-pix';
     const send = () =>
       request(app.getHttpServer())
@@ -1285,29 +1259,9 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
   });
   it('libera somente a cota sem pagamento após expiração e admite um único comprador na nova disputa', async () => {
     const run = randomUUID();
-    const password = 'isolated-reservation-test-password';
-    const [owner, previous, competitorA, competitorB] = await Promise.all(
-      (['ORGANIZER', 'BUYER', 'BUYER', 'BUYER'] as const).map(
-        async (role, index) =>
-          prisma.user.create({
-            data: {
-              name: 'Conta sintética',
-              email: `reuse-${run}-${index}@example.test`,
-              password: await hash(password, 4),
-              role,
-            },
-          }),
-      ),
-    );
-    const accessTokens = await Promise.all(
-      [previous, competitorA, competitorB].map(async ({ email }) => {
-        const { body } = await request(app.getHttpServer())
-          .post('/auth/login')
-          .send({ email, password })
-          .expect(201);
-        return (body as { accessToken: string }).accessToken;
-      }),
-    );
+    const owner = await organizerFixture(`reuse-organizer-${run}@example.test`);
+    const [previous, competitorA, competitorB] = buyers;
+    const accessTokens = buyers.map(({ token }) => token);
     await prisma.organizerProfile.create({
       data: {
         userId: owner.id,
