@@ -60,7 +60,7 @@ Portal indica link para o site dentro do aplicativo. Restrito indica exclusão i
 
 ## Evidências dos nove cenários • 26/11/2026
 
-**Aceite formal: 0/9.** A API de homologação está ativa com 21 migrações no Neon. O [teste HTTP no Neon QA](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45750452791) exercitou o frontend Next no executor e a lógica HTTP do app sem hardware. A [CI compilou e abriu o aplicativo Release no simulador](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45750452673), não em um iPhone. Não há link privado do site ou instalação física verificados nesta rodada.
+**Aceite formal: 0/9.** A API de homologação está ativa na revisão `ba183db`, com 21 migrações no Neon. O [teste HTTP nessa revisão hospedada](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45764146411) exercitou o Next no executor e a lógica HTTP do app sem hardware. A [CI compilou e abriu o aplicativo Release no simulador](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45755842850), não em um iPhone. O [iniciador da prévia privada](PREVIA_PRIVADA_MAC.md) tolera atrasos transitórios sem trocar o destino da API nem abrir túnel antes de confirmar o SHA e o banco. Não há link privado do site ou instalação física verificados nesta rodada.
 
 | # | Cenário obrigatório | Evidência atual | Falta para aceitar |
 |---|---|---|---|
@@ -72,7 +72,7 @@ Portal indica link para o site dentro do aplicativo. Restrito indica exclusão i
 | 6 | Títulos, ganhadores e saldo | Testes locais de emissão/estorno e apuração; a prova pública desaparece após invalidação, sem apagar o histórico | Os três resultados na mesma jornada QA por web e iOS |
 | 7 | Impedir duplicidade de cotas | Corrida em PostgreSQL isolado: uma reserva vencedora; a outra recebe conflito | Corrida web/iOS e reentrega do webhook sem novo título ou lançamento |
 | 8 | Isolamento dos organizadores | Isolamento de leitura/alteração passou no Neon QA por HTTP | Conferir com duas identidades na web privada e iPhone |
-| 9 | Permissões administrativas | 11 casos HTTP/PG locais: seis perfis, negação a compradores/organizadores, revogação e filtros de auditoria | Matriz de papéis no QA, ações permitidas/bloqueadas no site e o app sem acesso administrativo |
+| 9 | Permissões administrativas | 12 casos HTTP/PG locais: seis perfis, convite único de analista, negação a compradores/organizadores, revogação e auditoria | Matriz de papéis no QA, ações permitidas/bloqueadas no site e o app sem acesso administrativo |
 
 Seguimento: quando houver acesso ao Mac, testar login e campanhas no Release Core com pagamentos desligados. A prévia Next e o app devem confirmar a mesma revisão de API; o site precisa negar acesso anônimo antes de compartilhar seu link. Para a etapa financeira, usar somente credenciais atestadas na aba Teste do provedor, campanha e identidades sintéticas; uma confirmação local ou simulada não conta como entrega do webhook. Produção e App Store fora desta rodada.
 

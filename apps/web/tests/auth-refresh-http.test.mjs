@@ -83,6 +83,12 @@ async function startNext() {
 }
 before(async () => {
   upstream = createServer(async (request, response) => {
+    if (request.url === "/admin/invitations/synthetic-invitation" && request.method === "GET")
+      return json(response, 200, { adminTeamRole: "REGISTRATION_ANALYST" });
+    if (request.url === "/admin/invitations/synthetic-invitation/accept" && request.method === "POST") {
+      request.resume();
+      return json(response, 400, { message: "Apenas uma resposta de teste." });
+    }
     if (request.method === "POST" && request.url === "/auth/refresh") {
       let body = "";
       for await (const chunk of request) body += chunk.toString();
@@ -164,3 +170,29 @@ for (const [method, path, expected] of [
     }
   });
 }
+
+
+test("a página pública do convite e o BFF não guardam nem propagam a URL", async () => {
+  for (const [path, status, init] of [
+    ["/admin/convite/synthetic-invitation", 200, {}],
+    ["/api/admin/invitations/synthetic-invitation", 200, {}],
+    ["/api/admin/invitations/synthetic-invitation/accept", 400, {
+      method: "POST",
+      body: "{}",
+      headers: { "Content-Type": "application/json" },
+    }],
+  ]) {
+    const response = await fetch(web + path, {
+      ...init,
+      redirect: "error",
+      signal: AbortSignal.timeout(8_000),
+    });
+    assert.equal(response.status, status);
+    assert.equal(response.headers.get("referrer-policy"), "no-referrer");
+    assert.match(response.headers.get("cache-control") ?? "", /(?:^|,\s*)no-store(?:,|$)/);
+    await response.body?.cancel();
+  }
+  const ordinary = await fetch(web + "/api/auth/me");
+  assert.equal(ordinary.headers.get("referrer-policy"), "strict-origin-when-cross-origin");
+  await ordinary.body?.cancel();
+});

@@ -30,7 +30,13 @@ const nextConfig: NextConfig = {
         { key: "X-Frame-Options", value: "SAMEORIGIN" },
         { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
       ],
-    }];
+    }, ...["/admin/convite/:path*", "/api/admin/invitations/:path*"].map((source) => ({
+      source,
+      headers: [
+        { key: "Referrer-Policy", value: "no-referrer" },
+        { key: "Cache-Control", value: "private, no-store" },
+      ],
+    }))];
   },
 };
 

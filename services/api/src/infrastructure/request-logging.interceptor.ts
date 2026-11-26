@@ -5,6 +5,7 @@ import {
   NestInterceptor,
 } from '@nestjs/common';
 import { Observable, catchError, tap, throwError } from 'rxjs';
+import { safeRequestPath } from './safe-request-path';
 @Injectable()
 export class RequestLoggingInterceptor implements NestInterceptor {
   intercept(ctx: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -15,7 +16,7 @@ export class RequestLoggingInterceptor implements NestInterceptor {
         timestamp: new Date().toISOString(),
         requestId: req.requestId,
         method: req.method,
-        path: req.originalUrl,
+        path: safeRequestPath(req.originalUrl),
         userId: req.user?.id,
       };
     return next.handle().pipe(

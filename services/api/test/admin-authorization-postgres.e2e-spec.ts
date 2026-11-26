@@ -324,6 +324,138 @@ isolated(
       ).toMatchObject({ previousData: historical });
     });
 
+    it('invites a new analyst, enforces delegated access, and revokes the session through the team API', async () => {
+      const owner = admins.get(AdminTeamRole.SUPERADMIN)!;
+      const nonManager = admins.get(AdminTeamRole.AUDIT)!;
+      const name = 'Analista sintético da equipe';
+      const email = `${run}-invited-analyst@example.test`;
+      const newPassword = `Aa!1${randomBytes(20).toString('hex')}`;
+      const invitePayload = {
+        name,
+        email,
+        reason,
+        adminTeamRole: AdminTeamRole.REGISTRATION_ANALYST,
+      };
+      await api()
+        .post('/admin/team/invite')
+        .auth(nonManager.accessToken, { type: 'bearer' })
+        .send(invitePayload)
+        .expect(403);
+
+      const created = await api()
+        .post('/admin/team/invite')
+        .auth(owner.accessToken, { type: 'bearer' })
+        .send(invitePayload)
+        .expect(201);
+      const invite = created.body as {
+        id: string;
+        invitationPath?: string;
+        status: string;
+        sandbox: boolean;
+      };
+      expect(invite.status).toBe('PENDING');
+      expect(invite.sandbox).toBe(true);
+      const token = /^\/admin\/convite\/([a-f0-9]{64})$/.exec(
+        invite.invitationPath ?? '',
+      )?.[1];
+      expect(Boolean(token)).toBe(true);
+      const path = `/admin/invitations/${token}`;
+
+      const inspect = await api().get(path).expect(200);
+      const details = inspect.body as {
+        name: string;
+        email: string;
+        role: AdminTeamRole;
+      };
+      expect([details.name, details.email, details.role]).toEqual([
+        name,
+        email,
+        AdminTeamRole.REGISTRATION_ANALYST,
+      ]);
+      expect(await prisma.user.count({ where: { email } })).toBe(0);
+      const acceptance = {
+        name,
+        password: newPassword,
+        passwordConfirmation: newPassword,
+      };
+      const accepted = await api()
+        .post(`${path}/accept`)
+        .send(acceptance)
+        .expect(201);
+      const { userId } = accepted.body as { userId: string };
+      expect(typeof userId).toBe('string');
+      const consumed = await api().get(path).expect(400);
+      expect((consumed.body as { path: string }).path).toBe(
+        '/admin/invitations/[redacted]',
+      );
+
+      const login = await api()
+        .post('/auth/admin-login')
+        .send({ email, password: newPassword })
+        .expect(201);
+      const { accessToken, refreshToken } = login.body as Omit<Session, 'id'>;
+      expect(typeof accessToken === 'string' && accessToken.length > 0).toBe(
+        true,
+      );
+      expect(typeof refreshToken === 'string' && refreshToken.length > 0).toBe(
+        true,
+      );
+      const user = await api()
+        .get('/auth/me')
+        .auth(accessToken, { type: 'bearer' })
+        .expect(200);
+      const me = user.body as {
+        id: string;
+        role: UserRole;
+        adminPermissions: AdminPermission[];
+      };
+      expect([me.id, me.role]).toEqual([userId, UserRole.ADMIN]);
+      expect(me.adminPermissions).toEqual([
+        AdminPermission.USERS_READ,
+        AdminPermission.ORGANIZERS_REVIEW,
+      ]);
+
+      const organizerDirectory = () =>
+        api().get('/admin/organizers').auth(accessToken, { type: 'bearer' });
+      await organizerDirectory().expect(200);
+      await api()
+        .get('/admin/payments')
+        .auth(accessToken, { type: 'bearer' })
+        .expect(403);
+      await api()
+        .post(`/admin/team/${userId}/action`)
+        .auth(owner.accessToken, { type: 'bearer' })
+        .send({ action: 'REVOKE_SESSIONS', reason })
+        .expect(201);
+      await organizerDirectory().expect(401);
+      await api().post('/auth/refresh').send({ refreshToken }).expect(401);
+
+      const storedInvite = await prisma.adminTeamInvitation.findUniqueOrThrow({
+        where: { id: invite.id },
+        select: { status: true, acceptedUserId: true },
+      });
+      expect(storedInvite).toEqual({
+        status: 'ACCEPTED',
+        acceptedUserId: userId,
+      });
+      const acceptanceLog = await prisma.auditLog.findFirstOrThrow({
+        where: { entityId: invite.id, action: 'ADMIN_INVITATION_ACCEPTED' },
+        select: { actorUserId: true, newData: true },
+      });
+      expect(acceptanceLog).toEqual({
+        actorUserId: userId,
+        newData: {
+          role: AdminTeamRole.REGISTRATION_ANALYST,
+          promotedExistingUser: false,
+        },
+      });
+      const revocationLog = await prisma.auditLog.findFirstOrThrow({
+        where: { entityId: userId, action: 'ADMIN_MEMBER_REVOKE_SESSIONS' },
+        select: { actorUserId: true },
+      });
+      expect(revocationLog.actorUserId).toBe(owner.id);
+    });
+
     it('revokes access and refresh tokens only with write permission and audits minimal state', async () => {
       const analyst = admins.get(AdminTeamRole.REGISTRATION_ANALYST)!;
       const admin = admins.get(AdminTeamRole.ADMIN)!;
