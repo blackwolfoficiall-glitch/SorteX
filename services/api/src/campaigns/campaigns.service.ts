@@ -642,8 +642,24 @@ export class CampaignsService {
     target: CampaignMediaTarget,
     files: UploadedOrganizerFile[],
     instantPrizeId?: string,
+    expectedDraftCoverRevision?: string,
   ) {
     const current = await this.findOwned(id, user.id);
+    if (expectedDraftCoverRevision !== undefined) {
+      if (target !== 'COVER') {
+        throw new BadRequestException('A revisão se aplica apenas à capa.');
+      }
+      if (
+        current.status !== CampaignStatus.DRAFT ||
+        current.publishedAt !== null ||
+        (coverRevision(current.coverImage) ?? 'none') !==
+          expectedDraftCoverRevision
+      ) {
+        throw new ConflictException(
+          'O rascunho ou a capa mudou. Atualize antes de enviar.',
+        );
+      }
+    }
     this.ensureCampaignEditable(current.status);
     if (!files.length) throw new BadRequestException('Selecione um arquivo.');
     if (target !== 'GALLERY' && files.length > 1) {
@@ -659,6 +675,37 @@ export class CampaignsService {
         }),
       ),
     );
+
+    if (expectedDraftCoverRevision !== undefined) {
+      // Recheck at the write: a browser/admin may publish or replace while
+      // the image is being stored. Never mutate a previously published cover.
+      const outcome = await this.prisma.campaign.updateMany({
+        where: {
+          id,
+          organizerId: user.id,
+          status: CampaignStatus.DRAFT,
+          publishedAt: null,
+          coverImage: current.coverImage,
+        },
+        data: { coverImage: saved[0].storageKey },
+      });
+      if (!outcome.count) {
+        throw new ConflictException(
+          'O rascunho ou a capa mudou. Atualize antes de enviar.',
+        );
+      }
+      const readback = await this.getOwned(id, user);
+      if (
+        readback.status !== CampaignStatus.DRAFT ||
+        readback.publishedAt !== null ||
+        readback.coverImageRevision !== coverRevision(saved[0].storageKey)
+      ) {
+        throw new ConflictException(
+          'O rascunho ou a capa mudou. Atualize antes de enviar.',
+        );
+      }
+      return readback;
+    }
 
     if (target === 'GALLERY') {
       const start = await this.prisma.campaignImage.count({

@@ -19,6 +19,9 @@ export type OrganizerDraftRecord = {
   id: string;
   title: string;
   status: string;
+  organizerId?: string;
+  publishedAt?: string | null;
+  coverImageRevision?: string | null;
   description?: string | null;
   shortDescription?: string | null;
   mainPrizeName?: string | null;

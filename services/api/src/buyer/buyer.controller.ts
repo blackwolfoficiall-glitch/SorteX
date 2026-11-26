@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -54,7 +55,9 @@ export class BuyerController {
   ) {
     return this.buyer.unfavorite(user.id, id);
   }
-  @Get('notifications') notifications(@CurrentUser() user: AuthenticatedUser) {
+  @Get('notifications')
+  @Header('Cache-Control', 'private, no-store')
+  notifications(@CurrentUser() user: AuthenticatedUser) {
     return this.buyer.notifications(user.id);
   }
   @Post('notifications/read-all') readAll(

@@ -36,6 +36,7 @@ import { organizerFinanceSession } from "./src/organizer/finance";
 import { NativeOrganizerCampaignLifecycle } from "./src/components/NativeOrganizerCampaignLifecycle";
 import type { OrganizerCampaignState } from "./src/domain/organizer-campaign-lifecycle";
 import { NativeBuyerPrizes } from "./src/buyer/NativeBuyerPrizes";
+import { BuyerInboxScreen } from "./src/buyer/NativeBuyerInbox";
 import { NativeBuyerDrawResults } from "./src/buyer/NativeBuyerDrawResults";
 import { NativePublicDrawProof } from "./src/components/NativePublicDrawProof";
 import { NativePublicCampaignCover } from "./src/components/NativePublicCampaignCover";
@@ -515,6 +516,10 @@ function Home({ navigation }: any) {
   return (
     <Page title={`Olá, ${auth.user?.name.split(" ")[0] || ""}`}>
       <Notice message="Desenvolvimento · somente dados sintéticos" />
+      {auth.user?.role === "BUYER" && (
+        <Button secondary title="Notificações"
+          onPress={() => navigation.navigate("BuyerInbox")} />
+      )}
       {organizer && (
         <Button
           secondary
@@ -674,11 +679,12 @@ function CampaignDetail({ route, navigation }: any) {
 }
 function OrganizerDraftScreen({ navigation, route }: any) {
   const auth = useSyncExternalStore(client.subscribe, client.snapshot);
-  if (auth.user?.role !== "ORGANIZER")
-    return <Page title="Rascunho"><Notice error message="Somente organizadores podem editar campanhas." /></Page>;
+  const revision = useSyncExternalStore(client.subscribe, client.activeSessionRevision);
+  if (auth.user?.role !== "ORGANIZER" || revision === null)
+    return <Page title="Rascunho"><Notice error message="Somente organizadores com sessão ativa podem editar campanhas." /></Page>;
   const campaignId = typeof route.params?.campaignId === "string" ? route.params.campaignId : undefined;
-  return <NativeOrganizerDraft key={`${auth.user.id}:${campaignId ?? "new"}`} organizerId={auth.user.id}
-    campaignId={campaignId} onSaved={() => navigation.goBack()} />;
+  return <NativeOrganizerDraft key={`${auth.user.id}:${revision}:${campaignId ?? "new"}`} organizerId={auth.user.id}
+    revision={revision} campaignId={campaignId} onSaved={() => navigation.goBack()} />;
 }
 function OrganizerFinanceScreen() {
   useSyncExternalStore(client.subscribe, client.snapshot);
@@ -1082,6 +1088,10 @@ export default function App() {
                   component={MainTabs}
                   options={{ title: "SorteX · Teste" }}
                 />
+                {auth.user?.role === "BUYER" && (
+                  <Stack.Screen name="BuyerInbox" component={BuyerInboxScreen}
+                    options={{ title: "Notificações" }} />
+                )}
                 <Stack.Screen
                   name="Campaign"
                   component={CampaignDetail}

@@ -165,6 +165,7 @@ export class CampaignsController {
       data.target,
       files,
       data.instantPrizeId,
+      data.expectedDraftCoverRevision,
     );
   }
 

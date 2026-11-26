@@ -81,7 +81,7 @@ export class BuyerService {
           orderBy: { sortOrder: 'asc' },
         }),
         this.prisma.notification.count({
-          where: { userId: user.id, readAt: null },
+          where: { userId: user.id, readAt: null, deletedAt: null },
         }),
       ]);
     const campaigns =
@@ -239,24 +239,39 @@ export class BuyerService {
   }
   notifications(userId: string) {
     return this.prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
+      where: { userId, deletedAt: null },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        message: true,
+        readAt: true,
+        createdAt: true,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 100,
     });
   }
   async readAll(userId: string) {
     await this.prisma.notification.updateMany({
-      where: { userId, readAt: null },
+      where: { userId, readAt: null, deletedAt: null },
       data: { readAt: new Date() },
     });
     return { message: 'Notificações lidas.' };
   }
   async read(userId: string, id: string) {
+    const where = { id, userId, deletedAt: null };
     const result = await this.prisma.notification.updateMany({
-      where: { id, userId },
+      where: { ...where, readAt: null },
       data: { readAt: new Date() },
     });
-    if (!result.count)
+    if (
+      !result.count &&
+      !(await this.prisma.notification.findFirst({
+        where,
+        select: { id: true },
+      }))
+    )
       throw new NotFoundException('Notificação não encontrada.');
     return { message: 'Notificação lida.' };
   }

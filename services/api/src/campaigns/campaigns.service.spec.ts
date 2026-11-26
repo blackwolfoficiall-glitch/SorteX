@@ -22,6 +22,7 @@ import { DrawRuleEngineService } from '../draws/draw-rule-engine.service';
 import { OrganizerStorageService } from '../organizers/organizer-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CampaignsService } from './campaigns.service';
+import { coverRevision } from './cover-revision';
 
 const organizer = {
   id: 'organizer-1',
@@ -133,6 +134,7 @@ describe('CampaignsService', () => {
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
         delete: jest.fn(),
       },
       organizerProfile: {
@@ -215,6 +217,109 @@ describe('CampaignsService', () => {
         'owner',
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  describe('guarded native draft cover updates', () => {
+    const image = {
+      buffer: Buffer.from('synthetic'),
+      mimetype: 'image/png',
+      originalname: 'capa.png',
+      size: 9,
+    };
+    const newKey = 'campaigns/campaign-1/new.png';
+
+    it.each([
+      { status: CampaignStatus.PUBLISHED },
+      { status: CampaignStatus.PAUSED },
+      { publishedAt: new Date('2026-11-25') },
+      { coverImage: 'campaigns/campaign-1/different.png' },
+    ])(
+      'rejects even owned stale/public drafts before writing storage: %o',
+      async (change) => {
+        storage.save.mockClear();
+        prisma.campaign.findUnique.mockResolvedValue(campaign(change));
+        await expect(
+          service.uploadMedia(
+            'campaign-1',
+            owner,
+            'COVER',
+            [image],
+            undefined,
+            coverRevision('campaigns/1/cover.jpg')!,
+          ),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(storage.save).not.toHaveBeenCalled();
+        expect(prisma.campaign.updateMany).not.toHaveBeenCalled();
+      },
+    );
+
+    it('writes only when the exact unpublished draft cover is still current', async () => {
+      storage.save.mockResolvedValue({ storageKey: newKey });
+      prisma.campaign.findUnique
+        .mockResolvedValueOnce(campaign({ coverImage: null }))
+        .mockResolvedValueOnce(campaign({ coverImage: newKey }));
+      prisma.campaign.updateMany.mockResolvedValue({ count: 1 });
+      const result = await service.uploadMedia(
+        'campaign-1',
+        owner,
+        'COVER',
+        [image],
+        undefined,
+        'none',
+      );
+      expect(prisma.campaign.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'campaign-1',
+          organizerId: owner.id,
+          status: 'DRAFT',
+          publishedAt: null,
+          coverImage: null,
+        },
+        data: { coverImage: newKey },
+      });
+      expect(result.coverImageRevision).toBe(coverRevision(newKey));
+      expect(result).not.toHaveProperty('coverImage');
+    });
+
+    it('does not confirm another editor’s intervening cover as this upload', async () => {
+      storage.save.mockResolvedValue({ storageKey: newKey });
+      prisma.campaign.findUnique
+        .mockResolvedValueOnce(campaign({ coverImage: null }))
+        .mockResolvedValueOnce(
+          campaign({ coverImage: 'campaigns/1/concurrent.png' }),
+        );
+      prisma.campaign.updateMany.mockResolvedValue({ count: 1 });
+      await expect(
+        service.uploadMedia(
+          'campaign-1',
+          owner,
+          'COVER',
+          [image],
+          undefined,
+          'none',
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('does not update public media if publication or a new image wins while storage is writing', async () => {
+      storage.save.mockResolvedValue({ storageKey: newKey });
+      prisma.campaign.findUnique.mockResolvedValue(
+        campaign({ coverImage: null }),
+      );
+      prisma.campaign.updateMany.mockResolvedValue({ count: 0 });
+      await expect(
+        service.uploadMedia(
+          'campaign-1',
+          owner,
+          'COVER',
+          [image],
+          undefined,
+          'none',
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.campaign.update).not.toHaveBeenCalled();
+      expect(prisma.campaign.findUnique).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('previews an unreferenced milestone image only through the owner route', async () => {

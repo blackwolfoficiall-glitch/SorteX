@@ -64,6 +64,7 @@ export class SortexClient {
   ): Promise<T> {
     if (!path.startsWith("/") || path.startsWith("//") || path.includes(".."))
       throw new ApiError("Rota inválida.");
+    const multipart = body instanceof FormData;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
     try {
@@ -73,10 +74,12 @@ export class SortexClient {
         signal: controller.signal,
         headers: {
           Accept: "application/json",
-          ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+          ...(body !== undefined && !multipart
+            ? { "Content-Type": "application/json" }
+            : {}),
           ...(access ? { Authorization: `Bearer ${access}` } : {}),
         },
-        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        ...(body !== undefined ? { body: multipart ? body : JSON.stringify(body) } : {}),
       });
       const text = await r.text();
       let data: unknown = null;
@@ -263,6 +266,16 @@ export class SortexClient {
         throw retry;
       }
     }
+  }
+  async requestMultipart<T>(path: string, body: FormData, revision: number) {
+    const assertSession = () => {
+      if (this.activeSessionRevision() !== revision)
+        throw new ApiError("A sessão mudou. Entre novamente.", 401);
+    };
+    assertSession();
+    const result = await this.request<T>(path, "POST", body);
+    assertSession();
+    return result;
   }
   private async clear(message?: string) {
     this.nextRevision();

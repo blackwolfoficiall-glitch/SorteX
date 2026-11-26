@@ -76,6 +76,7 @@ export default function CompradorHome() {
             </div>
             <Link
               href="/comprador/notificacoes"
+              aria-label="Notificações"
               className="relative rounded-2xl bg-white p-3 shadow"
             >
               <Bell />

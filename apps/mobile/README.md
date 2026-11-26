@@ -68,3 +68,9 @@ Ver estado detalhado, pendências e fontes em [`../../docs/SORTEX_MOBILE_DESENVO
 ## Estado das integrações sociais
 
 O build inicial usa e-mail e senha. Google/Apple ainda exigem implementação do broker nativo e configuração externa; não são login funcional. O autolinking iOS exclui o módulo Apple não configurado para não solicitar uma capacidade dependente de assinatura elegível. SecureStore permanece incluído. Para habilitar Apple no futuro, concluir o fluxo, a configuração legítima e seus testes antes de incluir a capacidade. Não habilitar apenas mudando uma flag.
+
+### Capa de rascunho no app nativo
+
+Como organizador, salve o rascunho, abra os detalhes e toque em **Editar rascunho → Adicionar capa** (ou **Substituir capa**). O seletor do sistema usa um JPG, PNG ou WEBP de até 20 MB guardado em Arquivos. A confirmação aparece só após o servidor registrar e devolver a nova revisão. O app não muda capas de campanhas já publicadas ou pausadas; o envio não publica a campanha.
+
+Este caminho requer a API candidata com a verificação de revisão de capa e um novo development build com `expo-document-picker` 58.0.5. O navegador auxiliar não abre o seletor nativo.
