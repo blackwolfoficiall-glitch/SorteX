@@ -63,3 +63,30 @@ Referências: [deploy só de configuração](https://neon.com/docs/compute/funct
 - A primeira chamada com workflow reutilizável não recebeu o segredo do ambiente e parou antes de chamar o Neon. A chamada direta obteve o deploy 7 e fez o [rollback das três flags para o deploy 8](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45848884023) após as leituras iniciais de prontidão.
 - O [deploy 9 confirmou a ativação](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/45849233750). A primeira instância ainda respondeu `disabled`; aguardamos duas leituras consecutivas `up`. O teste HTTP seguinte confirmou capa sintética no BFF e no backend, mesmos bytes, sem cache, e negação a anônimo e outra organização. Nenhum rascunho foi publicado.
 - O gatilho pontual foi retirado. Não execute novamente o publicador antigo que presume `storage: disabled`; a ativação não trocou credenciais, habilitou pagamentos ou alterou produção. Ainda não há evidência de restauração, uploads de documentos na nuvem ou aceite físico.
+
+## Próximo rollout somente de código, com storage preservado
+
+Não rerodar o workflow histórico. Para o próximo deploy aprovado, seu caller
+protegido precisa configurar o SHA completo do código (`SORTEX_QA_CODE_SHA`,
+o mesmo que compilou o ZIP e passou no CI), além de fixar valores com base
+no recibo observado e verificado em QA, não obter pinos automaticamente:
+
+- `SORTEX_QA_BASE_SHA`: SHA completo servido agora.
+- `SORTEX_QA_BASE_DEPLOYMENT`: ID decimal da publicação atual e ativa.
+- `SORTEX_QA_EXPECTED_STORAGE`: `private-neon-s3` para o bucket de QA
+  comprovado ou `disabled` quando essa for a linha de base confirmada.
+
+Em modo privado, o rollout confere o bucket `sortex-qa-media` na branch QA,
+o endpoint/privacidade antes e depois e exige readiness `storage:up`. Os
+metadados de função não revelam valores de variáveis: o recibo da base
+deve corresponder à configuração conhecida desse bucket, e o script
+preserva seus valores enviando somente `APP_VERSION` junto com o ZIP.
+Também exige os mesmos nomes de variáveis antes e depois, sem overrides
+de banco/branch/AWS nem credenciais Mercado Pago no ambiente. O modo
+desativado exige que as flags `STORAGE_*` estejam ausentes.
+
+O script não volta a executar POST após erro ou recibo incerto. Se a base
+mudar ou a prontidão falhar, reconcilie o ID, o SHA e a configuração do
+bucket no projeto QA antes de autorizar outra publicação. Não fazer
+mudanças concorrentes pelo painel. Este patch não altera gatilhos nem
+configura o workflow histórico; ele falha sem os novos pinos.
