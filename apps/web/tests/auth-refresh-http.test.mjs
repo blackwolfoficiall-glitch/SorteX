@@ -71,12 +71,16 @@ async function startNext() {
     });
   for (let attempt = 0; attempt < 50; attempt++) {
     if (next.exitCode !== null) break;
-    const response = await fetch(`${web}/api/auth/me`, {
-      signal: AbortSignal.timeout(400),
+    // A cold server can return headers before the response body is ready.
+    // Retry the whole readiness probe, without relaxing its expected result.
+    const ready = await fetch(`${web}/api/auth/me`, {
+      signal: AbortSignal.timeout(1000),
       redirect: "error",
-    }).catch(() => null);
-    if (response?.status === 401 &&
-        (await response.json()).message === "Não autenticado.") return;
+    }).then(async (response) =>
+      response.status === 401 &&
+      (await response.json()).message === "Não autenticado."
+    ).catch(() => false);
+    if (ready) return;
     await delay(100);
   }
   throw new Error(`O site de teste não iniciou. Execute npm run build primeiro.\n${output}`);
