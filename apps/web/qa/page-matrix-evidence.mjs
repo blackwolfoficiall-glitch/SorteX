@@ -1,0 +1,55 @@
+// Curadoria de escopo por URL. Ampliar só com prova do mesmo ambiente, revisão e rota.
+export const publication = {
+  revision: "430bacc0214682d13f435ff7792218662f54332d",
+  verifiedUtc: "2026-11-27 22:10 UTC",
+  url: "https://sortex-qa-privada.workspace-de-1136.chatgpt.site",
+  directPaths: ["/dashboard"],
+  sharedShell: "Navegação compartilhada do organizador. Links visíveis não atestam os destinos.",
+};
+
+export const simulator = {
+  revision: "f3ddcd4",
+  run: "https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/46053577454",
+  partialPaths: {
+    "/login": "Login parcial no simulador",
+    "/comprador": "Início do comprador parcial no simulador",
+  },
+};
+
+export const notes = {
+  "/admin": "Redirecionamento separado do conteúdo de /admin/dashboard.",
+  "/admin/convite/[token]": "Abrir e aceitar convites reais não faz parte desta prova.",
+  "/admin/equipe": "Consulta local sem convites; revisar efeitos do GET e minimização do payload antes de publicar a área.",
+  "/admin/financeiro": "Conciliação interna não atesta liquidação, repasse ou saque.",
+  "/admin/gateways": "Configuração armazenada não atesta conexão, cobrança, split ou alerta de provedor.",
+  "/admin/loteria": "Não atesta importação oficial hospedada nem apuração compartilhada no iPhone.",
+  "/admin/pagamentos": "Aprovação registrada não comprova liquidação ou operação no provedor.",
+  "/cadastro/completar": "Apple, Google e vínculo de conta real não estão atestados.",
+  "/cadastro/comprador": "E-mail e fluxo completo ainda exigem evidência própria.",
+  "/cadastro/organizador": "Conclusão PF/PJ, documentos e aprovação integral exigem evidência própria.",
+  "/campanha/[slug]": "Acesso público local não comprova reserva, pagamento ou exposição em produção.",
+  "/comprador/checkout/[id]": "Mercado Pago Teste, webhook real e reflexo no iPhone ainda não atestados.",
+  "/comprador/compras/[id]": "Leitura de pedido não comprova pagamento no provedor nem aceite no iPhone.",
+  "/comprador/meus-premios": "Consulta de prêmios não é entrega, nem pagamento de prêmio.",
+  "/comprador/notificacoes": "Consulta local não comprova recebimento externo nem entrega no iPhone.",
+  "/comprador/pagamento/sucesso/[id]": "Não inferir pagamento aprovado por causa do nome da rota.",
+  "/dashboard/ads": "Sem teste autorizado dos conectores Meta, Google e TikTok.",
+  "/dashboard/afiliados": "Conversão e repasse íntegros ainda sem prova.",
+  "/dashboard/campanhas": "Listagem não foi percorrida no simulador da revisão registrada.",
+  "/dashboard/campanhas/nova": "Prova do cliente HTTP não atesta criar/publicar na interface iOS.",
+  "/dashboard/campanhas/[id]/editar": "Prova do cliente HTTP não atesta edição persistida na interface iOS.",
+  "/dashboard/comunicacao": "Envio externo permanece fora da evidência.",
+  "/dashboard/crm": "Consulta e segmentação parcial não autorizam disparo externo.",
+  "/dashboard/financeiro": "Saldo e extrato internos não comprovam conciliação, split ou repasse externo.",
+  "/dashboard/ia": "Resposta determinística/simulada não prova integração com provedor real.",
+  "/dashboard/integracoes": "Disponibilidade registrada não comprova o provedor externo.",
+  "/dashboard/personalizacao/dominio": "Sem prova de DNS ou ativação externa nesse recorte.",
+  "/dashboard/sorteios": "Não atesta importação Federal automática hospedada ou prova física.",
+  "/esqueci-senha": "Entrega real de e-mail e retomada integral ainda não atestadas.",
+  "/recuperar-senha": "E-mail e deep link reais não fazem parte da prova local.",
+  "/login": "Simulador não comprova renovação, logout, Apple/Google ou iPhone físico.",
+  "/organizador/gateways/mercado-pago": "Credenciais/provedor Teste e webhook não validados aqui.",
+  "/organizador/verificacao": "Privacidade de documentos não equivale a aprovação integral.",
+  "/preview/campaign/[campaignId]": "Prévia de edição não equivale a página publicada.",
+  "/teste": "Rota de diagnóstico; decidir exposição e testar separadamente.",
+};

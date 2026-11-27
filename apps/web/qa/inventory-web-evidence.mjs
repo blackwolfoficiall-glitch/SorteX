@@ -33,9 +33,15 @@ export const pageEvidence = [
   },
   {
     path: "/dashboard/campanhas/[id]/editar",
-    detail: "abertura de rascunho e campanha publicada próprios, acesso de outro organizador bloqueado; não testou salvar nem publicar",
-    source: "apps/web/e2e/campaign-wizard-premium.spec.ts",
-    revision: "2b47158",
+    detail: "editor e etapa de Prêmios em desktop, tablet e WebKit a 320 px; duas gravações para avançar num rascunho fictício, sem alterar prêmios ou publicar",
+    source: "apps/web/e2e/organizer-prize-publication-premium.spec.ts",
+    revision: "bb61b3d",
+  },
+  {
+    path: "/dashboard/campanhas/[id]/publicada",
+    detail: "confirmação e opções de compartilhamento somente para campanha publicada própria; rascunho, bloqueio e conta distinta verificados; sem publicar nem enviar",
+    source: "apps/web/e2e/organizer-prize-publication-premium.spec.ts",
+    revision: "bb61b3d",
   },
   {
     path: "/dashboard/financeiro",

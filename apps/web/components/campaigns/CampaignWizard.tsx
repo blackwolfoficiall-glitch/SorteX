@@ -35,6 +35,7 @@ import Card from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
 import PremiumScope from "@/components/premium/PremiumScope";
+import prizeStyles from "./campaign-prize-step-premium.module.css";
 import styles from "./CampaignWizard.module.css";
 import {
   createCampaign,
@@ -977,150 +978,154 @@ export default function CampaignWizard({
             title="Prêmios"
             description="Configure o prêmio principal e as cotas premiadas instantâneas."
           >
-            <div className="rounded-2xl bg-violet-50 p-5">
-              <h3 className="font-black">Prêmio principal</h3>
-              <p className="mt-2 text-sm text-zinc-600">
-                {form.mainPrizeName || "Ainda não informado"} · Valor estimado
-                R$ {(form.estimatedPrizeValue || 0).toFixed(2)}
-              </p>
-            </div>
-            <div className="mt-6 rounded-2xl border border-violet-100 bg-white p-5">
-              <h3 className="text-xl font-black">Cotas premiadas</h3>
-              <p className="mt-1 text-sm text-zinc-500">
-                Crie cotas independentes manualmente ou gere números únicos
-                automaticamente.
-              </p>
-              <div className="mt-5 grid gap-4 md:grid-cols-[1fr_180px_auto]">
-                <Field label="Forma de escolha">
-                  <Select
-                    value={prizeMode}
-                    onChange={(value) =>
-                      setPrizeMode(value as "MANUAL" | "AUTOMATIC")
-                    }
-                    options={["AUTOMATIC", "MANUAL"]}
-                  />
-                </Field>
-                <Field label="Quantidade de cotas">
-                  <NumberInput
-                    value={prizeCount}
-                    onChange={(value) =>
-                      setPrizeCount(
-                        value === undefined
-                          ? 1
-                          : Math.max(1, Math.floor(value)),
-                      )
-                    }
-                  />
-                </Field>
-                <div className="flex items-end">
-                  <Button onClick={createPrizeSlots} className="w-full">
-                    <Plus size={16} />{" "}
-                    {prizeMode === "AUTOMATIC"
-                      ? "Gerar todas automaticamente"
-                      : "Criar cotas"}
-                  </Button>
+            <PremiumScope className={prizeStyles.scope}>
+              <section className={prizeStyles.content} aria-label="Gerenciamento de prêmios">
+                <div className={prizeStyles.mainPrize}>
+                  <h3 className="font-black">Prêmio principal</h3>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    {form.mainPrizeName || "Ainda não informado"} · Valor estimado
+                    R$ {(form.estimatedPrizeValue || 0).toFixed(2)}
+                  </p>
                 </div>
-              </div>
-              {(form.instantPrizes || []).length > 1 && (
-                <Button
-                  className="mt-4"
-                  size="sm"
-                  variant="outline"
-                  onClick={applyFirstPrizeToAll}
-                >
-                  Aplicar configuração para todas
-                </Button>
-              )}
-            </div>
-            <div className="mt-4 space-y-4">
-              {(form.instantPrizes || []).map((prize, index) => (
-                <Card key={index} className="p-5">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h4 className="font-black text-violet-800">
-                      Cota {index + 1}
-                    </h4>
-                    <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold">
-                      {prize.exactNumber ? "Configurada" : "Pendente"}
-                    </span>
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-                    <Field label="Número">
-                      <Input
-                        className={inputClass}
-                        inputMode="numeric"
-                        value={prize.exactNumber || ""}
-                        onChange={(e) =>
-                          updatePrize(index, {
-                            exactNumber: e.target.value.replace(/\D/g, ""),
-                            generationRule: undefined,
-                          })
-                        }
-                      />
-                    </Field>
-                    <Field label="Nome do prêmio">
-                      <Input
-                        className={inputClass}
-                        value={prize.description}
-                        onChange={(e) =>
-                          updatePrize(index, { description: e.target.value })
-                        }
-                      />
-                    </Field>
-                    <Field label="Valor">
-                      <NumberInput
-                        value={prize.value}
-                        onChange={(value) => updatePrize(index, { value })}
-                      />
-                    </Field>
-                    <Field label="Tipo">
+                <div className={prizeStyles.ticketSection}>
+                  <h3 className="text-xl font-black">Cotas premiadas</h3>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    Crie cotas independentes manualmente ou gere números únicos
+                    automaticamente.
+                  </p>
+                  <div className="mt-5 grid gap-4 md:grid-cols-[1fr_180px_auto]">
+                    <Field label="Forma de escolha">
                       <Select
-                        value={prize.type}
+                        value={prizeMode}
                         onChange={(value) =>
-                          updatePrize(index, {
-                            type: value as CampaignInstantPrizeInput["type"],
-                          })
+                          setPrizeMode(value as "MANUAL" | "AUTOMATIC")
                         }
-                        options={["PIX", "PRODUCT", "GIFT_CARD", "OTHER"]}
+                        options={["AUTOMATIC", "MANUAL"]}
                       />
                     </Field>
+                    <Field label="Quantidade de cotas">
+                      <NumberInput
+                        value={prizeCount}
+                        onChange={(value) =>
+                          setPrizeCount(
+                            value === undefined
+                              ? 1
+                              : Math.max(1, Math.floor(value)),
+                          )
+                        }
+                      />
+                    </Field>
+                    <div className="flex items-end">
+                      <Button onClick={createPrizeSlots} className="w-full">
+                        <Plus size={16} />{" "}
+                        {prizeMode === "AUTOMATIC"
+                          ? "Gerar todas automaticamente"
+                          : "Criar cotas"}
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    className="mt-3"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      set(
-                        "instantPrizes",
-                        (form.instantPrizes || []).filter(
-                          (_, itemIndex) => itemIndex !== index,
-                        ),
-                      )
-                    }
-                  >
-                    <Trash2 size={15} /> Remover
-                  </Button>
-                </Card>
-              ))}
-            </div>
-            {campaign&&campaign.milestonePrizes.length>0&&<MilestoneManager
-              campaign={campaign}
-              busy={milestoneBusy}
-              onEvaluate={() => void refreshMilestones()}
-              onDraw={(milestoneId) =>
-                void refreshMilestones({ milestoneId, draw: true })
-              }
-            />}
-            <MilestoneEditor
-              campaignId={id}
-              milestones={form.milestones || []}
-              winnersRemainEligible={
-                form.milestoneWinnersRemainEligible !== false
-              }
-              onChange={(milestones) => set("milestones", milestones)}
-              onEligibilityChange={(value) =>
-                set("milestoneWinnersRemainEligible", value)
-              }
-            />
+                  {(form.instantPrizes || []).length > 1 && (
+                    <Button
+                      className="mt-4"
+                      size="sm"
+                      variant="outline"
+                      onClick={applyFirstPrizeToAll}
+                    >
+                      Aplicar configuração para todas
+                    </Button>
+                  )}
+                </div>
+                <div className="mt-4 space-y-4">
+                  {(form.instantPrizes || []).map((prize, index) => (
+                    <Card key={index} className="p-5">
+                      <div className={`mb-4 flex flex-wrap items-center justify-between gap-2 ${prizeStyles.ticketHeading}`}>
+                        <h4 className="font-black text-violet-800">
+                          Cota {index + 1}
+                        </h4>
+                        <span className={prizeStyles.status} data-configured={Boolean(prize.exactNumber)}>
+                          {prize.exactNumber ? "Configurada" : "Pendente"}
+                        </span>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+                        <Field label="Número">
+                          <Input
+                            className={inputClass}
+                            inputMode="numeric"
+                            value={prize.exactNumber || ""}
+                            onChange={(e) =>
+                              updatePrize(index, {
+                                exactNumber: e.target.value.replace(/\D/g, ""),
+                                generationRule: undefined,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field label="Nome do prêmio">
+                          <Input
+                            className={inputClass}
+                            value={prize.description}
+                            onChange={(e) =>
+                              updatePrize(index, { description: e.target.value })
+                            }
+                          />
+                        </Field>
+                        <Field label="Valor">
+                          <NumberInput
+                            value={prize.value}
+                            onChange={(value) => updatePrize(index, { value })}
+                          />
+                        </Field>
+                        <Field label="Tipo">
+                          <Select
+                            value={prize.type}
+                            onChange={(value) =>
+                              updatePrize(index, {
+                                type: value as CampaignInstantPrizeInput["type"],
+                              })
+                            }
+                            options={["PIX", "PRODUCT", "GIFT_CARD", "OTHER"]}
+                          />
+                        </Field>
+                      </div>
+                      <Button
+                        className="mt-3"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          set(
+                            "instantPrizes",
+                            (form.instantPrizes || []).filter(
+                              (_, itemIndex) => itemIndex !== index,
+                            ),
+                          )
+                        }
+                      >
+                        <Trash2 size={15} /> Remover
+                      </Button>
+                    </Card>
+                  ))}
+                </div>
+                {campaign&&campaign.milestonePrizes.length>0&&<MilestoneManager
+                  campaign={campaign}
+                  busy={milestoneBusy}
+                  onEvaluate={() => void refreshMilestones()}
+                  onDraw={(milestoneId) =>
+                    void refreshMilestones({ milestoneId, draw: true })
+                  }
+                />}
+                <MilestoneEditor
+                  campaignId={id}
+                  milestones={form.milestones || []}
+                  winnersRemainEligible={
+                    form.milestoneWinnersRemainEligible !== false
+                  }
+                  onChange={(milestones) => set("milestones", milestones)}
+                  onEligibilityChange={(value) =>
+                    set("milestoneWinnersRemainEligible", value)
+                  }
+                />
+              </section>
+            </PremiumScope>
             <Actions
               step={step}
               saving={saving}
