@@ -6,14 +6,23 @@ real pelo bundle `br.com.sortex.development`, sem Metro, deep link, atalho de
 autenticação ou modificações no código do app. O target só automatiza as
 interfaces nativas, inclusive `textFields` e `secureTextFields`.
 
-O primeiro trabalho no macOS é compilar o target isolado e validar a jornada
-com `mobile-native-xcuitest.yml`, preservando a execução Maestro original. O
-disparo é um push opt-in dos arquivos deste teste à branch QA, apenas se o
-repositório oficial for público. Não habilita deploy ou toca a branch main.
-A compilação e execução do alvo XCTest **ainda não foram verificadas**; Linux
-só pode verificar arquivos, sintaxe e barreiras. Não contar startup ou
-aprovação local como login aprovado, simulador como iPhone físico, nem este
-cenário como homologação de checkout.
+O workflow `mobile-native-xcuitest.yml` executa inicialmente **apenas a
+pré-checagem do driver** no macOS. Sem inicializar o aparelho virtual,
+instalar dependências, compilar o app ou iniciar a API, usa o mesmo
+`build-for-testing` do cenário completo e inspeciona em modo somente leitura
+o plist gerado pelo Xcode. O diagnóstico retido lista exclusivamente versão
+validada do Xcode, formato v1/v2, cardinalidade de configurações/alvos,
+categorias de caminhos (nunca valores), presença de variáveis/argumentos e
+um código fixo do validador. Mesmo um relatório inconclusivo não executa o
+cenário completo. A execução longa só pode ser habilitada em commit separado
+depois de confirmar a saída real de macOS; a guarda atual fixa
+`run_full=false`. A execução original do Maestro está preservada.
+
+Não contar a pré-checagem, startup ou aprovação local como login aprovado,
+o simulador como iPhone físico, nem este cenário como homologação de
+checkout. O disparo é um push opt-in dos arquivos do teste à branch QA,
+apenas se o repositório oficial for público. Não habilita deploy ou toca
+a branch main.
 
 O mesmo fixture verificado do Maestro fornece API Nest real em loopback e
 PostgreSQL 18 temporário com migrações, uma conta descartável e uma campanha

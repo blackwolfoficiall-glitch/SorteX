@@ -10,7 +10,7 @@ import unittest
 from xml.etree import ElementTree
 
 sys.dont_write_bytecode = True
-from evidence import APP_SUFFIX, PASSWORD_KEY, TARGET, TEST, configure, verify
+from evidence import APP_SUFFIX, PASSWORD_KEY, TARGET, TEST, configure, describe_shape, verify
 
 ROOT = Path(__file__).resolve().parent
 DUMMY = "a" * 48
@@ -79,6 +79,88 @@ class EvidenceGuards(unittest.TestCase):
         with self.assertRaises(ValueError):
             configure(v2(target()), self.app, "untrusted")
 
+    def test_shape_diagnostics_are_fixed_and_separate(self):
+        for override, expected, fact, value in (
+            ({"TestBundlePath": "/" + DUMMY + ".xctest"}, "bundle-path", "test-bundle", "other-product"),
+            ({"TestBundlePath": TARGET + ".xctest"}, "bundle-path", "test-bundle", "expected-basename"),
+            ({"TestHostPath": "/" + DUMMY + ".app"}, "host-path", "test-host", "other-product"),
+            ({"UITargetAppEnvironmentVariables": {DUMMY: DUMMY}}, "app-environment", "app-environment", "present"),
+            ({"UITargetAppCommandLineArguments": [DUMMY]}, "app-arguments", "app-arguments", "present"),
+            ({"EnvironmentVariables": {PASSWORD_KEY: DUMMY}}, "host-environment", "host-environment", "present"),
+        ):
+            with self.subTest(expected=expected):
+                shape = describe_shape(v2(target() | override))
+                self.assertEqual(shape["readiness"], expected)
+                self.assertEqual(shape[fact], value)
+                self.assertNotIn(DUMMY, str(shape))
+        dual = describe_shape(v2(target() | {"TestBundlePath": "other.xctest", "TestHostPath": "other.app"}))
+        self.assertEqual(dual["test-bundle"], "other-product")
+        self.assertEqual(dual["test-host"], "other-product")
+        self.assertEqual(describe_shape(v2(target(), target()))["targets"], "multiple")
+        self.assertEqual(describe_shape(v2())["targets"], "zero")
+        configs = describe_shape({"__xctestrun_metadata__": {"FormatVersion": 2}, "TestConfigurations": [{}, {}]})
+        self.assertEqual(configs["configurations"], "multiple")
+        self.assertEqual(configs["readiness"], "configuration-count")
+        self.assertEqual(describe_shape({"__xctestrun_metadata__": {"FormatVersion": 3}})["format"], "unsupported")
+        self.assertEqual(describe_shape({TARGET: target()})["format"], "v1")
+
+    def test_inspect_never_writes_spec_or_echoes_paths(self):
+        original = self.base / "generated.xctestrun"
+        raw = plistlib.dumps(v2(target() | {"UITargetAppPath": "/" + DUMMY}))
+        original.write_bytes(raw)
+        result = subprocess.run([sys.executable, str(ROOT / "evidence.py"), "inspect", str(original)],
+                                input=DUMMY, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("app-target=present", result.stdout)
+        self.assertIn("readiness=passed", result.stdout)
+        self.assertNotIn(DUMMY, result.stdout + result.stderr)
+        self.assertEqual(original.read_bytes(), raw)
+        self.assertFalse(list(self.base.glob("fixture-private.xctestrun")))
+
+    def test_driver_only_preflight_with_fake_local_xcrun(self):
+        binpath = self.base / "bin"
+        binpath.mkdir()
+        fake = binpath / "xcrun"
+        fake.write_text('''#!/usr/bin/env bash
+set -euo pipefail
+case "${1:-}:${2:-}" in
+  xcodebuild:-version)
+    printf 'Xcode 27.2\nBuild version 27Z123\nunsafe extra line\n'
+    ;;
+  xcodebuild:-project)
+    while [[ "$#" -gt 0 && "$1" != -derivedDataPath ]]; do shift; done
+    [[ "${@: -1}" == build-for-testing ]]
+    [[ "$2" == "$RUNNER_TEMP/sortex-xcuitest-preflight."*/driver ]]
+    mkdir -p "$2/Build/Products"
+    cp "$PREFLIGHT_SAMPLE" "$2/Build/Products/fixture.xctestrun"
+    ;;
+  *) exit 99 ;;
+esac
+''')
+        fake.chmod(0o700)
+        fixture = self.base / "sample.xctestrun"
+        raw = plistlib.dumps(v2(target() | {"UITargetAppPath": "/" + DUMMY}))
+        fixture.write_bytes(raw)
+        env = {"PATH": str(binpath) + os.pathsep + os.environ["PATH"], "RUNNER_OS": "macOS",
+               "GITHUB_REPOSITORY": "blackwolfoficiall-glitch/SorteX",
+               "GITHUB_REF": "refs/heads/homologacao/web-ios-integrada", "GITHUB_EVENT_NAME": "push",
+               "GITHUB_SHA": "f" * 40, "RUNNER_TEMP": str(self.base), "PREFLIGHT_SAMPLE": str(fixture),
+               "SORTEX_SIMULATOR_ID": "00000000-0000-0000-0000-000000000001"}
+        command = ["bash", str(ROOT / "preflight.sh")]
+        denied = subprocess.run(command, env=env | {"SORTEX_IOS_UI_BUYER_PASSWORD": DUMMY},
+                                text=True, capture_output=True)
+        self.assertEqual(denied.returncode, 64)
+        self.assertFalse((self.base / "sortex-xcuitest-driver-preflight.txt").exists())
+        result = subprocess.run(command, env=env, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        report = (self.base / "sortex-xcuitest-driver-preflight.txt").read_text()
+        self.assertIn("readiness=passed", report)
+        self.assertIn("Xcode 27.2", report)
+        self.assertNotIn("unsafe extra line", report)
+        self.assertNotIn(DUMMY, report)
+        self.assertEqual(fixture.read_bytes(), raw)
+        self.assertFalse(list(self.base.glob("sortex-xcuitest-preflight.*")))
+
     def test_exactly_one_actual_passing_case_required(self):
         self.assertTrue(verify(tree(case())))
         for result in ("Failed", "Skipped", "Unknown", "Expected Failure"):
@@ -123,8 +205,15 @@ class EvidenceGuards(unittest.TestCase):
         self.assertNotIn("pass.value", swift)
         self.assertNotIn("launchEnvironment", swift)
         workflow = (ROOT.parent / "workflows/mobile-native-xcuitest.yml").read_text()
-        self.assertEqual(workflow.count("actions/upload-artifact"), 1)
-        self.assertIn("/sortex-xcuitest-summary.txt", workflow)
+        preflight, full = workflow.split("  buyer-session:", 1)
+        self.assertEqual(preflight.count("actions/upload-artifact"), 1)
+        self.assertEqual(full.count("actions/upload-artifact"), 1)
+        self.assertIn("/sortex-xcuitest-summary.txt", full)
+        self.assertIn("run_full=false", preflight)
+        self.assertIn("needs: driver-preflight", full)
+        self.assertIn("needs.driver-preflight.outputs.run_full == 'true'", full)
+        for action in ("npm ci", "brew install", "simctl bootstatus", "with-fixture.sh", "finish.sh"):
+            self.assertNotIn(action, preflight)
         self.assertNotIn(".xcresult", workflow)
         shell = (ROOT / "run.sh").read_text()
         self.assertIn("test-without-building >\"$temp/test.log\" 2>&1", shell)

@@ -62,10 +62,7 @@ checkpoint release-installed
 # passes it to the distinct test host; nothing is injected into the SorteX app.
 derived="$temp/driver"
 dest="platform=iOS Simulator,id=$SORTEX_SIMULATOR_ID"
-xcrun xcodebuild -project "$base/SortexFixtureUI.xcodeproj" -scheme SortexFixtureUITests \
-  -configuration Debug -sdk iphonesimulator -destination "$dest" -derivedDataPath "$derived" \
-  -parallel-testing-enabled NO CODE_SIGNING_ALLOWED=NO build-for-testing \
-  >"$temp/test-build.log" 2>&1 || refuse driver-build
+bash "$base/build-driver.sh" "$temp" || refuse driver-build
 shopt -s nullglob
 specs=("$derived"/Build/Products/*.xctestrun)
 [[ "${#specs[@]}" == 1 ]] || refuse test-spec-count

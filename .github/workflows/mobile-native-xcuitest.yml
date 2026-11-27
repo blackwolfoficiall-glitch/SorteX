@@ -9,8 +9,45 @@ concurrency:
   group: sortex-xcuitest-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  buyer-session:
+  driver-preflight:
     if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event_name == 'push' && github.event.repository.private == false
+    runs-on: macos-latest
+    timeout-minutes: 12
+    outputs:
+      run_full: ${{ steps.gate.outputs.run_full }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validar os formatos e a ausência de segredos
+        shell: bash
+        run: python3 .github/ios-xcuitest/evidence_test.py
+      - name: Selecionar iPhone virtual sem inicializar
+        shell: bash
+        run: |
+          set -euo pipefail
+          simulator_id="$(xcrun simctl list devices available --json | python3 .github/ios-xcuitest/select-device.py)"
+          echo "SORTEX_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+      - name: Compilar somente o alvo XCUITest e verificar a especificação
+        shell: bash
+        run: bash .github/ios-xcuitest/preflight.sh
+      - name: Fixar execução exclusivamente no preflight
+        id: gate
+        shell: bash
+        # Do not enable the full job on a preflight-only patch. Change this
+        # literal in a separate reviewed commit after the exact preflight passes.
+        run: echo "run_full=false" >> "$GITHUB_OUTPUT"
+      - name: Guardar apenas formato, presença de campos e código de validação
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sortex-ios-xcuitest-preflight-${{ github.sha }}
+          path: ${{ runner.temp }}/sortex-xcuitest-driver-preflight.txt
+          if-no-files-found: ignore
+          retention-days: 1
+  buyer-session:
+    needs: driver-preflight
+    if: needs.driver-preflight.outputs.run_full == 'true' && github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event_name == 'push' && github.event.repository.private == false
     runs-on: macos-latest
     timeout-minutes: 70
     env:
@@ -60,7 +97,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          simulator_id="$(xcrun simctl list devices available --json | node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{const rows=Object.entries(JSON.parse(s).devices).filter(([runtime])=>runtime.includes("iOS")).flatMap(([,devices])=>devices);const d=rows.find(x=>x.isAvailable&&x.name.startsWith("iPhone")&&x.state==="Booted")||rows.find(x=>x.isAvailable&&x.name.startsWith("iPhone"));if(!d)process.exit(1);console.log(d.udid);});')"
+          simulator_id="$(xcrun simctl list devices available --json | python3 .github/ios-xcuitest/select-device.py)"
           xcrun simctl bootstatus "$simulator_id" -b
           echo "SORTEX_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
       - name: Verificar Release, jornada nativa e revogação no PostgreSQL
