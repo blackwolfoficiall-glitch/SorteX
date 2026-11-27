@@ -35,7 +35,7 @@ Controle de revisão dos gates: alterações nestas fontes exigem rever a interp
 | [/admin/conteudo](../../apps/web/app/admin/conteudo/page.tsx) | Admin · ADMIN da equipe + CONTENT_WRITE | — | [AdminOperationsCenter](../../apps/web/components/admin/AdminOperationsCenter.tsx) | [AdminOperationsCenter](../../apps/web/components/admin/AdminOperationsCenter.tsx) | ? / ? / não rodado |
 | [/admin/convite/\[token\]](../../apps/web/app/admin/convite/%5Btoken%5D/page.tsx) | Equipe · entrada · Exceção do proxy e layout; convite validado no fluxo | — | — | [page](../../apps/web/app/admin/convite/%5Btoken%5D/page.tsx) | ? / ? / não rodado |
 | [/admin/crm](../../apps/web/app/admin/crm/page.tsx) | Admin · ADMIN da equipe + AUDIT_READ | — | [AdminExistingModuleCenter](../../apps/web/components/admin/AdminExistingModuleCenter.tsx) | [AdminExistingModuleCenter](../../apps/web/components/admin/AdminExistingModuleCenter.tsx) | ? / ? / não rodado |
-| [/admin/dashboard](../../apps/web/app/admin/dashboard/page.tsx) | Admin · ADMIN da equipe | — | [AdminDashboard](../../apps/web/components/admin/AdminDashboard.tsx) | — | ? / ? / não rodado |
+| [/admin/dashboard](../../apps/web/app/admin/dashboard/page.tsx) | Admin · ADMIN da equipe | — | [AdminDashboard](../../apps/web/components/admin/AdminDashboard.tsx) | — | verificado no recorte local / parcial / passou local · [cf9f29e](../../apps/web/e2e/admin-overview-premium.spec.ts): visão geral, datas e valores, suporte restrito e acesso vedado a outros papéis; sem operações administrativas |
 | [/admin/denuncias](../../apps/web/app/admin/denuncias/page.tsx) | Admin · ADMIN da equipe + SUPPORT_WRITE | — | [AdminResourcePage](../../apps/web/components/admin/AdminResourcePage.tsx) | [AdminResourcePage](../../apps/web/components/admin/AdminResourcePage.tsx) | ? / ? / não rodado |
 | [/admin/equipe/\[id\]](../../apps/web/app/admin/equipe/%5Bid%5D/page.tsx) | Admin · ADMIN da equipe + USERS_READ | — | [RoleGate](../../apps/web/components/auth/RoleGate.tsx) | — | ? / ? / não rodado |
 | [/admin/equipe](../../apps/web/app/admin/equipe/page.tsx) | Admin · ADMIN da equipe + USERS_READ | — | [AdminTeamCenter](../../apps/web/components/admin/AdminTeamCenter.tsx) | [AdminTeamCenter](../../apps/web/components/admin/AdminTeamCenter.tsx) | ? / ? / não rodado |
@@ -75,7 +75,7 @@ Controle de revisão dos gates: alterações nestas fontes exigem rever a interp
 | [/comprador/meus-premios](../../apps/web/app/comprador/meus-premios/page.tsx) | Comprador · Proxy; BUYER ou ADMIN da equipe; aviso legal | — | [BuyerPrizes](../../apps/web/components/comprador/BuyerPrizes.tsx) | — | ? / ? / não rodado |
 | [/comprador/notificacoes](../../apps/web/app/comprador/notificacoes/page.tsx) | Comprador · Proxy; BUYER ou ADMIN da equipe; aviso legal | — | — | — | ? / ? / não rodado |
 | [/comprador/pagamento/sucesso/\[id\]](../../apps/web/app/comprador/pagamento/sucesso/%5Bid%5D/page.tsx) | Comprador · Proxy; BUYER ou ADMIN da equipe; aviso legal | — | [PostPaymentRewards](../../apps/web/components/draws/PostPaymentRewards.tsx), [Button](../../apps/web/components/ui/Button.tsx), [Card](../../apps/web/components/ui/Card.tsx) | — | ? / ? / não rodado |
-| [/comprador](../../apps/web/app/comprador/page.tsx) | Comprador · Proxy; BUYER ou ADMIN da equipe; aviso legal | — | [CampaignCard](../../apps/web/components/comprador/CampaignCard.tsx) | — | ? / ? / não rodado |
+| [/comprador](../../apps/web/app/comprador/page.tsx) | Comprador · Proxy; BUYER ou ADMIN da equipe; aviso legal | — | [RoleGate](../../apps/web/components/auth/RoleGate.tsx), [PremiumScope](../../apps/web/components/premium/PremiumScope.tsx) | — | verificado no recorte local / parcial / passou local · [1fc8fcf](../../apps/web/e2e-local/run-buyer-home-premium.mjs): home e capas da API, catálogo, estados e notificações por comprador; sem reservar ou comprar |
 | [/comprador/participar](../../apps/web/app/comprador/participar/page.tsx) | Comprador · Proxy; BUYER ou ADMIN da equipe; aviso legal | redireciona → /comprador/sorteios?filter=LIVE | — | — | ? / ? / não rodado |
 | [/comprador/perfil](../../apps/web/app/comprador/perfil/page.tsx) | Comprador · Proxy; BUYER ou ADMIN da equipe; aviso legal | — | — | [page](../../apps/web/app/comprador/perfil/page.tsx) | ? / ? / não rodado |
 | [/comprador/resultados](../../apps/web/app/comprador/resultados/page.tsx) | Comprador · Proxy; BUYER ou ADMIN da equipe; aviso legal | — | [RoleGate](../../apps/web/components/auth/RoleGate.tsx) | — | ? / ? / não rodado |
@@ -120,7 +120,7 @@ Controle de revisão dos gates: alterações nestas fontes exigem rever a interp
 | [/escolha](../../apps/web/app/escolha/page.tsx) | Acesso · Sem proxy de página; validações próprias do fluxo | re-exporta ../cadastro/page | [page](../../apps/web/app/cadastro/page.tsx) | — | ? / ? / não rodado |
 | [/esqueci-senha](../../apps/web/app/esqueci-senha/page.tsx) | Acesso · Sem proxy de página; validações próprias do fluxo | — | [AuthShell](../../apps/web/components/auth/AuthShell.tsx) | [page](../../apps/web/app/esqueci-senha/page.tsx) | ? / ? / não rodado |
 | [/juridico](../../apps/web/app/juridico/page.tsx) | Conta · RoleGate local BUYER/ORGANIZER/ADMIN da equipe; fora do proxy | — | [RoleGate](../../apps/web/components/auth/RoleGate.tsx), [LegalUserCenter](../../apps/web/components/legal/LegalUserCenter.tsx) | [LegalUserCenter](../../apps/web/components/legal/LegalUserCenter.tsx) | ? / ? / não rodado |
-| [/login](../../apps/web/app/login/page.tsx) | Acesso · Sem proxy de página; validações próprias do fluxo | — | [AuthShell](../../apps/web/components/auth/AuthShell.tsx), [SocialAccess](../../apps/web/components/auth/SocialAccess.tsx) | [page](../../apps/web/app/login/page.tsx) | ? / ? / não rodado |
+| [/login](../../apps/web/app/login/page.tsx) | Acesso · Sem proxy de página; validações próprias do fluxo | — | [AuthShell](../../apps/web/components/auth/AuthShell.tsx), [SocialAccess](../../apps/web/components/auth/SocialAccess.tsx), [PremiumScope](../../apps/web/components/premium/PremiumScope.tsx) | [page](../../apps/web/app/login/page.tsx) | verificado no recorte local / parcial / passou local · [b8d871c](../../apps/web/e2e/login-premium.spec.ts): entrada por e-mail, erro, teclado e redirecionamentos seguros; não ativou provedor social |
 | [/mini-campanhas/\[slug\]](../../apps/web/app/mini-campanhas/%5Bslug%5D/page.tsx) | Campanha e prova pública · Sem proxy de página; regras e visibilidade dependem da API | — | [MiniCampaignReserve](../../apps/web/components/organizer-platform/MiniCampaignReserve.tsx) | [MiniCampaignReserve](../../apps/web/components/organizer-platform/MiniCampaignReserve.tsx) | ? / ? / não rodado |
 | [/o/\[organizerId\]](../../apps/web/app/o/%5BorganizerId%5D/page.tsx) | Campanha e prova pública · Sem proxy de página; regras e visibilidade dependem da API | — | [OrganizerPublicHub](../../apps/web/components/public/OrganizerPublicHub.tsx) | — | ? / ? / não rodado |
 | [/organizador/escolher-plano](../../apps/web/app/organizador/escolher-plano/page.tsx) | Organizador · Proxy; ORGANIZER (gate adicional na página) | — | [RoleGate](../../apps/web/components/auth/RoleGate.tsx), [PlanSelector](../../apps/web/components/organizer-platform/PlanSelector.tsx) | — | ? / ? / não rodado |
@@ -317,7 +317,7 @@ O grafo segue imports estáticos de valor e reexports locais de App Router e com
 | [components/NumbersGrid.tsx](../../apps/web/components/NumbersGrid.tsx) | não encontrado estaticamente | — | — | — | `button` |
 | [components/Stats.tsx](../../apps/web/components/Stats.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/admin/AdminApprovalsCenter.tsx](../../apps/web/components/admin/AdminApprovalsCenter.tsx) | sim | `form` | — | — | `Link`, `Select`, `button`, `input`, `select` |
-| [components/admin/AdminDashboard.tsx](../../apps/web/components/admin/AdminDashboard.tsx) | sim | — | — | — | `select` |
+| [components/admin/AdminDashboard.tsx](../../apps/web/components/admin/AdminDashboard.tsx) | sim | — | — | — | `button`, `select` |
 | [components/admin/AdminExistingModuleCenter.tsx](../../apps/web/components/admin/AdminExistingModuleCenter.tsx) | sim | — | `table` | — | `button`, `input` |
 | [components/admin/AdminManagement.tsx](../../apps/web/components/admin/AdminManagement.tsx) | sim | `form` | — | — | `Link`, `button`, `input`, `select` |
 | [components/admin/AdminOperationsCenter.tsx](../../apps/web/components/admin/AdminOperationsCenter.tsx) | sim | — | `table` | — | `button`, `input` |
@@ -539,6 +539,7 @@ Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pel
 - [e2e/admin-critical-resources.spec.ts](../../apps/web/e2e/admin-critical-resources.spec.ts)
 - [e2e/admin-finance.spec.ts](../../apps/web/e2e/admin-finance.spec.ts)
 - [e2e/admin-organizers.spec.ts](../../apps/web/e2e/admin-organizers.spec.ts)
+- [e2e/admin-overview-premium.spec.ts](../../apps/web/e2e/admin-overview-premium.spec.ts)
 - [e2e/admin-phase6.spec.ts](../../apps/web/e2e/admin-phase6.spec.ts)
 - [e2e/ai-advisor-full.spec.ts](../../apps/web/e2e/ai-advisor-full.spec.ts)
 - [e2e/auth.setup.ts](../../apps/web/e2e/auth.setup.ts)
@@ -558,6 +559,7 @@ Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pel
 - [e2e/gateway-availability.spec.ts](../../apps/web/e2e/gateway-availability.spec.ts)
 - [e2e/integrated-access-review.spec.ts](../../apps/web/e2e/integrated-access-review.spec.ts)
 - [e2e/leads.spec.ts](../../apps/web/e2e/leads.spec.ts)
+- [e2e/login-premium.spec.ts](../../apps/web/e2e/login-premium.spec.ts)
 - [e2e/milestone-image.spec.ts](../../apps/web/e2e/milestone-image.spec.ts)
 - [e2e/mini-affiliates.spec.ts](../../apps/web/e2e/mini-affiliates.spec.ts)
 - [e2e/mvp-buyer-journey.spec.ts](../../apps/web/e2e/mvp-buyer-journey.spec.ts)
@@ -586,6 +588,7 @@ Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pel
 - [e2e-local/buyer-coupon-journey.spec.ts](../../apps/web/e2e-local/buyer-coupon-journey.spec.ts)
 - [e2e-local/buyer-purchase-history.spec.ts](../../apps/web/e2e-local/buyer-purchase-history.spec.ts)
 - [e2e-local/buyer-sales-window.spec.ts](../../apps/web/e2e-local/buyer-sales-window.spec.ts)
+- [e2e-local/run-buyer-home-premium.mjs](../../apps/web/e2e-local/run-buyer-home-premium.mjs)
 - [e2e-local/run-organizer-ads-premium.mjs](../../apps/web/e2e-local/run-organizer-ads-premium.mjs)
 - [e2e-local/run-organizer-advisor-premium.mjs](../../apps/web/e2e-local/run-organizer-advisor-premium.mjs)
 - [e2e-local/run-organizer-affiliates-premium.mjs](../../apps/web/e2e-local/run-organizer-affiliates-premium.mjs)

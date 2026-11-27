@@ -97,4 +97,22 @@ export const pageEvidence = [
     source: "apps/web/e2e/communication-premium.spec.ts",
     revision: "3374c43",
   },
+  {
+    path: "/comprador",
+    detail: "home e capas da API, catálogo, estados e notificações por comprador; sem reservar ou comprar",
+    source: "apps/web/e2e-local/run-buyer-home-premium.mjs",
+    revision: "1fc8fcf",
+  },
+  {
+    path: "/login",
+    detail: "entrada por e-mail, erro, teclado e redirecionamentos seguros; não ativou provedor social",
+    source: "apps/web/e2e/login-premium.spec.ts",
+    revision: "b8d871c",
+  },
+  {
+    path: "/admin/dashboard",
+    detail: "visão geral, datas e valores, suporte restrito e acesso vedado a outros papéis; sem operações administrativas",
+    source: "apps/web/e2e/admin-overview-premium.spec.ts",
+    revision: "cf9f29e",
+  },
 ];

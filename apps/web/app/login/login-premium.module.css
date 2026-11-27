@@ -1,0 +1,229 @@
+.scope { min-height: 100dvh; }
+
+.scope :global(.sx-auth) {
+  --sx-ink: var(--sxp-text);
+  --sx-muted: var(--sxp-muted);
+  min-height: 100dvh;
+  grid-template-columns: minmax(21rem, .92fr) minmax(0, 1.08fr);
+  color: var(--sxp-text);
+  background: var(--sxp-bg);
+  font-family: var(--sxp-font-body);
+}
+
+.scope :global(.sx-auth-story) {
+  background-color: var(--sxp-dark-bg);
+  background-image: radial-gradient(ellipse at 12% 54%, #7734f559, transparent 68%),
+    linear-gradient(142deg, #191238, #171a48);
+  color: var(--sxp-white);
+  border-inline-end: 1px solid var(--sxp-dark-line);
+}
+
+.scope :global(.sx-auth-story) h2,
+.scope :global(.sx-auth-heading) h1 {
+  font-family: var(--sxp-font-heading);
+  font-weight: 820;
+  letter-spacing: -.055em;
+  overflow-wrap: anywhere;
+}
+
+.scope :global(.sx-auth-story .sx-eyebrow),
+.scope :global(.sx-auth-story-bottom),
+.scope :global(.sx-auth-story) > a:last-child,
+.scope :global(.sx-auth-story) > div > p {
+  color: var(--sxp-dark-muted);
+}
+
+.scope :global(.sx-auth-story) h2 em { color: var(--sxp-dark-accent); }
+.scope :global(.sx-auth-mini-screen) { border-color: var(--sxp-dark-line); transform: none; }
+
+.scope :global(.sx-auth-main) {
+  min-width: 0;
+  padding: clamp(.78rem, 3.35vw, 2.7rem);
+}
+
+.scope :global(.sx-auth-form-wrap) {
+  min-width: 0;
+  width: 100%;
+  max-width: 30rem;
+  margin: auto 0;
+  padding: clamp(.8rem, 3.1vw, 1.7rem);
+  border: 1px solid var(--sxp-line);
+  border-block-start: 3px solid var(--sxp-purple);
+  border-radius: var(--sxp-panel-radius);
+  color: var(--sxp-text);
+  background: var(--sxp-surface);
+  box-shadow: var(--sxp-shadow);
+}
+
+.scope :global(.sx-auth-mobile-brand) { border-color: var(--sxp-line); }
+.scope :global(.sx-auth-mobile-brand .sx-wordmark) { color: var(--sxp-text); }
+.scope :global(.sx-auth-mobile-brand .sx-wordmark) span { color: var(--sxp-accent); }
+
+.scope :global(.sx-auth-back) {
+  min-height: 2.25rem;
+  margin-bottom: .55rem;
+  color: var(--sxp-accent);
+  font-size: .83rem;
+  font-weight: 780;
+}
+
+.scope :global(.sx-auth-heading .sx-eyebrow) {
+  color: var(--sxp-accent);
+  font-size: .71rem;
+  font-weight: 850;
+}
+
+.scope :global(.sx-auth-heading) h1 {
+  margin-top: .22rem;
+  color: var(--sxp-text);
+  font-size: clamp(1.65rem, 3.05vw, 2.35rem);
+  line-height: 1.18;
+}
+
+.scope :global(.sx-auth-heading) > p {
+  margin-top: .34rem;
+  color: var(--sxp-muted);
+  font-size: .85rem;
+  line-height: 1.5;
+}
+
+.scope :global(.sx-auth-form) { margin-top: .9rem; }
+
+.scope :global(.social-access) > div:first-child {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .36rem;
+}
+
+.scope :global(.social-button) {
+  min-height: 2.75rem;
+  min-width: 0;
+  gap: .35rem;
+  padding: .37rem .42rem;
+  border-color: var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  background: var(--sxp-bg);
+  color: var(--sxp-text);
+  font-size: .77rem;
+  font-weight: 800;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.scope :global(.social-button) :is(svg, span) { flex-shrink: 0; }
+.scope :global(.social-button) span { color: var(--sxp-accent); }
+.scope :global(.social-button):hover { border-color: var(--sxp-accent); }
+
+.scope :global(.social-button):disabled {
+  opacity: 1;
+  color: var(--sxp-muted);
+  background: var(--sxp-bg);
+  border-style: dashed;
+}
+
+.scope :global(.social-access) > p,
+.scope :global(.social-access) > div:last-child {
+  color: var(--sxp-muted);
+  font-size: .74rem;
+  line-height: 1.42;
+}
+
+.scope :global(.social-access) > div:last-child { margin-block: .7rem; gap: .45rem; }
+.scope :global(.social-access) > div:last-child > span { background: var(--sxp-line); }
+
+.form { display: grid; gap: .54rem; min-width: 0; }
+
+.scope .form > label {
+  color: var(--sxp-text);
+  font-size: .87rem;
+  font-weight: 790;
+}
+
+.scope .form :global(.sx-auth-input) {
+  min-width: 0;
+  min-height: 2.9rem;
+  height: auto;
+  border-color: var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  color: var(--sxp-text);
+  background: var(--sxp-bg);
+  font-size: 1rem;
+  box-shadow: none;
+}
+
+.scope .form :global(.sx-auth-input)::placeholder { color: var(--sxp-muted); }
+.scope .form label > div :global(.sx-auth-input) { padding-inline-end: 3.05rem; }
+
+.visibility {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  inset-inline-end: .18rem;
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border-radius: .65rem;
+  color: var(--sxp-accent);
+}
+
+.visibility:hover { background: var(--sxp-tint); }
+
+.scope .form a { color: var(--sxp-accent); text-decoration: underline; text-underline-offset: .16em; }
+.scope .form > p:last-child { color: var(--sxp-muted); }
+
+.scope :global(.sx-auth-alert) {
+  border-color: var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  color: var(--sxp-error);
+  background: var(--sxp-bg);
+}
+
+.scope :global(.sx-auth-submit) {
+  min-height: 2.85rem;
+  border-radius: var(--sxp-button-radius);
+  background: var(--sxp-gradient);
+  color: var(--sxp-white);
+  box-shadow: var(--sxp-shadow);
+  font-size: .86rem;
+  font-weight: 820;
+}
+
+.scope :global(.sx-auth-submit):hover { filter: brightness(.92); }
+
+.scope :global(.sx-auth-footer) {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .65rem;
+  margin-top: .7rem;
+  color: var(--sxp-muted);
+  font-size: .75rem;
+}
+
+.scope :global(.sx-auth-footer) a { color: var(--sxp-accent); }
+.scope :global(.sx-auth) :focus-visible { outline: 2px solid var(--sxp-focus); outline-offset: 2px; }
+.scope :global(.sx-auth-story) :focus-visible { outline-color: var(--sxp-dark-accent); }
+
+.loading {
+  display: flex;
+  min-height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  gap: .45rem;
+  color: var(--sxp-accent);
+}
+
+@media (max-width: 48rem) {
+  .scope :global(.sx-auth) { display: block; }
+  .scope :global(.sx-auth-story) { display: none; }
+  .scope :global(.sx-auth-main) { display: block; }
+  .scope :global(.sx-auth-form-wrap) { margin-inline: auto; }
+  .scope :global(.sx-auth-mobile-brand) {
+    display: flex;
+    margin-bottom: .64rem;
+    padding-block: .16rem .48rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scope .loading svg { animation: none; }
+}

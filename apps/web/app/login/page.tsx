@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { FormEvent, Suspense, useState } from "react";
 import { Eye, EyeOff, LoaderCircle, LogIn } from "lucide-react";
 import SocialAccess from "@/components/auth/SocialAccess";
+import PremiumScope from "@/components/premium/PremiumScope";
+import styles from "./login-premium.module.css";
 import { AuthShell, authInputClass } from "@/components/auth/AuthShell";
 import { AuthApiError, authRequest } from "@/lib/auth/client";
 import type { AuthUser } from "@/lib/auth/types";
@@ -112,97 +114,102 @@ function LoginForm() {
   }
 
   return (
-    <AuthShell
-      title="Entre na sua conta"
-      description="Acesse sua área de comprador ou organizador com segurança."
-      backHref="/"
-    >
-      <SocialAccess />
-      {searchParams.get("social_error") && (
-        <p role="alert" className="sx-auth-alert mb-5">
-          {searchParams.get("social_error") === "cancelled"
-            ? "O acesso com o provedor foi cancelado. Você pode tentar novamente ou usar e-mail."
-            : searchParams.get("social_error") === "unavailable"
-              ? "Este provedor aguarda configuração. Continue com e-mail e senha."
-              : "Não foi possível validar esse acesso. Inicie novamente; sua conta existente foi preservada."}
-        </p>
-      )}
-      <form onSubmit={submit} className="space-y-4">
-        <label className="block text-sm font-semibold text-zinc-700">
-          E-mail
-          <input
-            className={`${authInputClass} mt-2`}
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="voce@exemplo.com"
-            required
-          />
-        </label>
-
-        <label className="block text-sm font-semibold text-zinc-700">
-          Senha
-          <div className="relative mt-2">
-            <input
-              className={`${authInputClass} pr-12`}
-              type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Sua senha"
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((value) => !value)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500"
-              aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-            >
-              {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-            </button>
-          </div>
-        </label>
-
-        <div className="text-right">
-          <Link
-            href="/esqueci-senha"
-            className="text-sm font-semibold text-violet-700"
-          >
-            Esqueci minha senha
-          </Link>
-        </div>
-
-        {error && (
-          <p role="alert" className="sx-auth-alert">
-            {error}
+    <PremiumScope className={styles.scope}>
+      <AuthShell
+        title="Entre na sua conta"
+        description="Acesse sua área de comprador ou organizador com segurança."
+        backHref="/"
+      >
+        <SocialAccess />
+        {searchParams.get("social_error") && (
+          <p role="alert" className="sx-auth-alert mb-5">
+            {searchParams.get("social_error") === "cancelled"
+              ? "O acesso com o provedor foi cancelado. Você pode tentar novamente ou usar e-mail."
+              : searchParams.get("social_error") === "unavailable"
+                ? "Este provedor aguarda configuração. Continue com e-mail e senha."
+                : "Não foi possível validar esse acesso. Inicie novamente; sua conta existente foi preservada."}
           </p>
         )}
+        <form onSubmit={submit} className={styles.form}>
+          <label className="block text-sm font-semibold text-zinc-700">
+            E-mail
+            <input
+              className={`${authInputClass} mt-2`}
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="voce@exemplo.com"
+              required
+            />
+          </label>
 
-        <button type="submit" disabled={loading} className="sx-auth-submit">
-          {loading ? (
-            <LoaderCircle size={17} className="animate-spin" />
-          ) : (
-            <LogIn size={17} />
+          <label className="block text-sm font-semibold text-zinc-700">
+            Senha
+            <div className="relative mt-2">
+              <input
+                className={`${authInputClass} pr-12`}
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Sua senha"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((value) => !value)}
+                className={styles.visibility}
+                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+              >
+                {showPassword ? <EyeOff size={20} aria-hidden="true" /> : <Eye size={20} aria-hidden="true" />}
+              </button>
+            </div>
+          </label>
+
+          <div className="text-right">
+            <Link
+              href="/esqueci-senha"
+              className="text-sm font-semibold text-violet-700"
+            >
+              Esqueci minha senha
+            </Link>
+          </div>
+
+          {error && (
+            <p role="alert" className="sx-auth-alert">
+              {error}
+            </p>
           )}
-          {loading ? "Entrando..." : "Entrar"}
-        </button>
 
-        <p className="text-center text-sm text-zinc-500">
-          Ainda não tem conta?{" "}
-          <Link href="/escolha" className="font-bold text-violet-700">
-            Cadastre-se
-          </Link>
-        </p>
-      </form>
-    </AuthShell>
+          <button type="submit" disabled={loading} className="sx-auth-submit">
+            {loading ? (
+              <LoaderCircle size={17} aria-hidden="true" className="animate-spin" />
+            ) : (
+              <LogIn size={17} aria-hidden="true" />
+            )}
+            {loading ? "Entrando..." : "Entrar"}
+          </button>
+
+          <p className="text-center text-sm text-zinc-500">
+            Ainda não tem conta?{" "}
+            <Link href="/escolha" className="font-bold text-violet-700">
+              Cadastre-se
+            </Link>
+          </p>
+        </form>
+      </AuthShell>
+    </PremiumScope>
   );
 }
 
 function AuthPageLoading() {
   return (
-    <main className="flex min-h-screen items-center justify-center">
-      <div className="h-10 w-10 animate-spin rounded-full border-4 border-violet-200 border-t-violet-700" />
-    </main>
+    <PremiumScope className={styles.scope}>
+      <main className={styles.loading} role="status">
+        <LoaderCircle size={28} aria-hidden="true" className="animate-spin" />
+        Carregando acesso…
+      </main>
+    </PremiumScope>
   );
 }
