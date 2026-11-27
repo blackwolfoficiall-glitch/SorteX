@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CheckCircle2, ChevronRight, CircleDollarSign, Gift, Handshake, LockKeyhole, Menu, MessageCircle, RotateCw, Search, Share2, ShieldCheck, Target, Ticket, Trophy, X } from "lucide-react";
 import type { Campaign } from "@/lib/campaigns/types";
@@ -49,24 +50,55 @@ export function CampaignPublicHeader({campaign,onOpenTitles}:{campaign:Campaign;
 }
 
 export function CampaignBuyerTitlesPanel({campaign,open,onClose,onParticipate}:{campaign:Campaign;open:boolean;onClose:()=>void;onParticipate:()=>void}){
-  const [loading,setLoading]=useState(false),[retrying,setRetrying]=useState(false),[authRequired,setAuthRequired]=useState(false),[error,setError]=useState(""),[purchases,setPurchases]=useState<Purchase[]>([]),[roulette,setRoulette]=useState<RouletteStatus|null>(null),[prizes,setPrizes]=useState<InstantPrize[]>([]),[shareMessage,setShareMessage]=useState("");
-  const load=useCallback(async(background=false)=>{if(!background)setLoading(true);else setRetrying(true);setError("");try{const purchaseResponse=await fetch("/api/purchases/my",{credentials:"include",cache:"no-store"});if(purchaseResponse.status===401||purchaseResponse.status===403){setAuthRequired(true);setPurchases([]);return}if(!purchaseResponse.ok)throw new Error();const all=await purchaseResponse.json() as Purchase[];const current=all.filter(item=>item.campaignId===campaign.id);setPurchases(current);setAuthRequired(false);const [rouletteResponse,prizesResponse]=await Promise.all([fetch(`/api/draws/roulette/campaigns/${campaign.id}/status`,{credentials:"include",cache:"no-store"}),fetch("/api/draws/winners/my-instant-prizes",{credentials:"include",cache:"no-store"})]);setRoulette(rouletteResponse.ok?await rouletteResponse.json():null);if(prizesResponse.ok){const rows=await prizesResponse.json() as InstantPrize[];const purchaseIds=new Set(current.map(item=>item.id));setPrizes(rows.filter(item=>item.campaignId===campaign.id||purchaseIds.has(item.purchaseId)))}else setPrizes([])}catch{setError("Não foi possível carregar seus títulos. Tente novamente.")}finally{setLoading(false);setRetrying(false)}},[campaign.id]);
+  const router=useRouter();
+  const [loading,setLoading]=useState(open),[retrying,setRetrying]=useState(false),[authRequired,setAuthRequired]=useState(false),[error,setError]=useState(""),[purchases,setPurchases]=useState<Purchase[]>([]),[roulette,setRoulette]=useState<RouletteStatus|null>(null),[prizes,setPrizes]=useState<InstantPrize[]>([]),[shareMessage,setShareMessage]=useState("");
+  const load=useCallback(async(background=false)=>{if(!background)setLoading(true);else setRetrying(true);setError("");try{const purchaseResponse=await fetch("/api/purchases/my",{credentials:"include",cache:"no-store"});if(purchaseResponse.status===401||purchaseResponse.status===403){setAuthRequired(true);setPurchases([]);setRoulette(null);setPrizes([]);return}if(!purchaseResponse.ok)throw new Error();const all=await purchaseResponse.json() as Purchase[];const current=all.filter(item=>item.campaignId===campaign.id);setPurchases(current);setAuthRequired(false);const [rouletteResponse,prizesResponse]=await Promise.all([fetch(`/api/draws/roulette/campaigns/${campaign.id}/status`,{credentials:"include",cache:"no-store"}),fetch("/api/draws/winners/my-instant-prizes",{credentials:"include",cache:"no-store"})]);setRoulette(rouletteResponse.ok?await rouletteResponse.json():null);if(prizesResponse.ok){const rows=await prizesResponse.json() as InstantPrize[];const purchaseIds=new Set(current.map(item=>item.id));setPrizes(rows.filter(item=>item.campaignId===campaign.id||purchaseIds.has(item.purchaseId)))}else setPrizes([])}catch{setError("Não foi possível carregar seus títulos. Tente novamente.")}finally{setLoading(false);setRetrying(false)}},[campaign.id]);
   useEffect(()=>{if(!open)return;const initial=window.setTimeout(()=>void load(),0);const timer=window.setInterval(()=>{if(!document.hidden)void load(true)},10000);const refresh=()=>void load(true);window.addEventListener("focus",refresh);window.addEventListener("sortex:purchase-updated",refresh);return()=>{window.clearTimeout(initial);window.clearInterval(timer);window.removeEventListener("focus",refresh);window.removeEventListener("sortex:purchase-updated",refresh)}},[open,load]);
   useEffect(()=>{if(!open)return;const close=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose()};document.addEventListener("keydown",close);const previous=document.body.style.overflow;document.body.style.overflow="hidden";return()=>{document.removeEventListener("keydown",close);document.body.style.overflow=previous}},[open,onClose]);
-  const tickets=useMemo(()=>purchases.flatMap(item=>item.tickets),[purchases]);
-  async function share(){const url=window.location.href;try{if(navigator.share)await navigator.share({title:campaign.title,url});else{await navigator.clipboard.writeText(url);setShareMessage("Link copiado.");window.setTimeout(()=>setShareMessage(""),2500)}}catch{/* cancelamento nativo não é erro */}}
+  const ticketCount=useMemo(()=>purchases.reduce((count,item)=>count+(item.status==="PAID"?item.tickets.length:0),0),[purchases]);
+  async function share(){const address=new URL(window.location.href);if(address.searchParams.get("view")==="meus-titulos")address.searchParams.delete("view");const url=address.href;try{if(navigator.share)await navigator.share({title:campaign.title,url});else{await navigator.clipboard.writeText(url);setShareMessage("Link copiado.");window.setTimeout(()=>setShareMessage(""),2500)}}catch{/* cancelamento nativo não é erro */}}
   if(!open)return null;
   return <div className="fixed inset-0 z-[110]" role="presentation"><button type="button" aria-label="Fechar Meus Títulos" onClick={onClose} className="absolute inset-0 bg-black/50"/><section role="dialog" aria-modal="true" aria-labelledby="buyer-titles-title" className="absolute inset-x-0 bottom-0 flex max-h-[92dvh] flex-col rounded-t-[28px] bg-white shadow-2xl md:inset-auto md:left-1/2 md:top-1/2 md:w-[min(94vw,860px)] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-[28px]">
     <div className="flex items-center justify-between border-b p-5 sm:p-6"><div><p className="text-xs font-black uppercase tracking-wide text-violet-700">Área do comprador</p><h2 id="buyer-titles-title" className="mt-1 text-2xl font-black">Meus Títulos</h2></div><button autoFocus type="button" onClick={onClose} aria-label="Fechar" className="rounded-xl p-3 hover:bg-zinc-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-600"><X/></button></div>
     <div className="overflow-y-auto p-5 sm:p-6" aria-live="polite">
-      {loading?<TitlesSkeleton/>:authRequired?<EmptyPanel title="Entre para consultar seus títulos nesta campanha." action="Entrar" onAction={()=>{window.location.href=`/login?returnTo=${encodeURIComponent(window.location.pathname)}`}}/>:error?<EmptyPanel title={error} action={retrying?"Carregando…":"Tentar novamente"} onAction={()=>void load()} disabled={retrying}/>:purchases.length===0?<EmptyPanel title="Você ainda não possui títulos nesta campanha." action="Participar agora" onAction={()=>{onClose();onParticipate()}}/>:<div className="space-y-5">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><Summary icon={<Ticket/>} label="Quantidade de títulos" value={tickets.length.toLocaleString("pt-BR")}/><Summary icon={<RotateCw/>} label="Giros disponíveis" value={String(roulette?.availableRounds??0)}/><Summary icon={<Gift/>} label="Raspadinhas disponíveis" value="—" detail="Não disponível nesta campanha"/><Summary icon={<Gift/>} label="Prêmios instantâneos" value={String(prizes.length)}/></div>
-        <div className="space-y-3">{purchases.map(purchase=><article key={purchase.id} className="rounded-2xl border p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="font-black">Compra de {purchase.quantity.toLocaleString("pt-BR")} título{purchase.quantity===1?"":"s"}</p><p className="mt-1 text-xs text-zinc-500">{new Date(purchase.createdAt).toLocaleString("pt-BR")}</p></div><span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-black">{statusLabel[purchase.status]}</span></div><div className="mt-3 flex items-center justify-between text-sm"><span className="text-zinc-500">Valor pago</span><strong>{money(purchase.total)}</strong></div><details className="mt-3"><summary className="cursor-pointer text-sm font-black text-violet-700">Ver números ({purchase.tickets.length})</summary><div className="mt-3 flex flex-wrap gap-2">{purchase.tickets.map(ticket=><span key={ticket.id||ticket.number} className="rounded-lg bg-violet-50 px-2 py-1 font-mono text-xs font-black text-violet-800">{ticket.number}</span>)}</div></details></article>)}</div>
+      {loading?<TitlesSkeleton/>:authRequired?<EmptyPanel title="Entre para consultar seus títulos nesta campanha." action="Entrar" onAction={()=>{const next=`/campanha/${encodeURIComponent(campaign.slug)}?view=meus-titulos`;router.push(`/login?next=${encodeURIComponent(next)}`)}}/>:error?<EmptyPanel title={error} action={retrying?"Carregando…":"Tentar novamente"} onAction={()=>void load()} disabled={retrying}/>:purchases.length===0?<EmptyPanel title="Você ainda não possui títulos nesta campanha." action="Participar agora" onAction={()=>{onClose();onParticipate()}}/>:<div className="space-y-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4"><Summary icon={<Ticket/>} label="Quantidade de títulos" value={ticketCount.toLocaleString("pt-BR")}/><Summary icon={<RotateCw/>} label="Giros disponíveis" value={String(roulette?.availableRounds??0)}/><Summary icon={<Gift/>} label="Raspadinhas disponíveis" value="—" detail="Não disponível nesta campanha"/><Summary icon={<Gift/>} label="Prêmios instantâneos" value={String(prizes.length)}/></div>
+        <div className="space-y-3">{purchases.map(purchase=><CampaignPurchaseRow key={purchase.id} purchase={purchase}/>)}</div>
         {prizes.length>0&&<div><h3 className="font-black">Histórico de prêmios instantâneos</h3><div className="mt-3 space-y-2">{prizes.map(prize=><div key={prize.id} className="flex items-center justify-between gap-3 rounded-xl bg-amber-50 p-3 text-sm"><span><strong>{prize.instantPrize.description}</strong><span className="block font-mono text-xs text-zinc-600">Cota {prize.winningNumber}</span></span><strong>{money(Number(prize.instantPrize.value))}</strong></div>)}</div></div>}
         <div className="grid gap-2 sm:grid-cols-2"><button type="button" onClick={()=>{onClose();onParticipate()}} className="min-h-12 rounded-xl bg-violet-700 px-4 font-black text-white hover:bg-violet-800 active:scale-[.99]">Comprar mais títulos</button><button type="button" onClick={()=>void share()} className="min-h-12 rounded-xl border px-4 font-black hover:bg-zinc-50 active:scale-[.99]"><Share2 className="mr-2 inline" size={18}/>Compartilhar campanha</button></div>{shareMessage&&<p className="text-center text-sm font-bold text-emerald-700">{shareMessage}</p>}
       </div>}
     </div>
   </section></div>;
+}
+
+function CampaignPurchaseRow({ purchase }: { purchase: Purchase }) {
+  const paid = purchase.status === "PAID";
+  const tickets = paid ? purchase.tickets : [];
+  return (
+    <article className="rounded-2xl border p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-black">Compra de {purchase.quantity.toLocaleString("pt-BR")} título{purchase.quantity === 1 ? "" : "s"}</p>
+          <p className="mt-1 text-xs text-zinc-500">{new Date(purchase.createdAt).toLocaleString("pt-BR")}</p>
+        </div>
+        <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-black">{statusLabel[purchase.status]}</span>
+      </div>
+      <div className="mt-3 flex items-center justify-between text-sm">
+        <span className="text-zinc-500">{paid ? "Valor pago" : "Valor do pedido"}</span>
+        <strong>{money(purchase.total)}</strong>
+      </div>
+      {tickets.length ? (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-sm font-black text-violet-700">Ver números ({tickets.length})</summary>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {tickets.map(ticket => <span key={ticket.id || ticket.number} className="rounded-lg bg-violet-50 px-2 py-1 font-mono text-xs font-black text-violet-800">{ticket.number}</span>)}
+          </div>
+        </details>
+      ) : (
+        <p className="mt-3 text-sm text-zinc-500">Nenhum título confirmado nesta compra.</p>
+      )}
+    </article>
+  );
 }
 
 export function CampaignPublicFooter({campaign,onOpenTitles}:{campaign:Campaign;onOpenTitles:()=>void}){const [openSection,setOpenSection]=useState<string|null>(null);const social=supportedSocial(campaign.organizer.socialLinks||[]),whatsapp=whatsappUrl(campaign),preserve=()=>storeCampaignPosition(campaign.slug),dark=campaign.organizer.brand?.themeMode==="DARK",hub=(view:string)=>`/o/${campaign.organizer.id}?view=${view}&returnTo=${encodeURIComponent(`/campanha/${campaign.slug}`)}`;const toggle=(value:string)=>setOpenSection(current=>current===value?null:value);return <footer className={`mt-6 border-t px-4 pb-28 pt-6 transition-colors md:pb-8 ${dark?"bg-zinc-950 text-zinc-300":"bg-zinc-50 text-zinc-700"}`}><div className={`mx-auto max-w-[900px] divide-y overflow-hidden rounded-2xl border ${dark?"divide-white/10 border-white/10 bg-white/[.03]":"divide-zinc-200 border-zinc-200 bg-white shadow-sm"}`}>

@@ -18,6 +18,20 @@ export default function LoginPage() {
   );
 }
 
+function localLoginPath(value: string | null, origin: string) {
+  if (!value?.startsWith("/") || value.startsWith("//")) return null;
+  try {
+    const target = new URL(value, origin);
+    // Compare the browser's normalized origin, then return the vetted absolute
+    // address instead of re-interpreting the original path on navigation.
+    return target.origin === origin && !target.username && !target.password
+      ? target.href
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function LoginForm() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
@@ -48,15 +62,17 @@ function LoginForm() {
           "A sessão criada não corresponde ao usuário autenticado.",
         );
       }
-      const requestedPath = searchParams.get("next");
+      const requestedPath = localLoginPath(
+        searchParams.get("next"),
+        window.location.origin,
+      );
       let destination =
-        requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
-          ? requestedPath
-          : user.role === "BUYER"
-            ? "/comprador"
-            : user.role === "ADMIN"
-              ? "/admin/dashboard"
-              : "/dashboard";
+        requestedPath ??
+        (user.role === "BUYER"
+          ? "/comprador"
+          : user.role === "ADMIN"
+            ? "/admin/dashboard"
+            : "/dashboard");
       if (user.role === "ORGANIZER" && !requestedPath) {
         try {
           const plan = await getCurrentPlan();

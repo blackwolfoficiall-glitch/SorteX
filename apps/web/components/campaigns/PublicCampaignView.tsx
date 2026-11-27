@@ -44,10 +44,12 @@ export default function PublicCampaignView({
   slug,
   previewCampaign,
   previewMode = false,
+  initiallyShowBuyerTitles = false,
 }: {
   slug?: string;
   previewCampaign?: Campaign;
   previewMode?: boolean;
+  initiallyShowBuyerTitles?: boolean;
 }) {
   const [campaign, setCampaign] = useState<Campaign | null>(
     previewCampaign ?? null,
@@ -61,7 +63,7 @@ export default function PublicCampaignView({
     string | null
   >(null);
   const [buyerRounds, setBuyerRounds] = useState<number | null>(null);
-  const [showBuyerTitles, setShowBuyerTitles] = useState(false);
+  const [showBuyerTitles, setShowBuyerTitles] = useState(initiallyShowBuyerTitles);
   const [autoTitleColor, setAutoTitleColor] = useState("#FFFFFF");
   const dragStart = useRef<number | null>(null);
   useEffect(() => {
