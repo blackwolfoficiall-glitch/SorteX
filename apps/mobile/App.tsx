@@ -1291,7 +1291,7 @@ export default function App() {
                   <Stack.Screen
                     name="OrganizerFinance"
                     component={OrganizerFinanceScreen}
-                    options={{ title: "Financeiro" }}
+                    options={{ ...organizerCampaignHeader, title: "Financeiro" }}
                   />
                 )}
                 <Stack.Screen

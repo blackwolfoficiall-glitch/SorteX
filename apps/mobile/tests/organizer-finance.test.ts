@@ -11,6 +11,7 @@ import {
   organizerFinanceSession,
   parseBalance,
   parseStatement,
+  statementPageNavigation,
 } from "../src/organizer/finance";
 
 const organizer = {
@@ -215,4 +216,54 @@ test("an in-flight response from a previous authentication is ignored even for t
   pending.splice(0).forEach((respond) => respond());
   assert.deepEqual(await logoutRead, { kind: "stale" });
   await logout;
+});
+
+test("finance pagination distinguishes an empty first page and a page that disappeared", () => {
+  const nav = (page: number, total: number) =>
+    statementPageNavigation({
+      page,
+      total,
+      pages: Math.ceil(total / 15),
+      limit: 15,
+    });
+  assert.deepEqual(nav(1, 0), {
+    page: 1,
+    last: 1,
+    total: 0,
+    pastEnd: false,
+    previous: null,
+    next: null,
+  });
+  assert.deepEqual(nav(1, 16), {
+    page: 1,
+    last: 2,
+    total: 16,
+    pastEnd: false,
+    previous: null,
+    next: 2,
+  });
+  assert.deepEqual(nav(2, 16), {
+    page: 2,
+    last: 2,
+    total: 16,
+    pastEnd: false,
+    previous: 1,
+    next: null,
+  });
+  assert.deepEqual(nav(4, 16), {
+    page: 4,
+    last: 2,
+    total: 16,
+    pastEnd: true,
+    previous: 2,
+    next: null,
+  });
+  assert.deepEqual(nav(2, 0), {
+    page: 2,
+    last: 1,
+    total: 0,
+    pastEnd: true,
+    previous: 1,
+    next: null,
+  });
 });

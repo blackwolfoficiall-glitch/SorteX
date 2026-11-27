@@ -305,6 +305,8 @@ isolated('Ads confirmed sales with HTTP and disposable PostgreSQL', () => {
 
     expect((await visit(organizerToken, '&origin=META_ADS')).status).toBe(400);
     expect((await visit(organizerToken, '&origin=')).status).toBe(400);
+    const bypass = await visit(organizerToken, '&canReadProviderData=true');
+    expect(bypass.status).toBe(400);
 
     const response = await visit(organizerToken);
     expect(response.status).toBe(200);
@@ -333,16 +335,39 @@ isolated('Ads confirmed sales with HTTP and disposable PostgreSQL', () => {
         attributedRevenue: null,
         roas: null,
         roi: null,
-        reportingProviders: ['META_ADS', 'GOOGLE_ADS', 'TIKTOK_ADS'].map(
-          (provider) => ({
-            provider,
-            intendedCapability: 'READ_ONLY_REPORTING',
-            status: 'DISABLED',
-            canReadProviderData: false,
-            canPublish: false,
-            canChangeBudget: false,
-          }),
-        ),
+        reportingProviders: [
+          {
+            provider: 'META_ADS',
+            qaPath: 'OFFLINE_ONLY_PRODUCTION_DATA_API',
+          },
+          {
+            provider: 'GOOGLE_ADS',
+            qaPath: 'ISOLATED_TEST_ACCOUNT_WITHOUT_SERVING_METRICS',
+          },
+          {
+            provider: 'TIKTOK_ADS',
+            qaPath: 'OFFLINE_UNTIL_REPORTING_TEST_ACCESS_VERIFIED',
+          },
+        ].map(({ provider, qaPath }) => ({
+          provider,
+          intendedCapability: 'READ_ONLY_REPORTING',
+          status: 'DISABLED',
+          canReadProviderData: false,
+          canPublish: false,
+          canChangeBudget: false,
+          onboarding: {
+            schemaVersion: 1,
+            qaPath,
+            authorization: {
+              applicationAccess: 'NOT_VERIFIED',
+              advertiserConsent: 'NOT_VERIFIED',
+              campaignEligibility: 'NOT_VERIFIED',
+              noSpendScope: 'NOT_VERIFIED',
+            },
+            canConnectAccount: false,
+            canUploadConversionEvents: false,
+          },
+        })),
       },
     });
     const onlyAffiliate = await visit(organizerToken, '&origin=AFFILIATE');

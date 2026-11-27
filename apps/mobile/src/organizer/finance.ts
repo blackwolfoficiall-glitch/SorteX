@@ -243,3 +243,15 @@ export async function loadOrganizerFinance(
     throw error;
   }
 }
+
+export function statementPageNavigation({ page, pages, total }: Statement["pagination"]) {
+  // Counts can shrink between requests. Never render "page 2 of 1", or try
+  // to present another page's entries as the currently requested page.
+  const last = Math.max(1, pages);
+  return {
+    page, last, total,
+    pastEnd: page > last,
+    previous: page > 1 ? Math.min(last, page - 1) : null,
+    next: page < last ? page + 1 : null,
+  };
+}
