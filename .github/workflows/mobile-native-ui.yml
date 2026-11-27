@@ -172,7 +172,7 @@ jobs:
               } < "$diagnostic"
               case "$cli" in
                 login_cli=keyboard-dismiss-failed|login_cli=email-control|login_cli=email-value|login_cli=password-control|\
-                login_cli=submit-control|login_cli=signed-in-view|login_cli=driver|login_cli=unclassified)
+                login_cli=inputs-not-observed|login_cli=submit-control|login_cli=signed-in-view|login_cli=driver|login_cli=unclassified)
                   printf '%s\n' "$cli" ;;
               esac
               case "$api" in

@@ -28,8 +28,10 @@ test('credentialed flow keeps strict login selectors and only the login phase en
   const fixture = readFileSync(resolve(dir, 'fixture.cjs'), 'utf8');
   assert.match(fixture, /assert\.equal\(loginInputs\.length, 1,/);
   assert.match(fixture, /assert\.equal\(loginInputs\[0\]\.input, 'matches',/);
-  assert.match(flow, /extendedWaitUntil:\s+visible:\s+id: sortex-login-submit\s+enabled: true\s+timeout: 5000/);
-  assert.match(flow, /tapOn:\s+id: sortex-login-submit\s+enabled: true\n- extendedWaitUntil:\s+visible: "Olá, CompradorIOS"/);
+  assert.match(flow, /assertVisible:\s+id: sortex-login-inputs-ready[\s\S]*?tapOn:\s+id: sortex-login-submit\n- extendedWaitUntil:\s+visible: "Olá, CompradorIOS"/);
+  const app = readFileSync(resolve(dir, '../../apps/mobile/App.tsx'), 'utf8');
+  assert.match(app, /ready \? "sortex-login-inputs-ready" : "sortex-login-inputs-incomplete"/);
+  assert.match(app, /testID="sortex-login-submit"[\s\S]*?disabled=\{!ready\}[\s\S]*?if \(!ready \|\| busy\) return/);
   assert.doesNotMatch(flow, /id: sortex-login-submit\s+text:|optional:|point:/);
 });
 

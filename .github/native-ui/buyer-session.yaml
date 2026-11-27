@@ -20,16 +20,16 @@ name: Login nativo (PostgreSQL local)
 - hideKeyboard
 - scrollUntilVisible:
     element:
+      id: sortex-login-inputs-ready
+    direction: DOWN
+- assertVisible:
+    id: sortex-login-inputs-ready
+- scrollUntilVisible:
+    element:
       id: sortex-login-submit
     direction: DOWN
-- extendedWaitUntil:
-    visible:
-      id: sortex-login-submit
-      enabled: true
-    timeout: 5000
 - tapOn:
     id: sortex-login-submit
-    enabled: true
 - extendedWaitUntil:
     visible: "Olá, CompradorIOS"
     timeout: 45000

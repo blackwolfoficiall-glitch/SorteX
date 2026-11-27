@@ -147,6 +147,7 @@ function Login({ navigation }: any) {
         onChangeText={setEmail}
         keyboardType="email-address"
         autoComplete="email"
+        autoCorrect={false}
         textContentType="username"
       />
       <Field
@@ -158,6 +159,14 @@ function Login({ navigation }: any) {
         autoComplete="current-password"
         textContentType="password"
       />
+      <Text
+        testID={ready ? "sortex-login-inputs-ready" : "sortex-login-inputs-incomplete"}
+        style={s.muted}
+      >
+        {ready
+          ? "Toque em Entrar com e-mail para continuar."
+          : "Informe o e-mail e uma senha de pelo menos 8 caracteres."}
+      </Text>
       {!!error && <Notice error message={error} />}
       <Button
         title="Entrar com e-mail"

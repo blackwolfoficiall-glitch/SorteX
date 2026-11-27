@@ -159,6 +159,7 @@ test('login diagnostic reports only exact route, input category and status class
   assert.equal(maestroStatus('iOS driver not ready in time'), 'driver');
   assert.equal(maestroStatus('Assertion is false: id sortex-login-email and text "^sortex-ios-ui@example.test$"'), 'email-value');
   assert.equal(maestroStatus('Element not found: id: sortex-login-password'), 'password-control');
+  assert.equal(maestroStatus('Element not found: sortex-login-inputs-ready'), 'inputs-not-observed');
   assert.equal(maestroStatus('sortex-login-email passed\n' + otherSecrets), 'unclassified');
   assert.deepEqual(apiObservation(null), { status: 'unknown', input: 'unknown' });
   assert.deepEqual(apiObservation('{"method":"POST","path":"/auth/login?other","status":201}'), { status: 'not-seen', input: 'not-seen' });
