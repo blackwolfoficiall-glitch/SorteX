@@ -26,7 +26,7 @@ test("lead carrega, filtra, abre, edita, cria tarefa e inicia comunicação", as
 
   const task = `Tarefa de homologação ${Date.now()}`;
   await page.getByPlaceholder("Nova tarefa").fill(task);
-  await page.getByRole("button", { name: "Criar", exact: true }).click();
+  await page.getByRole("button", { name: "Criar tarefa", exact: true }).click();
   await expect(page.getByText("Tarefa criada.")).toBeVisible();
   const tasksResponse = await page.request.get("/api/crm/tasks");
   expect(tasksResponse.ok()).toBeTruthy();
