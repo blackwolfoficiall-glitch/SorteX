@@ -268,7 +268,7 @@ esac
                       "email-readback-leading-dropped", "email-readback-trailing-dropped",
                       "email-readback-edge-truncated", "email-readback-extra-text", "email-readback-mismatch",
                       "password", "login", "campaign-home-ready",
-                      "campaign-tab-discover", "campaign-tab-actionable", "campaign-tab-tap",
+                      "campaign-tab-discover", "campaign-tab-actionable", "campaign-tab-initial-selection", "campaign-tab-tap",
                       "campaign-tab-selected", "campaign-screen-visible", "campaign-list", "campaign-open", "campaign-detail", "campaign-prize", "campaign-regulation",
                       "signed-in-relaunch", "logout", "signed-out-relaunch"):
             self.assertIn('"sortex-' + stage + '"', swift)
@@ -304,7 +304,10 @@ esac
         self.assertIn('identified("sortex-buyer-campaigns-tab", in: app)', swift)
         self.assertIn('identified("sortex-buyer-campaign-open-campanha-sintetica-ios", in: app)', swift)
         self.assertIn('descendants(matching: .any).matching(NSPredicate(format: "identifier == %@", identifier))', swift)
-        self.assertIn('campaignTab.isEnabled && campaignTab.isHittable', swift)
+        self.assertIn('guard waitUntil(timeout: 10, { campaignTab.isEnabled && campaignTab.isHittable })', swift)
+        self.assertEqual(swift.count('campaignTab.tap()'), 1)
+        self.assertLess(swift.index('sortex-campaign-tab-actionable'), swift.index('sortex-campaign-tab-initial-selection'))
+        self.assertLess(swift.index('sortex-campaign-tab-initial-selection'), swift.index('sortex-campaign-tab-tap'))
         self.assertIn('campaignTabQuery.count, 1', swift)
         self.assertIn('XCTAssertFalse(campaignTab.isSelected', swift)
         self.assertIn('waitUntil(timeout: 10) { campaignTab.isSelected }', swift)

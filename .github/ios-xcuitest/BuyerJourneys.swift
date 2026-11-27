@@ -116,8 +116,23 @@ final class BuyerJourneys: XCTestCase {
         }
 
         XCTContext.runActivity(named: "sortex-campaign-tab-actionable") { _ in
-            XCTAssertTrue(waitUntil(timeout: 10) { campaignTab.isEnabled && campaignTab.isHittable },
-                          "Buyer campaign tab never became actionable")
+            guard waitUntil(timeout: 10, { campaignTab.isEnabled && campaignTab.isHittable }) else {
+                // Do not change which taps qualify. Report only the last
+                // observed condition, without recording the AX hierarchy.
+                let reason: CampaignTabFailure
+                if !campaignTab.exists { reason = .lost }
+                else if !campaignTab.isEnabled { reason = .disabled }
+                else if !campaignTab.isHittable {
+                    reason = app.keyboards.firstMatch.exists ? .noHitPointKeyboardPresent : .noHitPoint
+                } else { reason = .unsettled }
+                XCTContext.runActivity(named: reason.rawValue) { _ in
+                    XCTFail("Buyer campaign tab did not settle into an actionable state")
+                }
+                return
+            }
+        }
+
+        XCTContext.runActivity(named: "sortex-campaign-tab-initial-selection") { _ in
             XCTAssertFalse(campaignTab.isSelected, "Buyer campaign tab was already selected on Home")
         }
 
@@ -220,6 +235,14 @@ final class BuyerJourneys: XCTestCase {
         if let tab = matches.first(where: { $0.elementType == .other }) { return tab }
         if let only = matches.first, matches.count == 1 { return only }
         throw ElementNotActionable()
+    }
+
+    private enum CampaignTabFailure: String {
+        case noHitPointKeyboardPresent = "sortex-campaign-tab-no-hit-point-keyboard-present"
+        case lost = "sortex-campaign-tab-lost"
+        case disabled = "sortex-campaign-tab-disabled"
+        case noHitPoint = "sortex-campaign-tab-no-hit-point"
+        case unsettled = "sortex-campaign-tab-unsettled"
     }
 
     private enum EmailReadbackFailure: String {

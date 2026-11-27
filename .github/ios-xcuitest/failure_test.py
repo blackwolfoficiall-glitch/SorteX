@@ -92,6 +92,28 @@ class FailureDiagnostic(unittest.TestCase):
         self.assertEqual(observed_phase({"testRuns": [{}, {}]}), "activities-unreadable")
         self.assertEqual(observed_phase(None), "activities-unreadable")
 
+    def test_campaign_tab_reports_only_fixed_actionability_results(self):
+        swift = (ROOT / "BuyerJourneys.swift").read_text()
+        enum = swift.split("private enum CampaignTabFailure", 1)[1].split("\n    }", 1)[0]
+        labels = set(re.findall(r' = "sortex-(campaign-tab-[a-z-]+)"', enum))
+        self.assertEqual(labels, {
+            "campaign-tab-no-hit-point-keyboard-present", "campaign-tab-lost", "campaign-tab-disabled",
+            "campaign-tab-no-hit-point", "campaign-tab-unsettled",
+        })
+        activity = {"title": "sortex-campaign-tab-actionable"}
+        for label in labels:
+            with self.subTest(label=label):
+                observed = {"title": "sortex-" + label, "name": PRIVATE}
+                self.assertEqual(observed_phase({"activities": [
+                    activity | {"childActivities": [observed]},
+                ]}), label)
+                self.assertEqual(observed_phase({"activities": [
+                    activity | {"childActivities": [{"title": "sortex-" + label + " " + PRIVATE}]},
+                ]}), "campaign-tab-actionable")
+        self.assertEqual(observed_phase({"activities": [
+            activity, {"title": "sortex-campaign-tab-initial-selection"},
+        ]}), "campaign-tab-initial-selection")
+
     def test_email_readback_reports_only_declared_fixed_mismatch_classes(self):
         swift = (ROOT / "BuyerJourneys.swift").read_text()
         enum = swift.split("private enum EmailReadbackFailure", 1)[1].split("\n    }", 1)[0]

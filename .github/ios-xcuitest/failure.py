@@ -19,6 +19,8 @@ PHASES = (
     "password", "login",
     "campaign", "campaign-tab",
     "campaign-home-ready", "campaign-tab-discover", "campaign-tab-actionable",
+    "campaign-tab-no-hit-point-keyboard-present", "campaign-tab-lost", "campaign-tab-disabled",
+    "campaign-tab-no-hit-point", "campaign-tab-unsettled", "campaign-tab-initial-selection",
     "campaign-tab-tap", "campaign-tab-selected", "campaign-screen-visible",
     "campaign-list", "campaign-open", "campaign-detail", "campaign-prize",
     "campaign-regulation", "signed-in-relaunch", "logout", "signed-out-relaunch",
