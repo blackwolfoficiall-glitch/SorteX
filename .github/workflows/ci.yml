@@ -38,7 +38,7 @@ jobs:
       - name: Verify the Web route inventory and shared design tokens
         run: |
           node apps/web/qa/inventory-web.mjs --check
-          node --test apps/web/qa/inventory-web.test.mjs apps/web/tests/premium-foundation.test.mjs apps/web/tests/public-instant-prize-bff.test.mjs
+          node --test apps/web/qa/inventory-web.test.mjs apps/web/tests/premium-foundation.test.mjs apps/web/tests/public-instant-prize-bff.test.mjs apps/web/tests/admin-team-list-bff.test.mjs
       - run: npm run lint
         working-directory: apps/web
       - run: npx tsc --noEmit

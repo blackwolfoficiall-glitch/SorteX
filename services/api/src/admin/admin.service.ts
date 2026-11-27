@@ -33,6 +33,10 @@ import {
 } from '../auth/policies/admin-authorization.policy';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  adminTeamInvitationListRow,
+  adminTeamInvitationListSelect,
+} from './admin-team-invitation-list';
+import {
   AdminListDto,
   AdminGatewayDto,
   AdminTeamDto,
@@ -1853,13 +1857,13 @@ export class AdminService {
             in: [AdminInvitationStatus.PENDING, AdminInvitationStatus.EXPIRED],
           },
         },
-        include: { invitedBy: { select: { id: true, name: true } } },
+        select: adminTeamInvitationListSelect,
         orderBy: { createdAt: 'desc' },
       }),
     ]);
     return {
       members,
-      invitations,
+      invitations: invitations.map(adminTeamInvitationListRow),
       summary: {
         total: members.length,
         active: members.filter((member) => member.isActive).length,

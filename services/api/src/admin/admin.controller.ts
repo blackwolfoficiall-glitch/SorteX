@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -139,6 +140,7 @@ export class AdminController {
   }
   @Get('team')
   @AdminPermissions(AdminPermission.USERS_READ)
+  @Header('Cache-Control', 'private, no-store')
   team() {
     return this.admin.team();
   }

@@ -531,6 +531,7 @@ O grafo segue imports estáticos de valor e reexports locais de App Router e com
 
 Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pelo nome. Use os testes como candidatos para a nova rodada por revisão, papel, viewport e estado.
 
+- [tests/admin-team-list-bff.test.mjs](../../apps/web/tests/admin-team-list-bff.test.mjs)
 - [tests/ads-confirmed-sales.test.mjs](../../apps/web/tests/ads-confirmed-sales.test.mjs)
 - [tests/affiliate-login-real.mjs](../../apps/web/tests/affiliate-login-real.mjs)
 - [tests/auth-refresh-http.test.mjs](../../apps/web/tests/auth-refresh-http.test.mjs)
