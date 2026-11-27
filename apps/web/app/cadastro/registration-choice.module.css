@@ -1,0 +1,72 @@
+.registration .choiceTitle {
+  margin-block: .52rem;
+  color: var(--sxp-text);
+  font-family: var(--sxp-font-heading);
+  font-size: .9rem;
+  font-weight: 800;
+}
+
+.registration .choiceGrid { gap: .54rem; }
+
+.registration .choiceCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  min-width: 0;
+  gap: .55rem;
+  padding: clamp(.55rem, 2vw, .86rem);
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  color: var(--sxp-text);
+  background: var(--sxp-bg);
+  transform: none;
+  box-shadow: none;
+}
+
+.registration .choiceCard:hover,
+.registration .choiceCard:focus-visible {
+  border-color: var(--sxp-accent);
+  background: var(--sxp-tint);
+}
+
+.registration .choiceCard h3 {
+  color: var(--sxp-text);
+  font-family: var(--sxp-font-heading);
+  font-size: .91rem;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.registration .choiceCard p {
+  margin-top: .22rem;
+  color: var(--sxp-muted);
+  font-size: .77rem;
+  line-height: 1.38;
+  overflow-wrap: anywhere;
+}
+
+.choiceIcon {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: .65rem;
+  background: var(--sxp-tint);
+  color: var(--sxp-accent);
+}
+
+.registration .choiceCard .arrow { color: var(--sxp-accent); }
+
+.signIn {
+  margin-top: .78rem;
+  color: var(--sxp-muted);
+  font-size: .8rem;
+  text-align: center;
+}
+
+.registration .signIn a {
+  color: var(--sxp-accent);
+  font-weight: 820;
+  text-decoration: underline;
+  text-underline-offset: .16em;
+}

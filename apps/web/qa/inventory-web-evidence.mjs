@@ -115,4 +115,28 @@ export const pageEvidence = [
     source: "apps/web/e2e/admin-overview-premium.spec.ts",
     revision: "cf9f29e",
   },
+  {
+    path: "/comprador/sorteios",
+    detail: "catálogo, preços, capas, filtros e paginação de campanhas públicas; sem reservar ou comprar",
+    source: "apps/web/e2e-local/run-buyer-catalog-premium.mjs",
+    revision: "7871901",
+  },
+  {
+    path: "/comprador/perfil",
+    detail: "perfil por conta, atalhos, temas e recuperação de erro; sem salvar nem encerrar sessão",
+    source: "apps/web/e2e/buyer-profile-premium.spec.ts",
+    revision: "40de454",
+  },
+  {
+    path: "/cadastro",
+    detail: "escolha de perfil e destinos PF/PJ e comprador; não criou contas",
+    source: "apps/web/e2e/registration-choice-premium.spec.ts",
+    revision: "4f38406",
+  },
+  {
+    path: "/escolha",
+    detail: "atalho mantido e testado para mesma escolha, teclado e validação vazia; sem criar conta",
+    source: "apps/web/e2e/registration-choice-premium.spec.ts",
+    revision: "4f38406",
+  },
 ];
