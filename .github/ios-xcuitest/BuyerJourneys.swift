@@ -56,14 +56,33 @@ final class BuyerJourneys: XCTestCase {
             XCTAssertFalse(email.exists, "Login remained visible after sign-in")
         }
 
-        try XCTContext.runActivity(named: "sortex-campaign") { _ in
-            try tab("Campanhas", in: app).tap()
-            XCTAssertTrue(app.staticTexts["Campanha sintetica iOS"].waitForExistence(timeout: 30))
-            let view = app.buttons["Ver campanha"].firstMatch
-            try requireHittable(view, in: app)
-            view.tap()
+        let campaignTab = app.buttons["sortex-buyer-campaigns-tab"]
+        let fixtureCampaign = app.buttons["sortex-buyer-campaign-open-campanha-sintetica-ios"]
+        XCTContext.runActivity(named: "sortex-campaign-tab") { _ in
+            XCTAssertTrue(campaignTab.waitForExistence(timeout: 30), "Buyer campaign tab is absent")
+            XCTAssertTrue(campaignTab.isHittable, "Buyer campaign tab is not actionable")
+            campaignTab.tap()
+        }
+
+        XCTContext.runActivity(named: "sortex-campaign-list") { _ in
+            // The featured Home card shares the title and CTA label. Only the
+            // list reached by the native tab exposes this campaign-specific ID.
+            XCTAssertTrue(fixtureCampaign.waitForExistence(timeout: 30), "Fixture campaign is absent from buyer list")
+            XCTAssertTrue(app.staticTexts["Campanha sintetica iOS"].firstMatch.waitForExistence(timeout: 30))
+        }
+
+        try XCTContext.runActivity(named: "sortex-campaign-open") { _ in
+            try requireHittable(fixtureCampaign, in: app)
+            fixtureCampaign.tap()
+        }
+
+        XCTContext.runActivity(named: "sortex-campaign-detail") { _ in
             XCTAssertTrue(app.staticTexts["Detalhes da campanha"].waitForExistence(timeout: 30))
+        }
+        XCTContext.runActivity(named: "sortex-campaign-prize") { _ in
             XCTAssertTrue(app.staticTexts["Prêmio: Premio sintetico iOS"].waitForExistence(timeout: 30))
+        }
+        XCTContext.runActivity(named: "sortex-campaign-regulation") { _ in
             XCTAssertTrue(app.staticTexts["Regulamento sintetico da campanha iOS."].waitForExistence(timeout: 30))
         }
 

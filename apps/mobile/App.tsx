@@ -510,9 +510,11 @@ function Register({ navigation }: any) {
 function CampaignCard({
   item,
   navigation,
+  detailsTestID,
 }: {
   item: Campaign;
   navigation: any;
+  detailsTestID?: string;
 }) {
   return (
     <View style={s.card}>
@@ -529,6 +531,7 @@ function CampaignCard({
       <Button
         secondary
         title="Ver campanha"
+        testID={detailsTestID}
         onPress={() => navigation.navigate("Campaign", { item })}
       />
     </View>
@@ -592,7 +595,12 @@ function Campaigns({ navigation }: any) {
       {organizer && <Button title="Criar rascunho" onPress={() => navigation.navigate("OrganizerDraft")} />}
       <Load state={state}>
         {items.map((item) => (
-          <CampaignCard key={item.id} item={item} navigation={navigation} />
+          <CampaignCard
+            key={item.id}
+            item={item}
+            navigation={navigation}
+            detailsTestID={!organizer ? `sortex-buyer-campaign-open-${item.slug}` : undefined}
+          />
         ))}
         {!items.length && <Notice message="Nenhuma campanha disponível." />}
         {!Array.isArray(state.data) && state.data && (
@@ -1138,7 +1146,7 @@ function MainTabs() {
       <Tabs.Screen
         name="Campaigns"
         component={Campaigns}
-        options={{ title: "Campanhas" }}
+        options={{ title: "Campanhas", tabBarButtonTestID: "sortex-buyer-campaigns-tab" }}
       />
       <Tabs.Screen
         name="Orders"

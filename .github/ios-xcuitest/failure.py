@@ -11,8 +11,9 @@ sys.dont_write_bytecode = True
 from evidence import TEST
 
 PHASES = (
-    "startup", "email", "password", "login", "campaign",
-    "signed-in-relaunch", "logout", "signed-out-relaunch",
+    "startup", "email", "password", "login", "campaign", "campaign-tab",
+    "campaign-list", "campaign-open", "campaign-detail", "campaign-prize",
+    "campaign-regulation", "signed-in-relaunch", "logout", "signed-out-relaunch",
 )
 CASES = {"Failed": "failed", "Passed": "passed", "Skipped": "skipped",
          "Expected Failure": "expected-failure"}
@@ -20,6 +21,7 @@ HTTP_STATUS = set("unknown not-seen 2xx 400-validation 401-unauthorized 403-forb
                   "429-rate-limited 4xx-other 5xx".split())
 HTTP_INPUT = set("unknown not-seen matches email-mismatch password-mismatch both-mismatch "
                  "missing-email missing-password missing-both".split())
+CAMPAIGN_READ = {"unknown", "not-seen", "2xx", "non-2xx", "mixed"}
 PRELAUNCH_HINTS = (
     ("invalid-destination", r"unable to find a destination matching|ineligible destinations for|no devices matched"),
     ("runner-launch-failed", r"failed to launch (?:the )?test runner|test runner failed to (?:initialize|launch)|"
@@ -138,19 +140,19 @@ def private_fixture_log(log, runner_temp):
 def api_observation(log):
     # This fixture log already contains allowlisted observer events, not request
     # bodies. Reuse its classifier, then independently recheck both output enums.
-    if not log:
-        return "unknown", "unknown"
-    classifier = Path(__file__).resolve().parent.parent / "native-ui/login-failure-status.cjs"
-    code = ("const fs=require('node:fs'); const {apiObservation}=require(process.argv[1]);"
-            "let s=null; try{const f=process.argv[2]; const stat=fs.lstatSync(f); if(stat.isFile()&&stat.size<=1048576)"
-            "s=fs.readFileSync(f,'utf8');}catch{}"
-            "process.stdout.write(JSON.stringify(apiObservation(s)));")
-    obs = json_command(["node", "-e", code, str(classifier), log])
+    obs = None
+    if log:
+        classifier = Path(__file__).resolve().parent / "fixture-read-observation.cjs"
+        obs = json_command(["node", str(classifier), log])
     if not isinstance(obs, dict):
-        return "unknown", "unknown"
-    status, shape = obs.get("status"), obs.get("input")
-    return (status if isinstance(status, str) and status in HTTP_STATUS else "unknown",
-            shape if isinstance(shape, str) and shape in HTTP_INPUT else "unknown")
+        obs = {}
+
+    def safe(key, accepted):
+        value = obs.get(key)
+        return value if isinstance(value, str) and value in accepted else "unknown"
+
+    return (safe("status", HTTP_STATUS), safe("input", HTTP_INPUT),
+            safe("list", CAMPAIGN_READ), safe("detail", CAMPAIGN_READ))
 
 
 def diagnose(bundle, console, api_log):
@@ -166,9 +168,10 @@ def diagnose(bundle, console, api_log):
                                        "--test-id", TEST, "--compact"])
             phase = observed_phase(activities)
     hint = startup_hint(console) if phase not in PHASES else "not-applicable"
-    status, shape = api_observation(api_log)
+    status, shape, campaign_list, campaign_detail = api_observation(api_log)
     return {"xcui-outcome": outcome, "xcui-last-phase": phase, "xcui-launch-hint": hint,
-            "login-api": status, "login-input": shape}
+            "login-api": status, "login-input": shape, "campaign-list-api": campaign_list,
+            "campaign-detail-api": campaign_detail}
 
 
 def main():

@@ -127,7 +127,8 @@ esac
         if fixture_event is None:
             self.log.write_text("")
         else:
-            self.log.write_text(json.dumps(fixture_event) + "\n")
+            events = fixture_event if isinstance(fixture_event, list) else [fixture_event]
+            self.log.write_text("".join(json.dumps(event) + "\n" for event in events))
         cmd = ["bash", "-c", 'python3 -B "$1" "$2" "$3"', "fake-shell",
                str(ROOT / "failure.py"), str(self.result), str(self.console)]
         env = {"PATH": str(bindir) + os.pathsep + os.environ["PATH"],
@@ -153,8 +154,26 @@ esac
         ]}]}, {"event": "sortex-ios-fixture-login-shape", "input": "matches", "status": 200,
                "ignored-unknown-field": PRIVATE})
         self.assertEqual(report, "sha=" + "a" * 40 + "\nxcui-outcome=failed\nxcui-last-phase=login\n"
-                         "xcui-launch-hint=not-applicable\nlogin-api=2xx\nlogin-input=matches\n")
+                         "xcui-launch-hint=not-applicable\nlogin-api=2xx\nlogin-input=matches\n"
+                         "campaign-list-api=not-seen\ncampaign-detail-api=not-seen\n")
         self.assertTrue((self.base / "queried").exists())
+
+    def test_native_campaign_substage_and_only_two_fixed_read_routes(self):
+        activity = {"testRuns": [{"activities": [
+            {"title": "sortex-campaign-tab"}, {"title": "sortex-campaign-list"},
+            {"title": "sortex-campaign-open"}, {"title": "sortex-campaign-detail"},
+            {"title": "sortex-campaign-prize", "failure": PRIVATE},
+        ]}]}
+        report = self.run_fake(cases(expected_case()), activity, [
+            {"method": "GET", "path": "/buyer/campaigns?page=1&limit=15&private=" + PRIVATE, "status": 200},
+            {"method": "GET", "path": "/buyer/campaigns/other", "status": 500},
+            {"method": "GET", "path": "/public/campaigns/campanha-sintetica-ios", "status": 404},
+            {"method": "GET", "path": "/public/campaigns/campanha-sintetica-ios", "status": 200},
+            {"method": "POST", "path": "/buyer/campaigns", "status": 404},
+        ])
+        self.assertIn("xcui-last-phase=campaign-prize\n", report)
+        self.assertIn("campaign-list-api=2xx\n", report)
+        self.assertIn("campaign-detail-api=mixed\n", report)
 
     def test_shell_distinguishes_missing_bundle_from_empty_test_inventory(self):
         self.console.write_text("Failed to launch the test runner " + PRIVATE)

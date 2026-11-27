@@ -1621,15 +1621,9 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
     const run = randomUUID();
     const externalReference = `pay-${run}`;
     const providerPaymentId = `ord-${run}`;
+    const organizerPassword = `synthetic-organizer-${run}`;
     const [organizer, buyer] = await Promise.all([
-      prisma.user.create({
-        data: {
-          name: 'Organizador Sintético',
-          email: `organizer-${run}@example.test`,
-          password: 'unusable-fixture-hash',
-          role: 'ORGANIZER',
-        },
-      }),
+      organizerFixture(`organizer-${run}@example.test`, organizerPassword),
       prisma.user.create({
         data: {
           name: 'Comprador Sintético',
@@ -1692,6 +1686,59 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       },
     });
 
+    const organizerToken = await login(organizer.email, organizerPassword);
+    const ads = await prisma.sortexAdCampaign.create({
+      data: {
+        organizerId: organizer.id,
+        campaignId: campaign.id,
+        name: 'Mídia local sintética de teste',
+        code: `ads-${run}`,
+        status: 'SANDBOX_ACTIVE',
+        objective: 'VISITS',
+        channels: ['INSTAGRAM'],
+        audience: {},
+        location: {},
+        creative: {},
+        budget: '20.00',
+        budgetType: 'TOTAL',
+      },
+    });
+    const report = () =>
+      request(app.getHttpServer() as Server)
+        .get('/sortex-ads/confirmed-sales')
+        .query({ campaignId: campaign.id, period: '30D' })
+        .set('Authorization', `Bearer ${organizerToken}`)
+        .expect('Cache-Control', 'private, no-store')
+        .expect(200);
+    for (const visitor of ['one', 'two'])
+      await request(app.getHttpServer() as Server)
+        .post(`/track/ads/${ads.code}`)
+        .send({
+          type: 'CLICK',
+          channel: 'INSTAGRAM',
+          visitorId: `qa-${visitor}`,
+        })
+        .expect(201);
+    await expect(
+      prisma.sortexAdEvent.count({ where: { adId: ads.id, type: 'CLICK' } }),
+    ).resolves.toBe(2);
+    await expect(
+      prisma.purchase.findUniqueOrThrow({ where: { id: purchase.id } }),
+    ).resolves.toMatchObject({ status: 'AWAITING_PAYMENT', confirmedAt: null });
+    await report().expect(({ body }) => {
+      expect(body).toMatchObject({
+        source: 'SORTEX_CONFIRMED_PURCHASES',
+        totals: {
+          confirmedOrders: 0,
+          buyers: 0,
+          titlesSold: 0,
+          paidOrderValue: '0.00',
+        },
+        daily: [],
+        paidMedia: { status: 'UNAVAILABLE', roas: null },
+      });
+    });
+
     let status = 'processed';
     let detail = 'accredited';
     const order = jest
@@ -1723,12 +1770,36 @@ isolated('Pagamento HTTP + PostgreSQL (provedor não contatado)', () => {
       .expect(({ body }) => {
         expect(body).toMatchObject({ status: 'APPROVED' });
       });
+    const settled = await report();
+    const outcome = {
+      confirmedOrders: 1,
+      buyers: 1,
+      titlesSold: 2,
+      paidOrderValue: '10.00',
+      averageOrderValue: '10.00',
+    };
+    expect(settled.body).toMatchObject({
+      source: 'SORTEX_CONFIRMED_PURCHASES',
+      totals: outcome,
+      daily: [outcome],
+      attribution: {
+        channels: [
+          { origin: 'AFFILIATE', confirmedOrders: 0 },
+          { origin: 'UNKNOWN', ...outcome },
+        ],
+      },
+      paidMedia: { status: 'UNAVAILABLE', roas: null },
+    });
     await webhook('approved')
       .expect(200)
       .expect(({ body }) => {
         expect(body).toMatchObject({ duplicate: true });
       });
     expect(order).toHaveBeenCalledTimes(1);
+    await report().expect(({ body }) => {
+      expect(body).toEqual(settled.body);
+    });
+
     await expect(
       prisma.ledgerEntry.count({
         where: {

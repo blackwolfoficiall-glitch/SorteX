@@ -54,3 +54,9 @@ falha antes de iniciar, e as categorias de login já abstraídas pelo fixture.
 O diagnóstico não confirma que a última atividade tenha terminado, não
 configura uma nova tentativa e não substitui a evidência de sucesso. O log
 local, os dados JSON brutos e o bundle de resultados não são publicados.
+
+A tela Campanhas tem marcos separados para aba, lista, abertura, detalhe,
+prêmio e regulamento. Quando o caso falha, os dois GETs da campanha
+sintética recebem classificações independentes (sem URL, parâmetros,
+contagem, corpo ou status exato). O diagnóstico nunca altera a validação
+do cenário completo nem substitui a consulta no aplicativo.

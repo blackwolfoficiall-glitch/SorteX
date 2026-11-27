@@ -248,13 +248,21 @@ esac
             self.assertIn(ref.get("BlueprintIdentifier"), pbx)
         self.assertIn("com.apple.product-type.bundle.ui-testing", pbx)
         swift = (ROOT / "BuyerJourneys.swift").read_text()
-        for stage in ("startup", "email", "password", "login", "campaign",
+        for stage in ("startup", "email", "password", "login", "campaign-tab", "campaign-list",
+                      "campaign-open", "campaign-detail", "campaign-prize", "campaign-regulation",
                       "signed-in-relaunch", "logout", "signed-out-relaunch"):
             self.assertIn('"sortex-' + stage + '"', swift)
         self.assertIn('secureTextFields["sortex-login-password"]', swift)
         self.assertIn("pass.typeText(password)", swift)
         self.assertNotIn("pass.value", swift)
         self.assertNotIn("launchEnvironment", swift)
+        app = (ROOT.parent.parent / "apps/mobile/App.tsx").read_text()
+        self.assertIn('tabBarButtonTestID: "sortex-buyer-campaigns-tab"', app)
+        self.assertIn('detailsTestID={!organizer ? `sortex-buyer-campaign-open-${item.slug}` : undefined}', app)
+        self.assertIn('app.buttons["sortex-buyer-campaigns-tab"]', swift)
+        self.assertIn('app.buttons["sortex-buyer-campaign-open-campanha-sintetica-ios"]', swift)
+        self.assertNotIn('app.buttons["Ver campanha"]', swift)
+        self.assertIn('app.staticTexts["Regulamento sintetico da campanha iOS."]', swift)
         workflow = (ROOT.parent / "workflows/mobile-native-xcuitest.yml").read_text()
         preflight, full = workflow.split("  buyer-session:", 1)
         self.assertEqual(preflight.count("actions/upload-artifact"), 1)
