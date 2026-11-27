@@ -211,4 +211,22 @@ export const pageEvidence = [
     source: "apps/web/e2e/buyer-notifications-premium.spec.ts",
     revision: "a09a4fd",
   },
+  {
+    path: "/comprador/favoritos",
+    detail: "campanhas públicas favoritas da conta, capas e recuperação; sem marcar nem remover",
+    source: "apps/web/e2e/buyer-favorites-premium.spec.ts",
+    revision: "638c3a2",
+  },
+  {
+    path: "/comprador/resultados",
+    detail: "resultados próprios e privacidade, zeros preservados, simulação identificada e erro; sem apuração",
+    source: "apps/web/e2e-local/run-buyer-results-premium.mjs",
+    revision: "5db9481",
+  },
+  {
+    path: "/admin/campanhas",
+    detail: "lista, contagens, filtros, paginação e papéis; sem abrir detalhes ou executar moderação",
+    source: "apps/web/e2e/admin-campaigns-premium.spec.ts",
+    revision: "da1b44b",
+  },
 ];

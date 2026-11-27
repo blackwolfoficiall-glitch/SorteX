@@ -1,3 +1,41 @@
-import Image from 'next/image';import Link from 'next/link';import {BadgeCheck,CalendarDays} from 'lucide-react';import type { FavoriteCampaignCard } from '../../../../packages/contracts/src/buyer-favorites';
+import Image from "next/image";
+import Link from "next/link";
+import { BadgeCheck, CalendarDays, Ticket } from "lucide-react";
+import type { FavoriteCampaignCard } from "../../../../packages/contracts/src/buyer-favorites";
 import { versionedCoverUrl } from "@/lib/campaigns/cover-revision";
-export default function CampaignCard({campaign}:{campaign:FavoriteCampaignCard}){return <Link href={`/campanha/${campaign.slug}`} className="overflow-hidden rounded-3xl border border-zinc-100 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg"><div className="relative aspect-[16/10] bg-violet-100">{campaign.coverImageUrl?<Image src={versionedCoverUrl(campaign.coverImageUrl, campaign.coverImageRevision)} alt={campaign.title} fill className="object-cover" unoptimized/>:<div className="flex h-full items-center justify-center text-4xl">🎟️</div>}<span className="absolute left-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-black text-violet-700">R$ {campaign.numberPrice.toFixed(2).replace('.',',')}</span></div><div className="p-4"><div className="flex items-center gap-1 text-xs text-zinc-500">{campaign.organizer.name}{campaign.organizer.verified&&<BadgeCheck size={14} className="text-violet-600"/>}</div><h3 className="mt-1 line-clamp-2 text-lg font-black">{campaign.title}</h3><div className="mt-4 h-2 overflow-hidden rounded-full bg-zinc-100"><div className="h-full bg-violet-600" style={{width:`${campaign.soldPercentage}%`}}/></div><div className="mt-2 flex justify-between text-xs text-zinc-500"><span>{campaign.soldPercentage}% vendido</span><span className="flex items-center gap-1"><CalendarDays size={13}/>{campaign.drawDate?new Date(campaign.drawDate).toLocaleDateString('pt-BR'):'A definir'}</span></div></div></Link>}
+import styles from "./favorite-campaign.module.css";
+
+export default function CampaignCard({ campaign }: { campaign: FavoriteCampaignCard }) {
+  return (
+    <Link href={`/campanha/${campaign.slug}`} className={styles.card}>
+      <div className={styles.cover}>
+        {campaign.coverImageUrl ? (
+          <Image
+            src={versionedCoverUrl(campaign.coverImageUrl, campaign.coverImageRevision)}
+            alt={campaign.title}
+            fill
+            className={styles.photo}
+            unoptimized
+          />
+        ) : (
+          <Ticket aria-hidden="true" size={44} />
+        )}
+        <span className={styles.price}>R$ {campaign.numberPrice.toFixed(2).replace(".", ",")}</span>
+      </div>
+      <div className={styles.body}>
+        <div className={styles.organizer}>
+          <span>{campaign.organizer.name}</span>
+          {campaign.organizer.verified && <BadgeCheck size={15} aria-label="Organizador verificado" role="img" />}
+        </div>
+        <h2 className={styles.title}>{campaign.title}</h2>
+        <div className={styles.track} aria-hidden="true">
+          <div className={styles.fill} style={{ width: `${campaign.soldPercentage}%` }} />
+        </div>
+        <div className={styles.metrics}>
+          <span>{campaign.soldPercentage}% vendido</span>
+          <span><CalendarDays size={14} aria-hidden="true" />{campaign.drawDate ? new Date(campaign.drawDate).toLocaleDateString("pt-BR") : "A definir"}</span>
+        </div>
+      </div>
+    </Link>
+  );
+}

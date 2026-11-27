@@ -1,0 +1,87 @@
+html:has(.scope) { scroll-padding-bottom: calc(6.25rem + env(safe-area-inset-bottom, 0px)); }
+.scope { min-height: 100%; }
+.content {
+  width: min(100%, 72rem);
+  margin: 0 auto;
+  padding: clamp(1rem, 4vw, 2.5rem);
+  padding-bottom: calc(6.25rem + env(safe-area-inset-bottom, 0px));
+  overflow-wrap: anywhere;
+}
+.banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: clamp(1rem, 3vw, 1.75rem);
+  background: var(--sxp-surface);
+  border: 1px solid var(--sxp-line);
+  border-radius: 1.5rem;
+  box-shadow: var(--sxp-shadow);
+}
+.banner h1 { margin: .2rem 0; }
+.icon {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 1rem;
+  background: var(--sxp-gradient);
+  color: var(--sxp-white);
+  flex: none;
+}
+.intro { flex: 1 1 14rem; min-width: 0; }
+.eyebrow {
+  color: var(--sxp-accent);
+  font-size: .75rem;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: .09em;
+}
+.description, .status, .empty { color: var(--sxp-muted); }
+.description, .status, .error, .empty { font-size: .875rem; line-height: 1.55; }
+.status, .error, .empty { margin-top: 1rem; border-radius: 1rem; padding: .875rem 1rem; }
+.status, .empty { background: var(--sxp-surface); border: 1px solid var(--sxp-line); }
+.empty { text-align: center; }
+.error { color: var(--sxp-error); border: 1px solid var(--sxp-error); }
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  margin: 1.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+.item {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: .5rem;
+  border-radius: 1.25rem;
+  border: 1px solid var(--sxp-line);
+  background: var(--sxp-surface);
+  box-shadow: var(--sxp-shadow);
+}
+.remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .5rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: .5rem;
+  margin-top: auto;
+  border-radius: .85rem;
+  color: var(--sxp-error);
+  font-size: .875rem;
+  font-weight: 750;
+}
+.remove:not(:disabled):hover { background: var(--sxp-tint); }
+.remove:disabled { cursor: not-allowed; opacity: .65; }
+.refresh { margin-top: 1rem; }
+.remove:focus-visible { outline: 2px solid var(--sxp-focus); outline-offset: 2px; }
+@media (min-width: 36rem) {
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 64rem) {
+  .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

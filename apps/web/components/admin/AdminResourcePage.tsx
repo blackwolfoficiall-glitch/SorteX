@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw, Search, ShieldAlert, UsersRound, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw, Search, ShieldAlert, TicketCheck, UsersRound, X } from 'lucide-react';
 import PremiumScope from '@/components/premium/PremiumScope';
 import { useAuthorizedUser } from '@/components/auth/RoleGate';
 import { hasAdminPermission } from '@/lib/admin/authorization';
@@ -29,12 +29,14 @@ const configs: Record<OperationalMode, Config> = {
   reports: { title: 'Denúncias', subtitle: 'Análise e resolução rastreável', read: 'SUPPORT_WRITE', write: 'SUPPORT_WRITE', search: 'Motivo, descrição ou entidade', status: ['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'DISMISSED'] },
 };
 
-export default function AdminResourcePage({ mode, premiumUsers = false }: { mode: Mode; premiumUsers?: boolean }) {
+export default function AdminResourcePage({ mode, premiumUsers = false, premiumCampaigns = false }: {
+  mode: Mode; premiumUsers?: boolean; premiumCampaigns?: boolean;
+}) {
   if (!(mode in configs)) return <LegacyResource mode={mode} />;
-  return <OperationalResource mode={mode as OperationalMode} premiumUsers={premiumUsers && mode === 'users'} />;
+  return <OperationalResource mode={mode as OperationalMode} premiumList={(premiumUsers && mode === 'users') || (premiumCampaigns && mode === 'campaigns')} />;
 }
 
-function OperationalResource({ mode, premiumUsers }: { mode: OperationalMode; premiumUsers: boolean }) {
+function OperationalResource({ mode, premiumList }: { mode: OperationalMode; premiumList: boolean }) {
   const config = configs[mode];
   const user = useAuthorizedUser();
   const canWrite = Boolean(user && hasAdminPermission(user, config.write));
@@ -51,12 +53,12 @@ function OperationalResource({ mode, premiumUsers }: { mode: OperationalMode; pr
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [userListUnavailable, setUserListUnavailable] = useState(false);
-  const userListRequest = useRef(0);
+  const [listUnavailable, setListUnavailable] = useState(false);
+  const listRequest = useRef(0);
 
   const load = useCallback(async () => {
-    const request = premiumUsers ? ++userListRequest.current : 0;
-    const isCurrent = () => !premiumUsers || request === userListRequest.current;
+    const request = premiumList ? ++listRequest.current : 0;
+    const isCurrent = () => !premiumList || request === listRequest.current;
     setLoading(true);
     setError('');
     try {
@@ -67,26 +69,26 @@ function OperationalResource({ mode, premiumUsers }: { mode: OperationalMode; pr
       if (to) query.set('to', new Date(`${to}T23:59:59`).toISOString());
       const result = await api<PageResult>(`${mode}?${query}`);
       if (!isCurrent()) return;
-      if (premiumUsers) setUserListUnavailable(false);
+      if (premiumList) setListUnavailable(false);
       setRows(result.data ?? []);
       setPages(result.pagination?.pages || 1);
       setTotal(result.pagination?.total || 0);
     } catch (cause) {
       if (!isCurrent()) return;
-      if (premiumUsers) setUserListUnavailable(true);
+      if (premiumList) setListUnavailable(true);
       setError(cause instanceof Error ? cause.message : 'Não foi possível carregar esta área.');
     } finally {
       if (isCurrent()) setLoading(false);
     }
-  }, [from, mode, page, premiumUsers, search, sort, status, to]);
+  }, [from, mode, page, premiumList, search, sort, status, to]);
 
   useEffect(() => {
     const task = window.setTimeout(() => void load(), 0);
     return () => {
       window.clearTimeout(task);
-      if (premiumUsers) userListRequest.current += 1;
+      if (premiumList) listRequest.current += 1;
     };
-  }, [load, premiumUsers]);
+  }, [load, premiumList]);
 
   async function openDetail(row: Row) {
     try {
@@ -124,16 +126,20 @@ function OperationalResource({ mode, premiumUsers }: { mode: OperationalMode; pr
     }
   }
 
-  if (premiumUsers) {
+  if (premiumList) {
+    const campaigns = mode === 'campaigns';
+    const Icon = campaigns ? TicketCheck : UsersRound;
+    const item = campaigns ? 'campanha' : 'usuário';
+    const statuses = campaigns ? campaignStatuses : userStatuses;
     const filtering = Boolean(search.trim() || status || from || to);
-    const statusText = loading ? 'Carregando usuários…'
-      : userListUnavailable ? 'Listagem indisponível.'
-      : `${total.toLocaleString('pt-BR')} ${total === 1 ? 'usuário' : 'usuários'} ${filtering ? 'nos filtros aplicados' : 'no cadastro'}`;
+    const statusText = loading ? `Carregando ${item}s…`
+      : listUnavailable ? 'Listagem indisponível.'
+      : `${total.toLocaleString('pt-BR')} ${total === 1 ? item : `${item}s`} ${filtering ? 'nos filtros aplicados' : 'no cadastro'}`;
     return <>
-      <PremiumScope className="sx-admin-users">
+      <PremiumScope className={campaigns ? "sx-admin-campaigns" : "sx-admin-users"}>
         <main className="sx-au-wrap">
           <header className="sx-premium-ticket sx-au-hero">
-            <UsersRound aria-hidden="true" size={30} />
+            <Icon aria-hidden="true" size={30} />
             <div>
               <p className="sx-au-eyebrow">Administração</p>
               <h1 className="sx-premium-title">{config.title}</h1>
@@ -147,7 +153,7 @@ function OperationalResource({ mode, premiumUsers }: { mode: OperationalMode; pr
             <h2 id="sx-au-filters" className="sx-premium-section">Filtros</h2>
             <div className="sx-au-fields">
               <label className="sx-au-search">
-                <span>Pesquisar usuários</span>
+                <span>Pesquisar {item}s</span>
                 <span className="sx-au-input">
                   <Search aria-hidden="true" size={17} />
                   <input type="search" value={search} aria-describedby="sx-au-search-hint" onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
@@ -157,7 +163,7 @@ function OperationalResource({ mode, premiumUsers }: { mode: OperationalMode; pr
                 <span>Status</span>
                 <select aria-label="Filtrar status" value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }}>
                   <option value="">Todos os status</option>
-                  {config.status?.map((item) => <option key={item} value={item}>{userStatuses[item] ?? item}</option>)}
+                  {config.status?.map((item) => <option key={item} value={item}>{statuses[item] ?? item}</option>)}
                 </select>
               </label>
               <label>
@@ -169,7 +175,7 @@ function OperationalResource({ mode, premiumUsers }: { mode: OperationalMode; pr
               <label><span>Data inicial</span><input type="date" value={from} onChange={(event) => { setFrom(event.target.value); setPage(1); }} /></label>
               <label><span>Data final</span><input type="date" value={to} onChange={(event) => { setTo(event.target.value); setPage(1); }} /></label>
             </div>
-            <p id="sx-au-search-hint" className="sx-premium-muted">Pesquise por nome, e-mail, CPF, CNPJ ou telefone.</p>
+            <p id="sx-au-search-hint" className="sx-premium-muted">{campaigns ? 'Pesquise pelo título da campanha.' : 'Pesquise por nome, e-mail, CPF, CNPJ ou telefone.'}</p>
           </section>
           <section className="sx-au-results" aria-labelledby="sx-au-results">
             <header>
@@ -187,21 +193,30 @@ function OperationalResource({ mode, premiumUsers }: { mode: OperationalMode; pr
               <div aria-hidden="true" className="sx-premium-surface sx-au-state">
                 <LoaderCircle className="sx-au-spinner" size={24} />
               </div>
-            ) : !userListUnavailable && (rows.length ? (
+            ) : !listUnavailable && (rows.length ? (
               <ul className="sx-au-list" role="list">
                 {rows.map((row) => {
-                  const presenter = present('users', row);
-                  const nextAction = primaryAction('users', presenter.status);
+                  const presenter = present(mode, row);
+                  const nextAction = primaryAction(mode, presenter.status);
                   return (
                     <li key={String(row.id)} className="sx-premium-surface sx-au-row">
                       <div className="sx-au-identity">
                         <h3 className="sx-premium-section"><button type="button" className="sx-au-name" onClick={() => void openDetail(row)}>{presenter.title}</button></h3>
-                        {presenter.subtitle && <p className="sx-premium-muted">{presenter.subtitle}</p>}
+                        {presenter.subtitle && <p className="sx-premium-muted">{campaigns ? `Organizador: ${presenter.subtitle}` : presenter.subtitle}</p>}
                       </div>
                       <dl className="sx-au-meta">
-                        <div><dt>Perfil</dt><dd>{userRoles[String(row.role)] ?? String(row.role ?? '—')}</dd></div>
-                        <div><dt>Localidade</dt><dd>{[row.city, row.state].filter(Boolean).join(' / ') || '—'}</dd></div>
-                        <div><dt>Status</dt><dd><span className="sx-premium-badge">{userStatuses[presenter.status] ?? presenter.status}</span></dd></div>
+                        {campaigns ? (
+                          <>
+                            <div><dt>Títulos vendidos</dt><dd>{campaignCount(row.soldNumbers)}</dd></div>
+                            <div><dt>Total de títulos</dt><dd>{campaignCount(row.totalNumbers)}</dd></div>
+                          </>
+                        ) : (
+                          <>
+                            <div><dt>Perfil</dt><dd>{userRoles[String(row.role)] ?? String(row.role ?? '—')}</dd></div>
+                            <div><dt>Localidade</dt><dd>{[row.city, row.state].filter(Boolean).join(' / ') || '—'}</dd></div>
+                          </>
+                        )}
+                        <div><dt>Status</dt><dd><span className="sx-premium-badge">{statuses[presenter.status] ?? presenter.status}</span></dd></div>
                         <div><dt>Cadastro</dt><dd>{formatDate(row.createdAt ?? row.requestedAt)}</dd></div>
                       </dl>
                       <div className="sx-au-actions">
@@ -213,7 +228,7 @@ function OperationalResource({ mode, premiumUsers }: { mode: OperationalMode; pr
                 })}
               </ul>
             ) : <p className="sx-premium-surface sx-au-state">Nenhum registro encontrado para os filtros informados.</p>)}
-            {!loading && !userListUnavailable && pages > 1 && (
+            {!loading && !listUnavailable && pages > 1 && (
               <nav aria-label="Paginação" className="sx-au-pages">
                 <button type="button" disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="sx-premium-button">Anterior</button>
                 <span className="sx-premium-muted">Página {page} de {pages}</span>
@@ -291,6 +306,15 @@ function availableActions(mode: OperationalMode, status: string): string[] {
 }
 function primaryAction(mode: OperationalMode, status: string) { return availableActions(mode, status)[0]; }
 function actionLabel(action: string) { return ({ APPROVE: 'Aprovar', REJECT: 'Rejeitar', REQUEST_CHANGES: 'Solicitar ajustes', PAUSE: 'Pausar', REACTIVATE: 'Reativar', BLOCK_PURCHASES: 'Bloquear compras', UNBLOCK_PURCHASES: 'Liberar compras', ACTIVATE: 'Ativar', SUSPEND: 'Suspender', BLOCK: 'Bloquear', UNBLOCK: 'Desbloquear', REVOKE_SESSIONS: 'Encerrar sessões', REVIEW: 'Marcar para revisão', RESOLVED: 'Resolver', DISMISSED: 'Descartar', DISPUTED: 'Sinalizar disputa', DELIVERED: 'Confirmar entrega', OPEN: 'Reabrir', IN_PROGRESS: 'Iniciar atendimento', WAITING_CUSTOMER: 'Aguardar cliente', CLOSED: 'Fechar' } as Record<string, string>)[action] ?? action; }
+
+const campaignStatuses: Readonly<Record<string, string>> = {
+  DRAFT: 'Rascunho', PENDING_REVIEW: 'Aguardando revisão', PUBLISHED: 'Publicada',
+  PAUSED: 'Pausada', SOLD_OUT: 'Esgotada', DRAWN: 'Sorteada', FINISHED: 'Encerrada', CANCELLED: 'Cancelada',
+};
+
+function campaignCount(value: unknown) {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('pt-BR') : 'Não informado';
+}
 
 const userStatuses: Readonly<Record<string, string>> = {
   ACTIVE: 'Ativo', INACTIVE: 'Inativo', SUSPENDED: 'Suspenso', BLOCKED: 'Bloqueado',
