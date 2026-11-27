@@ -1,5 +1,8 @@
 'use client';
 import { useEffect, useState } from 'react';
+import { FlaskConical, ShieldCheck, Trophy } from 'lucide-react';
+import PremiumScope from '@/components/premium/PremiumScope';
+import styles from './organizer-draw-premium.module.css';
 
 type Mode='organizer'|'winners'|'buyer'|'admin';
 type JsonRecord=Record<string,unknown>;
@@ -42,7 +45,107 @@ export default function DrawWorkspace({mode}:{mode:Mode}){
   </Shell>;
   if(mode==='buyer')return <Shell title="Meus prêmios" subtitle="Acompanhe entregas e confirme o recebimento com segurança."><ItemList items={items}/></Shell>;
   if(mode==='winners')return <Shell title="Ganhadores" subtitle="Contato, entrega, confirmação e material de divulgação."><ItemList items={items}/><div className={card}><h2 className="text-lg font-bold">Prévia vertical 9:16</h2><div className="mx-auto mt-4 aspect-[9/16] max-w-64 rounded-[2rem] bg-gradient-to-b from-violet-950 to-violet-600 p-5 text-white"><div className="flex justify-between text-xs"><span>LOGO ORGANIZADOR</span><b>SorteX</b></div><div className="flex h-full flex-col items-center justify-center text-center"><span className="text-5xl">🏆</span><h3 className="mt-4 text-2xl font-black">Prêmio entregue</h3><p className="mt-2">Verificado pela SorteX</p><div className="mt-8 rounded-xl bg-white/15 p-3 text-xs">QR CODE • código público</div></div></div></div></Shell>;
-  return <Shell title="Motor de sorteios" subtitle="Simule, execute e confirme separadamente, com regra publicada e resultado verificado."><div className={card}><div className="grid gap-4 md:grid-cols-2"><Field label="ID da campanha" value={campaignId} onChange={setCampaignId}/><Field label="ID da extração verificada" value={lotteryDrawId} onChange={setLotteryDrawId}/></div><div className="mt-5 flex flex-wrap gap-3"><Button onClick={()=>action(`campaigns/${campaignId}/draw/simulate`,{lotteryDrawId})}>Simular</Button><Button onClick={()=>action(`campaigns/${campaignId}/draw/execute`,{lotteryDrawId})}>Executar prévia</Button><Button onClick={()=>action(`campaigns/${campaignId}/draw/confirm`)}>Confirmar resultado</Button></div>{message&&<p className="mt-4 rounded-xl bg-violet-50 p-3 text-sm text-violet-800">{message}</p>}</div><RuleSimulator/></Shell>;
+  return (
+    <PremiumScope className={styles.scope}>
+      <section
+        className={styles.content}
+        aria-labelledby="organizer-draw-title"
+      >
+        <header className={styles.banner}>
+          <span className={styles.icon}>
+            <Trophy aria-hidden="true" size={25} />
+          </span>
+          <div>
+            <p className={styles.eyebrow}>Apuração</p>
+            <h1 id="organizer-draw-title" className="sx-premium-title">
+              Motor de sorteios
+            </h1>
+            <p className={styles.muted}>
+              Simule, execute e confirme separadamente, com regra publicada e
+              resultado verificado.
+            </p>
+          </div>
+        </header>
+        <section
+          className={styles.surface}
+          aria-labelledby="organizer-draw-operation-title"
+        >
+          <h2
+            id="organizer-draw-operation-title"
+            className={styles.sectionTitle}
+          >
+            <ShieldCheck aria-hidden="true" size={21} /> Apuração da campanha
+          </h2>
+          <div className={styles.fields}>
+            <OrganizerDrawField
+              label="ID da campanha"
+              value={campaignId}
+              onChange={setCampaignId}
+            />
+            <OrganizerDrawField
+              label="ID da extração verificada"
+              value={lotteryDrawId}
+              onChange={setLotteryDrawId}
+            />
+          </div>
+          <div className={styles.actions}>
+            <button
+              className="sx-premium-button"
+              data-variant="primary"
+              type="button"
+              onClick={() =>
+                action(`campaigns/${campaignId}/draw/simulate`, {
+                  lotteryDrawId,
+                })
+              }
+            >
+              Simular
+            </button>
+            <button
+              className="sx-premium-button"
+              type="button"
+              onClick={() =>
+                action(`campaigns/${campaignId}/draw/execute`, {
+                  lotteryDrawId,
+                })
+              }
+            >
+              Executar prévia
+            </button>
+            <button
+              className="sx-premium-button"
+              type="button"
+              onClick={() => action(`campaigns/${campaignId}/draw/confirm`)}
+            >
+              Confirmar resultado
+            </button>
+          </div>
+          {message && (
+            <p role="status" className={styles.message}>
+              {message}
+            </p>
+          )}
+        </section>
+        <RuleSimulator />
+      </section>
+    </PremiumScope>
+  );
+}
+function OrganizerDrawField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <label className={styles.field}>
+      {label}
+      <input value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
 }
 function Shell({title,subtitle,children}:{title:string;subtitle:string;children:React.ReactNode}){return <main className="min-h-screen bg-slate-50 p-4 md:p-8"><div className="mx-auto max-w-6xl"><span className="text-sm font-bold uppercase tracking-widest text-violet-600">SorteX • Módulo 6</span><h1 className="mt-2 text-3xl font-black text-slate-950">{title}</h1><p className="mt-2 text-slate-600">{subtitle}</p><div className="mt-8 grid gap-6">{children}</div></div></main>}
 function Field({label,value,onChange}:{label:string;value:string;onChange:(v:string)=>void}){return <label className="grid gap-2 text-sm font-semibold text-slate-700">{label}<input className="rounded-xl border border-slate-200 p-3 font-normal" value={value} onChange={e=>onChange(e.target.value)}/></label>}
@@ -95,4 +198,24 @@ function CaixaImportForm({onSubmit}:{onSubmit:(extractionNumber:string)=>Promise
     <button type="submit" disabled={busy} className="mt-4 rounded-xl bg-violet-700 px-5 py-3 text-sm font-bold text-white transition hover:bg-violet-800 disabled:opacity-60">{busy?'Consultando a CAIXA...':'Importar para revisão'}</button>
   </form>;
 }
-function RuleSimulator(){const [result,setResult]=useState<JsonRecord|null>(null);async function simulate(){const steps=[1,2,3,4,5].map((sourcePrize,order)=>({order:order+1,sourcePrize,digitPosition:'UNIT',direction:'NORMAL'}));const response=await fetch('/api/draws/draw-rules/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ruleDefinition:{version:1,outputLength:5,steps,normalization:{mode:'MODULO_TOTAL_NUMBERS'}},prizes:['12345','54321','00009','90807','11111'],totalNumbers:100000})});setResult(await response.json());}return <div className={card}><h2 className="text-lg font-bold">Simulador visual</h2><p className="mt-1 text-sm text-slate-500">Usa dados fictícios e nunca cria ganhador.</p><div className="mt-4"><Button onClick={simulate}>Executar simulação segura</Button></div>{result&&<pre className="mt-4 overflow-auto rounded-xl bg-slate-950 p-4 text-xs text-emerald-300">{JSON.stringify(result,null,2)}</pre>}</div>}
+function RuleSimulator(){const [result,setResult]=useState<JsonRecord|null>(null);async function simulate(){const steps=[1,2,3,4,5].map((sourcePrize,order)=>({order:order+1,sourcePrize,digitPosition:'UNIT',direction:'NORMAL'}));const response=await fetch('/api/draws/draw-rules/simulate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ruleDefinition:{version:1,outputLength:5,steps,normalization:{mode:'MODULO_TOTAL_NUMBERS'}},prizes:['12345','54321','00009','90807','11111'],totalNumbers:100000})});setResult(await response.json());}
+  return (
+    <section
+      className={styles.surface}
+      aria-labelledby="organizer-draw-simulator-title"
+    >
+      <h2 id="organizer-draw-simulator-title" className={styles.sectionTitle}>
+        <FlaskConical aria-hidden="true" size={21} /> Simulador visual
+      </h2>
+      <p className={styles.muted}>Usa dados fictícios e nunca cria ganhador.</p>
+      <div className={styles.actions}>
+        <button type="button" className="sx-premium-button" onClick={simulate}>
+          Executar simulação segura
+        </button>
+      </div>
+      {result && (
+        <pre className={styles.result}>{JSON.stringify(result, null, 2)}</pre>
+      )}
+    </section>
+  );
+}

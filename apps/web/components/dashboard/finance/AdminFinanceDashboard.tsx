@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   BadgeDollarSign,
   Building2,
@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
+import PremiumScope from '@/components/premium/PremiumScope';
 import { useAuthorizedUser } from '@/components/auth/RoleGate';
 import { hasAdminPermission } from '@/lib/admin/authorization';
 
@@ -18,9 +19,9 @@ type Tab = 'payouts' | 'ledger' | 'accounts' | 'adjustments' | 'subscriptions' |
 type Row = Record<string, unknown> & { id?: string };
 type PageResult = { data: Row[]; pagination: { page: number; pages: number; total: number } };
 type Overview = {
-  platform?: { lifetimeNetRevenue: number };
-  organizers?: { lifetimeGrossRevenue: number; availableBalance: number };
-  pendingPayouts: number;
+  platform?: { lifetimeNetRevenue: number | string | null };
+  organizers?: { lifetimeGrossRevenue: number | string | null; availableBalance: number | string | null };
+  pendingPayouts: number | null;
 };
 
 const tabs: Array<{ id: Tab; label: string }> = [
@@ -31,9 +32,25 @@ const tabs: Array<{ id: Tab; label: string }> = [
   { id: 'subscriptions', label: 'Assinaturas e planos' },
   { id: 'reconciliation', label: 'Conciliação' },
 ];
-const card = 'rounded-3xl border border-slate-200 bg-white p-5 shadow-sm';
-const money = (value: unknown = 0) =>
-  Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const unavailable = 'Não informado';
+const ledgerFeeLabels: Readonly<Record<string, string>> = {
+  PLATFORM_FEE: 'Taxa da plataforma (lançamento interno)',
+  GATEWAY_FEE: 'Taxa do gateway (lançamento interno)',
+  MONTHLY_PLAN_FEE: 'Mensalidade do plano (lançamento interno)',
+};
+function amount(value: unknown, currency?: unknown) {
+  if (typeof value !== 'number' && (typeof value !== 'string' || !/^-?\d+(?:\.\d+)?$/.test(value))) return unavailable;
+  const n = Number(value);
+  // The API serializes financial aggregates as numbers. Beyond this threshold a cent is not reliably representable.
+  if (!Number.isFinite(n) || Math.abs(n) >= 2 ** 46) return unavailable;
+  const digits = { minimumFractionDigits: 2, maximumFractionDigits: 2 };
+  return typeof currency === 'string' && /^[A-Z]{3}$/.test(currency)
+    ? n.toLocaleString('pt-BR', { ...digits, style: 'currency', currency })
+    : n.toLocaleString('pt-BR', digits);
+}
+function count(value: unknown) {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('pt-BR') : unavailable;
+}
 const date = (value: unknown) => value ? new Date(String(value)).toLocaleString('pt-BR') : '—';
 const text = (value: unknown) => value == null || value === '' ? '—' : String(value);
 
@@ -53,9 +70,13 @@ export default function AdminFinanceDashboard() {
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadedTab, setLoadedTab] = useState<Tab | null>(null);
+  const listRequest = useRef(0);
   const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
+    const request = ++listRequest.current;
     setLoading(true);
     setError('');
     try {
@@ -69,7 +90,10 @@ export default function AdminFinanceDashboard() {
         api<Overview>('overview'),
         api<PageResult | Row>(`${tab}?${query}`),
       ]);
+      if (request !== listRequest.current) return;
+      setLoadedTab(tab);
       setOverview(summary);
+      setLoadFailed(false);
       if (tab === 'reconciliation') {
         setReconciliation(result as Row);
         setRows([]);
@@ -80,15 +104,21 @@ export default function AdminFinanceDashboard() {
         setPages(paged.pagination?.pages || 1);
       }
     } catch (reason) {
+      if (request !== listRequest.current) return;
+      setLoadedTab(tab);
+      setLoadFailed(true);
       setError(reason instanceof Error ? reason.message : 'Não foi possível carregar o financeiro.');
     } finally {
-      setLoading(false);
+      if (request === listRequest.current) setLoading(false);
     }
   }, [page, search, sort, status, tab]);
 
   useEffect(() => {
     const task = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(task);
+    return () => {
+      window.clearTimeout(task);
+      listRequest.current += 1;
+    };
   }, [load]);
 
   function changeTab(next: Tab) {
@@ -153,104 +183,116 @@ export default function AdminFinanceDashboard() {
     URL.revokeObjectURL(url);
   }
 
-  return (
-    <main className="min-h-screen bg-slate-50 p-4 md:p-8">
-      <div className="mx-auto max-w-7xl">
-        <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">Administração SorteX</p>
-        <h1 className="mt-2 text-3xl font-black">Controle financeiro</h1>
-        <p className="mt-1 text-slate-500">Repasses, saldos, assinaturas e conciliação com trilha de auditoria.</p>
+  const updating = loading || loadedTab !== tab;
+  return <>
+    <PremiumScope className="sx-admin-finance">
+      <main className="sx-af-wrap">
+        <header className="sx-premium-ticket sx-af-hero">
+          <CircleDollarSign size={30} aria-hidden="true" />
+          <div>
+            <p className="sx-af-eyebrow">Administração SorteX</p>
+            <h1 className="sx-premium-title">Controle financeiro</h1>
+            <p>Consulte repasses, contas, assinaturas e conciliação interna.</p>
+          </div>
+        </header>
         {error && <Feedback tone="error" message={error} action={load} />}
         {notice && <Feedback tone="success" message={notice} />}
-
-        <div className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Kpi icon={CircleDollarSign} label="Receita SorteX" value={money(overview?.platform?.lifetimeNetRevenue)} />
-          <Kpi icon={BadgeDollarSign} label="GMV organizadores" value={money(overview?.organizers?.lifetimeGrossRevenue)} />
-          <Kpi icon={Building2} label="Saldo disponível" value={money(overview?.organizers?.availableBalance)} />
-          <Kpi icon={ShieldCheck} label="Repasses pendentes" value={String(overview?.pendingPayouts ?? 0)} />
-        </div>
-
-        <div className="mt-6 flex gap-2 overflow-x-auto pb-2" role="tablist" aria-label="Áreas financeiras">
+        <section className="sx-af-summary" aria-labelledby="sx-af-summary">
+          <h2 className="sx-premium-section" id="sx-af-summary">Resumo financeiro</h2>
+          <p className="sx-premium-muted">Os saldos são internos e não comprovam repasse ou saque. Os totais dos organizadores não são separados nem convertidos por moeda.</p>
+          {updating ? <p role="status" className="sx-premium-muted">Carregando indicadores financeiros…</p> : loadFailed ? (
+            <p role="status" className="sx-premium-muted">Resumo financeiro indisponível.</p>
+          ) : (
+            <dl className="sx-af-kpis">
+              <Kpi icon={CircleDollarSign} label="Receita líquida acumulada da SorteX" value={amount(overview?.platform?.lifetimeNetRevenue, 'BRL')} hint="Conta interna da plataforma em BRL." />
+              <Kpi icon={BadgeDollarSign} label="Volume bruto acumulado dos organizadores" value={amount(overview?.organizers?.lifetimeGrossRevenue)} hint="Total do sistema sem separação por moeda." />
+              <Kpi icon={Building2} label="Saldo interno disponível dos organizadores" value={amount(overview?.organizers?.availableBalance)} hint="Total do sistema sem separação por moeda." />
+              <Kpi icon={ShieldCheck} label="Solicitações de repasse pendentes" value={count(overview?.pendingPayouts)} hint="Solicitadas ou em análise. Não representa valor pago." />
+            </dl>
+          )}
+        </section>
+        <div className="sx-af-tabs" role="tablist" aria-label="Áreas financeiras">
           {tabs.map((item) => (
-            <button key={item.id} role="tab" aria-selected={tab === item.id} onClick={() => changeTab(item.id)}
-              className={`shrink-0 rounded-xl px-4 py-2 text-sm font-semibold ${tab === item.id ? 'bg-violet-700 text-white' : 'border bg-white text-slate-600'}`}>
-              {item.label}
-            </button>
+            <button key={item.id} type="button" role="tab" id={`sx-af-tab-${item.id}`} aria-controls="sx-af-panel" aria-selected={tab === item.id}
+              onClick={() => changeTab(item.id)} className="sx-premium-button">{item.label}</button>
           ))}
         </div>
 
-        <section className={`${card} mt-3`}>
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <h2 className="text-lg font-black">{tabs.find((item) => item.id === tab)?.label}</h2>
-            <div className="flex flex-col gap-2 sm:flex-row">
+        <section id="sx-af-panel" role="tabpanel" aria-labelledby={`sx-af-tab-${tab}`} className="sx-premium-surface sx-af-panel">
+          <header className="sx-af-toolbar">
+            <h2 className="sx-premium-section">{tabs.find((item) => item.id === tab)?.label}</h2>
+            <div className="sx-af-filters">
               {tab !== 'reconciliation' && (
                 <>
-                  <label className="relative">
+                  <label className="sx-af-search">
                     <span className="sr-only">Pesquisar</span>
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                    <input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }}
-                      placeholder="Pesquisar" className="w-full rounded-xl border py-2 pl-9 pr-3 text-sm sm:w-56" />
+                    <Search aria-hidden="true" size={17} />
+                    <input type="search" value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Pesquisar" />
                   </label>
                   {(tab === 'payouts' || tab === 'accounts' || tab === 'subscriptions') && (
                     <input value={status} onChange={(event) => { setStatus(event.target.value.toUpperCase()); setPage(1); }}
-                      placeholder="Filtrar status" aria-label="Filtrar status" className="rounded-xl border px-3 py-2 text-sm" />
+                      placeholder="Filtrar status" aria-label="Filtrar status" />
                   )}
-                  <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Ordenar"
-                    className="rounded-xl border px-3 py-2 text-sm">
+                  <select value={sort} onChange={(event) => setSort(event.target.value)} aria-label="Ordenar">
                     <option value="recent">Mais recentes</option><option value="oldest">Mais antigos</option>
                     {(tab === 'ledger' || tab === 'adjustments') && <><option value="amount_desc">Maior valor</option><option value="amount_asc">Menor valor</option></>}
                   </select>
                 </>
               )}
-              {canWrite && tab === 'adjustments' && <button onClick={createAdjustment} className="rounded-xl bg-violet-700 px-4 py-2 text-sm font-bold text-white">Novo ajuste</button>}
-              {['payouts', 'ledger', 'adjustments'].includes(tab) && <button onClick={exportCsv} className="flex items-center justify-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold"><Download className="h-4 w-4" /> Exportar</button>}
+              {canWrite && tab === 'adjustments' && <button type="button" onClick={createAdjustment} className="sx-premium-button" data-variant="primary">Novo ajuste</button>}
+              {['payouts', 'ledger', 'adjustments'].includes(tab) && <button type="button" onClick={exportCsv} className="sx-premium-button"><Download size={17} aria-hidden="true" /> Exportar</button>}
             </div>
-          </div>
+          </header>
 
-          {loading ? <Loading /> : tab === 'reconciliation' ? <Reconciliation data={reconciliation} /> :
+          {updating ? <Loading /> : loadFailed ? (
+            <p className="sx-af-empty sx-premium-muted">Não foi possível consultar esta área.</p>
+          ) : tab === 'reconciliation' ? <Reconciliation data={reconciliation} /> :
             rows.length ? <FinanceTable tab={tab} rows={rows} canReview={canReview} canWrite={canWrite} openDetail={openDetail} mutate={mutate} /> :
-              <p className="py-14 text-center text-slate-500">Nenhum registro encontrado para os filtros informados.</p>}
-
-          {!loading && tab !== 'reconciliation' && pages > 1 && (
-            <div className="mt-4 flex items-center justify-end gap-3">
-              <button disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="rounded-lg border px-3 py-2 disabled:opacity-40">Anterior</button>
-              <span className="text-sm">Página {page} de {pages}</span>
-              <button disabled={page === pages} onClick={() => setPage((value) => value + 1)} className="rounded-lg border px-3 py-2 disabled:opacity-40">Próxima</button>
-            </div>
+              <p className="sx-af-empty sx-premium-muted">Nenhum registro encontrado para os filtros informados.</p>}
+          {!updating && !loadFailed && tab !== 'reconciliation' && pages > 1 && (
+            <nav aria-label="Paginação" className="sx-af-pages">
+              <button type="button" disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="sx-premium-button">Anterior</button>
+              <span className="sx-premium-muted">Página {page} de {pages}</span>
+              <button type="button" disabled={page === pages} onClick={() => setPage((value) => value + 1)} className="sx-premium-button">Próxima</button>
+            </nav>
           )}
         </section>
-      </div>
-      {detail && <DetailPanel data={detail} close={() => setDetail(null)} />}
-    </main>
-  );
+      </main>
+    </PremiumScope>
+    {detail && <DetailPanel data={detail} close={() => setDetail(null)} />}
+  </>;
 }
 
 function FinanceTable({ tab, rows, canReview, canWrite, openDetail, mutate }: {
   tab: Tab; rows: Row[]; canReview: boolean; canWrite: boolean;
   openDetail: (row: Row) => void; mutate: (path: string, label: string) => Promise<void>;
 }) {
-  return <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm">
-    <thead className="text-slate-500"><tr><th className="py-3">Registro</th><th>Responsável</th><th>Valor / plano</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead>
-    <tbody>{rows.map((row, index) => {
-      const organizer = row.organizer as Row | undefined;
-      const account = row.account as Row | undefined;
-      const plan = row.selectedPlan as Row | undefined;
-      const status = text(row.status);
-      return <tr key={String(row.id ?? index)} className="border-t">
-        <td className="py-4"><button onClick={() => openDetail(row)} className="font-bold text-violet-700 hover:underline">{text(row.reference ?? row.reason ?? row.id)}</button><br /><span className="text-xs text-slate-500">{text(row.type ?? row.direction)}</span></td>
-        <td>{text(organizer?.name ?? account?.ownerId ?? row.ownerId ?? (row.createdBy as Row | undefined)?.name)}</td>
-        <td className="font-semibold">{row.amount != null ? money(row.amount) : text(plan?.name ?? row.plan ?? row.currency)}</td>
-        <td>{status}</td><td>{date(row.requestedAt ?? row.createdAt ?? row.startedAt)}</td>
-        <td><div className="flex gap-2">
-          <button onClick={() => openDetail(row)} className="rounded-lg border px-3 py-2 text-xs font-bold">Detalhes</button>
-          {tab === 'payouts' && canReview && status === 'REQUESTED' && <>
-            <button onClick={() => mutate(`payouts/${row.id}/approve`, 'Justificativa da aprovação:')} className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white">Aprovar</button>
-            <button onClick={() => mutate(`payouts/${row.id}/reject`, 'Motivo da rejeição:')} className="rounded-lg bg-red-600 px-3 py-2 text-xs font-bold text-white">Rejeitar</button>
-          </>}
-          {tab === 'accounts' && canWrite && <button onClick={() => mutate(`accounts/${row.id}/${status === 'BLOCKED' ? 'unblock' : 'block'}`, `Motivo para ${status === 'BLOCKED' ? 'desbloquear' : 'bloquear'} a conta:`)} className="rounded-lg bg-slate-800 px-3 py-2 text-xs font-bold text-white">{status === 'BLOCKED' ? 'Desbloquear' : 'Bloquear'}</button>}
-        </div></td>
-      </tr>;
-    })}</tbody>
-  </table></div>;
+  return <ul className="sx-af-table" role="list">{rows.map((row, index) => {
+    const organizer = row.organizer as Row | undefined;
+    const account = row.account as Row | undefined;
+    const plan = row.selectedPlan as Row | undefined;
+    const status = text(row.status);
+    return <li key={String(row.id ?? index)} className="sx-premium-surface sx-af-row">
+      <div className="sx-af-item">
+        <button type="button" onClick={() => openDetail(row)} className="sx-af-record">{text(row.reference ?? row.reason ?? row.id)}</button>
+        <p className="sx-premium-muted">{ledgerFeeLabels[String(row.type)] ?? text(row.type ?? row.direction)}</p>
+      </div>
+      <dl className="sx-af-data">
+        <div><dt>Responsável</dt><dd>{text(organizer?.name ?? account?.ownerId ?? row.ownerId ?? (row.createdBy as Row | undefined)?.name)}</dd></div>
+        <div><dt>Valor / plano</dt><dd>{row.amount != null ? amount(row.amount, row.currency ?? account?.currency) : text(plan?.name ?? row.plan ?? row.currency)}</dd></div>
+        <div><dt>Status</dt><dd><span className="sx-premium-badge">{status}</span></dd></div>
+        <div><dt>Data</dt><dd>{date(row.requestedAt ?? row.createdAt ?? row.startedAt)}</dd></div>
+      </dl>
+      <div className="sx-af-actions">
+        <button type="button" onClick={() => openDetail(row)} className="sx-premium-button">Detalhes</button>
+        {tab === 'payouts' && canReview && status === 'REQUESTED' && <>
+          <button type="button" onClick={() => mutate(`payouts/${row.id}/approve`, 'Justificativa da aprovação:')} className="sx-premium-button">Aprovar</button>
+          <button type="button" onClick={() => mutate(`payouts/${row.id}/reject`, 'Motivo da rejeição:')} className="sx-premium-button">Rejeitar</button>
+        </>}
+        {tab === 'accounts' && canWrite && <button type="button" onClick={() => mutate(`accounts/${row.id}/${status === 'BLOCKED' ? 'unblock' : 'block'}`, `Motivo para ${status === 'BLOCKED' ? 'desbloquear' : 'bloquear'} a conta:`)} className="sx-premium-button">{status === 'BLOCKED' ? 'Desbloquear' : 'Bloquear'}</button>}
+      </div>
+    </li>;
+  })}</ul>;
 }
 
 function DetailPanel({ data, close }: { data: Row; close: () => void }) {
@@ -266,21 +308,37 @@ function DetailPanel({ data, close }: { data: Row; close: () => void }) {
 }
 
 function Reconciliation({ data }: { data: Row | null }) {
-  if (!data) return null;
-  return <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-    <Kpi icon={CircleDollarSign} label="Pagamentos aprovados" value={money(data.paymentTotal)} />
-    <Kpi icon={BadgeDollarSign} label="Lançamentos brutos" value={money(data.ledgerTotal)} />
-    <Kpi icon={Building2} label="Diferença" value={money(data.difference)} />
-    <Kpi icon={ShieldCheck} label="Situação" value={data.balanced ? 'Conciliado' : 'Divergência encontrada'} />
+  if (!data) return <p className="sx-af-empty sx-premium-muted">Conciliação interna indisponível.</p>;
+  return <div className="sx-af-reconcile">
+    <p className="sx-premium-muted">Comparação entre pagamentos aprovados e lançamentos brutos concluídos na SorteX, sem separação por moeda. Não confirma liquidação no provedor.</p>
+    <dl className="sx-af-kpis">
+      <Kpi icon={CircleDollarSign} label="Pagamentos aprovados" value={amount(data.paymentTotal)} />
+      <Kpi icon={BadgeDollarSign} label="Lançamentos brutos concluídos" value={amount(data.ledgerTotal)} />
+      <Kpi icon={Building2} label="Diferença interna" value={amount(data.difference)} />
+      <Kpi icon={ShieldCheck} label="Conciliação interna" value={data.balanced === true ? 'Totais internos iguais' : data.balanced === false ? 'Divergência encontrada' : unavailable} />
+    </dl>
   </div>;
 }
-function Kpi({ icon: Icon, label, value }: { icon: typeof CircleDollarSign; label: string; value: string }) {
-  return <div className={card}><Icon className="text-violet-600" /><p className="mt-5 text-sm text-slate-500">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></div>;
+
+function Kpi({ icon: Icon, label, value, hint }: { icon: typeof CircleDollarSign; label: string; value: string; hint?: string }) {
+  return <div className="sx-premium-surface sx-af-kpi">
+    <Icon aria-hidden="true" size={20} />
+    <dt className="sx-premium-muted">{label}</dt>
+    <dd>{value}{hint && <span className="sx-premium-muted">{hint}</span>}</dd>
+  </div>;
 }
-function Loading() { return <div className="grid min-h-56 place-items-center"><LoaderCircle aria-label="Carregando" className="animate-spin text-violet-700" /></div>; }
+
+function Loading() {
+  return <div role="status" className="sx-af-empty sx-premium-muted"><LoaderCircle className="sx-af-spinner" aria-hidden="true" /> Carregando registros…</div>;
+}
+
 function Feedback({ tone, message, action }: { tone: 'error' | 'success'; message: string; action?: () => void }) {
-  return <div role={tone === 'error' ? 'alert' : 'status'} className={`mt-4 flex items-center justify-between rounded-xl p-3 ${tone === 'error' ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}><span>{message}</span>{action && <button onClick={action} className="font-bold underline">Tentar novamente</button>}</div>;
+  return <div className={`sx-premium-surface sx-af-feedback sx-af-${tone}`}>
+    <span role={tone === 'error' ? 'alert' : 'status'}>{message}</span>
+    {action && <button type="button" onClick={action} className="sx-premium-button">Tentar novamente</button>}
+  </div>;
 }
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/admin/finance/${path}`, { ...init, headers: init?.body ? { 'Content-Type': 'application/json', ...init.headers } : init?.headers });
   const payload = await response.json().catch(() => ({}));

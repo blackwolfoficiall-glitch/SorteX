@@ -247,4 +247,22 @@ export const pageEvidence = [
     source: "apps/web/e2e/admin-payments-premium.spec.ts",
     revision: "6b0c62b",
   },
+  {
+    path: "/",
+    detail: "somente topo público e seus atalhos, temas, foco e metadados; restantes da página preservados",
+    source: "apps/web/e2e-local/run-public-home-hero-premium.mjs",
+    revision: "e25ef37",
+  },
+  {
+    path: "/dashboard/sorteios",
+    detail: "interface de apuração do organizador e acesso; resultado fictício verificado via GET separado, sem importar ou apurar",
+    source: "apps/web/e2e/organizer-apuracao-premium.spec.ts",
+    revision: "4532bfc",
+  },
+  {
+    path: "/admin/financeiro",
+    detail: "visão geral, seis abas consultadas, distinção de moeda e saldo interno, restrições de perfil; sem repasse ou ações",
+    source: "apps/web/e2e/admin-finance-premium.spec.ts",
+    revision: "87b13b2",
+  },
 ];
