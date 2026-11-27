@@ -258,8 +258,12 @@ esac
         workflow = (ROOT.parent / "workflows/mobile-native-xcuitest.yml").read_text()
         preflight, full = workflow.split("  buyer-session:", 1)
         self.assertEqual(preflight.count("actions/upload-artifact"), 1)
-        self.assertEqual(full.count("actions/upload-artifact"), 1)
+        self.assertEqual(full.count("actions/upload-artifact"), 2)
         self.assertIn("/sortex-xcuitest-summary.txt", full)
+        self.assertIn("/sortex-xcuitest-failure.txt", full)
+        self.assertIn("steps.xctest-run.outcome == 'failure'", full)
+        self.assertIn('python3 "$base/failure.py" "$result" "$temp/test.log" >/dev/null 2>&1 || true',
+                      (ROOT / "run.sh").read_text())
         self.assertIn("run_full=false", preflight)
         self.assertIn("needs: driver-preflight", full)
         self.assertIn("needs.driver-preflight.outputs.run_full == 'true'", full)

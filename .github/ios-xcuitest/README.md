@@ -46,3 +46,11 @@ node --test .github/native-ui/fixture-guards.test.cjs .github/native-ui/startup-
 ```
 
 Referências: [XCUIApplication por bundle](https://developer.apple.com/documentation/xcuiautomation/xcuiapplication/init%28bundleidentifier%3A%29), [Xcode e resultados de testes](https://help.apple.com/xcode/mac/current/en.lproj/devc38fc7392.html), [manual xctestrun do Xcode](https://keith.github.io/xcode-man-pages/xcodebuild.xctestrun.5.html).
+
+Se o Xcode falhar durante a execução, o coletor usa o inventário e as
+atividades daquele único caso por `xcresulttool`. Guarda somente categorias
+fixas para resultado, última atividade reconhecida, eventual indício de
+falha antes de iniciar, e as categorias de login já abstraídas pelo fixture.
+O diagnóstico não confirma que a última atividade tenha terminado, não
+configura uma nova tentativa e não substitui a evidência de sucesso. O log
+local, os dados JSON brutos e o bundle de resultados não são publicados.

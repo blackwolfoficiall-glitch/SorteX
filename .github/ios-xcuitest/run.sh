@@ -73,7 +73,12 @@ unset password
 
 result="$temp/Test.xcresult"
 xcrun xcodebuild -xctestrun "$spec" -destination "$dest" -parallel-testing-enabled NO \
-  -resultBundlePath "$result" test-without-building >"$temp/test.log" 2>&1 || refuse ui-steps
+  -resultBundlePath "$result" test-without-building >"$temp/test.log" 2>&1 || {
+  # Best-effort only, in the existing private temp directory. Diagnostic
+  # behavior can never turn a failed XCTest invocation into an accepted run.
+  python3 "$base/failure.py" "$result" "$temp/test.log" >/dev/null 2>&1 || true
+  refuse ui-steps
+}
 xcrun xcresulttool get test-results tests --path "$result" 2>"$temp/result-errors.log" |
   python3 "$base/evidence.py" verify || refuse result-guard
 checkpoint signed-out-relaunch-verified

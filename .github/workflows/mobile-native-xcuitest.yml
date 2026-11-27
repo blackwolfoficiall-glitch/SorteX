@@ -21,7 +21,7 @@ jobs:
           persist-credentials: false
       - name: Validar os formatos e a ausência de segredos
         shell: bash
-        run: python3 .github/ios-xcuitest/evidence_test.py
+        run: python3 -B -m unittest discover -s .github/ios-xcuitest -p '*_test.py'
       - name: Selecionar iPhone virtual sem inicializar
         shell: bash
         run: |
@@ -108,6 +108,7 @@ jobs:
           xcrun simctl bootstatus "$simulator_id" -b
           echo "SORTEX_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
       - name: Verificar Release, jornada nativa e revogação no PostgreSQL
+        id: xctest-run
         shell: bash
         run: bash .github/ios-xcuitest/finish.sh
       - name: Reter apenas o resumo sanitizado do cenário aprovado
@@ -116,4 +117,12 @@ jobs:
           name: sortex-ios-xcuitest-${{ github.sha }}
           path: ${{ runner.temp }}/sortex-xcuitest-summary.txt
           if-no-files-found: error
+          retention-days: 1
+      - name: Reter apenas a classificação sanitizada se o XCUITest falhar
+        if: ${{ failure() && !cancelled() && steps.xctest-run.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sortex-ios-xcuitest-failure-${{ github.sha }}
+          path: ${{ runner.temp }}/sortex-xcuitest-failure.txt
+          if-no-files-found: ignore
           retention-days: 1
