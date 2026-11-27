@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -89,6 +90,24 @@ class FailureDiagnostic(unittest.TestCase):
                 ]}), phase)
         self.assertEqual(observed_phase({"testRuns": [{}, {}]}), "activities-unreadable")
         self.assertEqual(observed_phase(None), "activities-unreadable")
+
+    def test_email_readback_reports_only_declared_fixed_mismatch_classes(self):
+        swift = (ROOT / "BuyerJourneys.swift").read_text()
+        enum = swift.split("private enum EmailReadbackFailure", 1)[1].split("\n    }", 1)[0]
+        labels = set(re.findall(r' = "sortex-(email-readback-[a-z-]+)"', enum))
+        self.assertEqual(labels, {
+            "email-readback-unavailable", "email-readback-label", "email-readback-normalization",
+            "email-readback-leading-dropped", "email-readback-trailing-dropped",
+            "email-readback-edge-truncated", "email-readback-extra-text", "email-readback-mismatch",
+        })
+        for label in labels:
+            with self.subTest(label=label):
+                data = {"testRuns": [{"activities": [
+                    {"title": "sortex-email-readback", "childActivities": [
+                        {"title": "sortex-" + label}, {"title": "sortex-" + label + "-" + PRIVATE},
+                    ]},
+                ]}]}
+                self.assertEqual(observed_phase(data), label)
 
     def test_console_hints_only_return_fixed_labels(self):
         for message, expected in (

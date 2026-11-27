@@ -41,18 +41,19 @@ final class BuyerJourneys: XCTestCase {
             email.typeText(buyer)
         }
         XCTContext.runActivity(named: "sortex-email-readback") { _ in
-            // Compare only the disposable email; never print the observed value,
-            // its length, or the accessibility tree, even if the value is wrong.
-            let entered = email.value as? String
-            guard entered == buyer else {
-                if entered?.isEmpty != false {
-                    XCTContext.runActivity(named: "sortex-email-readback-unavailable") { _ in
-                        XCTFail("Email field returned no readable value")
-                    }
-                } else {
-                    XCTContext.runActivity(named: "sortex-email-readback-mismatch") { _ in
-                        XCTFail("Email entry did not match the fixture")
-                    }
+            // React Native's controlled field can finish its render after the
+            // typing event. Observe passively once; never tap or type again.
+            var entered: String?
+            let matched = waitUntil(timeout: 2) {
+                entered = email.value as? String
+                return entered == buyer
+            }
+            guard matched else {
+                // Emit only a fixed category. Never record the readback,
+                // its length, or any accessibility hierarchy.
+                let reason = emailReadbackFailure(entered, expected: buyer)
+                XCTContext.runActivity(named: reason.rawValue) { _ in
+                    XCTFail("Exact email readback did not match the fixture")
                 }
                 return
             }
@@ -204,6 +205,30 @@ final class BuyerJourneys: XCTestCase {
         if let tab = matches.first(where: { $0.elementType == .other }) { return tab }
         if let only = matches.first, matches.count == 1 { return only }
         throw ElementNotActionable()
+    }
+
+    private enum EmailReadbackFailure: String {
+        case unavailable = "sortex-email-readback-unavailable"
+        case label = "sortex-email-readback-label"
+        case normalization = "sortex-email-readback-normalization"
+        case leadingDropped = "sortex-email-readback-leading-dropped"
+        case trailingDropped = "sortex-email-readback-trailing-dropped"
+        case edgeTruncated = "sortex-email-readback-edge-truncated"
+        case extraText = "sortex-email-readback-extra-text"
+        case mismatch = "sortex-email-readback-mismatch"
+    }
+
+    private func emailReadbackFailure(_ entered: String?, expected: String) -> EmailReadbackFailure {
+        guard let entered, !entered.isEmpty else { return .unavailable }
+        if entered == "E-mail" { return .label }
+        if entered.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == expected {
+            return .normalization
+        }
+        if entered == String(expected.dropFirst()) { return .leadingDropped }
+        if entered == String(expected.dropLast()) { return .trailingDropped }
+        if expected.hasPrefix(entered) || expected.hasSuffix(entered) { return .edgeTruncated }
+        if entered.contains(expected) { return .extraText }
+        return .mismatch
     }
 
     private struct MissingFixturePassword: Error {}

@@ -12,7 +12,10 @@ from evidence import TEST
 
 PHASES = (
     "startup", "email", "email-tap", "email-keyboard", "email-type", "email-readback",
-    "email-readback-unavailable", "email-readback-mismatch", "password", "login",
+    "email-readback-unavailable", "email-readback-label", "email-readback-normalization",
+    "email-readback-leading-dropped", "email-readback-trailing-dropped",
+    "email-readback-edge-truncated", "email-readback-extra-text", "email-readback-mismatch",
+    "password", "login",
     "campaign", "campaign-tab",
     "campaign-home-ready", "campaign-tab-discover", "campaign-tab-actionable",
     "campaign-tab-tap", "campaign-tab-selected", "campaign-screen-visible",
