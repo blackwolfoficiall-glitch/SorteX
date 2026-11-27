@@ -207,9 +207,10 @@ test.describe("apuração Premium do organizador em modo de leitura", () => {
             name: "Resultados da Loteria Federal",
           });
           await expect(header).toBeVisible();
-          expect(
-            await header.locator("xpath=ancestor::*[@data-sx-premium]").count(),
-          ).toBe(0);
+          await expect(
+            page.getByRole("region", { name: "Resultados da Loteria Federal" }),
+          ).toHaveCSS("color-scheme", "dark");
+          await expect(panel(page)).toHaveCount(0);
           await expect(
             page.getByRole("heading", { name: "Cadastrar extração" }),
           ).toBeVisible();

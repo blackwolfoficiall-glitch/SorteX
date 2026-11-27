@@ -18,6 +18,8 @@ import {
   Trophy,
 } from "lucide-react";
 import Card from "@/components/ui/Card";
+import PremiumScope from "@/components/premium/PremiumScope";
+import publicHero from "./public-campaign-hero-premium.module.css";
 import PurchasePanel from "@/components/purchases/PurchasePanel";
 import { resolveBuyerSalesWindow, salesWindowMessage } from "../../../../packages/contracts/src/campaign-sales-window";
 import type { Campaign, RewardSection } from "@/lib/campaigns/types";
@@ -322,38 +324,15 @@ export default function PublicCampaignView({
             ? campaign.customTitleColor!
             : autoTitleColor;
 
-  return (
-    <main
-      className="min-h-screen overflow-x-hidden pb-28 text-zinc-950"
-      style={{
-        backgroundColor: campaign.organizer.brand?.backgroundColor || "#F4F4F5",
-        color: campaign.organizer.brand?.textColor || "#18181B",
-        fontFamily: String(
-          campaignPreferences?.fontFamily || "Inter, system-ui, sans-serif",
-        ),
-        fontSize:
-          campaignPreferences?.fontScale === "LARGE"
-            ? "112.5%"
-            : campaignPreferences?.fontScale === "COMPACT"
-              ? "93.75%"
-              : "100%",
-      }}
-    >
-      {previewMode && (
-        <div className="sticky top-0 z-[90] bg-amber-400 px-4 py-2 text-center text-xs font-black text-amber-950">
-          Modo de pré-visualização — alterações ainda não publicadas.
-        </div>
-      )}
-      <CampaignPublicHeader
-        campaign={campaign}
-        onOpenTitles={() => setShowBuyerTitles(true)}
-      />
-
+  const premiumPublic = Boolean(slug && !previewMode && !previewCampaign);
+  const customFont = typeof campaignPreferences?.fontFamily === "string" && Boolean(campaignPreferences.fontFamily.trim());
+  const campaignHero = (
+    <>
       <section className="mx-auto max-w-[1500px] px-2 pt-3 sm:px-4 lg:px-6">
-        <div className="overflow-hidden rounded-2xl border bg-white shadow-sm sm:rounded-[26px]">
+        <div className={`overflow-hidden rounded-2xl border bg-white shadow-sm sm:rounded-[26px] ${premiumPublic ? publicHero.frame : ""}`}>
           <div
             data-testid="campaign-hero"
-            className="relative h-[255px] touch-pan-y select-none overflow-hidden bg-zinc-100 sm:h-[360px] lg:h-[500px]"
+            className={`relative h-[255px] touch-pan-y select-none overflow-hidden bg-zinc-100 sm:h-[360px] lg:h-[500px] ${premiumPublic ? publicHero.media : ""}`}
             onPointerDown={(event) => {
               dragStart.current = event.clientX;
               event.currentTarget.setPointerCapture(event.pointerId);
@@ -389,8 +368,8 @@ export default function PublicCampaignView({
                 draggable={false}
               />
             ) : (
-              <div className="flex h-full items-center justify-center">
-                <ImageIcon size={64} className="text-violet-300" />
+              <div className={`flex h-full items-center justify-center ${premiumPublic ? publicHero.placeholder : ""}`} data-dark-title={premiumPublic && titleColor === "#111111" ? true : undefined}>
+                <ImageIcon size={64} className="text-violet-300" aria-hidden="true" />
               </div>
             )}
             <div className="absolute left-3 top-3 w-[34%] sm:left-6 sm:top-6 sm:w-[28%] lg:left-10 lg:top-9 lg:w-[22%]">
@@ -398,7 +377,7 @@ export default function PublicCampaignView({
                 target={drawDisplay.target}
               />
             </div>
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/35 via-black/10 to-transparent px-4 pb-5 pt-20 text-white sm:px-7 sm:pb-7 lg:px-10">
+            <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/35 via-black/10 to-transparent px-4 pb-5 pt-20 text-white sm:px-7 sm:pb-7 lg:px-10 ${premiumPublic && titleColor === "#FFFFFF" ? publicHero.whiteTitleScrim : ""}`}>
               <div style={{ color: titleColor }}>
                 {campaign.titleDisplayMode === "HIGHLIGHT" ? (
                   <div className="max-w-5xl">
@@ -426,7 +405,7 @@ export default function PublicCampaignView({
                 </span>
               </div>
             </div>
-            {images.length > 1 && (
+            {!premiumPublic && images.length > 1 && (
               <div className="absolute bottom-2 right-3 z-10 flex gap-1.5 sm:bottom-4 sm:right-5">
                 {images.map((image, index) => (
                   <button
@@ -439,18 +418,36 @@ export default function PublicCampaignView({
               </div>
             )}
             {campaign.organizer.verified && (
-              <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-[9px] font-bold text-white sm:right-5 sm:top-5 sm:text-xs sm:backdrop-blur-sm">
+              <div className={`absolute right-3 top-3 flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-[9px] font-bold text-white sm:right-5 sm:top-5 sm:text-xs sm:backdrop-blur-sm ${premiumPublic ? publicHero.verified : ""}`}>
                 <CheckCircle2 className="text-green-300" size={15} />{" "}
                 Organizador verificado
               </div>
             )}
           </div>
+          {premiumPublic && images.length > 1 && (
+            <div className={publicHero.gallery} role="group" aria-label="Galeria da campanha">
+              <span className={publicHero.galleryLabel}><ImageIcon size={16} aria-hidden="true" /> Fotos da campanha</span>
+              <div className={publicHero.controls}>
+                {images.map((image, index) => (
+                  <button
+                    key={image.id}
+                    type="button"
+                    aria-label={`Mostrar imagem ${index + 1}`}
+                    aria-pressed={selectedImage === index}
+                    onClick={() => setSelectedImage(index)}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
       <section className="mx-auto max-w-[1500px] px-2 py-3 sm:px-4 lg:px-6">
         <div
-          className={`grid overflow-hidden rounded-2xl border bg-white shadow-sm transition-shadow duration-300 hover:shadow-md ${campaign.showParticipants !== false ? "grid-cols-3" : "grid-cols-2"}`}
+          className={`grid overflow-hidden rounded-2xl border bg-white shadow-sm transition-shadow duration-300 hover:shadow-md ${campaign.showParticipants !== false ? "grid-cols-3" : "grid-cols-2"} ${premiumPublic ? publicHero.metrics : ""}`}
         >
           <div
             className="p-3 sm:p-5"
@@ -472,9 +469,15 @@ export default function PublicCampaignView({
                 {percent.toFixed(0)}%
               </strong>
             </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100 sm:h-3">
+            <div className={`mt-3 h-2 overflow-hidden rounded-full bg-zinc-100 sm:h-3 ${premiumPublic ? publicHero.progress : ""}`}
+              role={premiumPublic ? "progressbar" : undefined}
+              aria-label={premiumPublic ? "Percentual vendido" : undefined}
+              aria-valuenow={premiumPublic ? percent : undefined}
+              aria-valuemin={premiumPublic ? 0 : undefined}
+              aria-valuemax={premiumPublic ? 100 : undefined}
+            >
               <div
-                className="h-full rounded-full bg-green-500 transition-all duration-700"
+                className={`h-full rounded-full bg-green-500 transition-all duration-700 ${premiumPublic ? publicHero.progressFill : ""}`}
                 style={{ width: `${percent}%` }}
               />
             </div>
@@ -491,6 +494,44 @@ export default function PublicCampaignView({
           )}
         </div>
       </section>
+
+    </>
+  );
+
+  return (
+    <main
+      className="min-h-screen overflow-x-hidden pb-28 text-zinc-950"
+      style={{
+        backgroundColor: campaign.organizer.brand?.backgroundColor || "#F4F4F5",
+        color: campaign.organizer.brand?.textColor || "#18181B",
+        fontFamily: String(
+          campaignPreferences?.fontFamily || "Inter, system-ui, sans-serif",
+        ),
+        fontSize:
+          campaignPreferences?.fontScale === "LARGE"
+            ? "112.5%"
+            : campaignPreferences?.fontScale === "COMPACT"
+              ? "93.75%"
+              : "100%",
+      }}
+    >
+      {previewMode && (
+        <div className="sticky top-0 z-[90] bg-amber-400 px-4 py-2 text-center text-xs font-black text-amber-950">
+          Modo de pré-visualização — alterações ainda não publicadas.
+        </div>
+      )}
+      <CampaignPublicHeader
+        campaign={campaign}
+        onOpenTitles={() => setShowBuyerTitles(true)}
+      />
+
+      {premiumPublic ? (
+        <PremiumScope className={`${publicHero.scope} ${customFont ? publicHero.personalizedFont : ""}`}>
+          <div data-public-campaign-hero="premium">
+            {campaignHero}
+          </div>
+        </PremiumScope>
+      ) : campaignHero}
 
       <section className="mx-auto max-w-[1500px] space-y-3 px-2 sm:space-y-4 sm:px-4 lg:px-6">
         <div id="participar">

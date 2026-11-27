@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { FlaskConical, ShieldCheck, Trophy } from 'lucide-react';
 import PremiumScope from '@/components/premium/PremiumScope';
 import styles from './organizer-draw-premium.module.css';
+import AdminLotteryHistory from './AdminLotteryHistory';
 
 type Mode='organizer'|'winners'|'buyer'|'admin';
 type JsonRecord=Record<string,unknown>;
@@ -37,12 +38,30 @@ export default function DrawWorkspace({mode}:{mode:Mode}){
       setMessage('Não foi possível confirmar a operação. Verifique a lista antes de tentar novamente.');
     }
   }
-  if(mode==='admin')return <Shell title="Resultados da Loteria Federal" subtitle="Cadastro manual ou importação da CAIXA, com revisão administrativa.">
-    <LotteryForm onSubmit={(data)=>action('admin/lottery-draws',data)}/>
-    <CaixaImportForm onSubmit={(extractionNumber)=>action('admin/lottery-draws/import/caixa',{extractionNumber})}/>
-    {message&&<p role="status" className="rounded-xl bg-violet-50 p-3 text-sm text-violet-800">{message}</p>}
-    <ItemList items={items} onReview={(id,decision,reason)=>action(`admin/lottery-draws/${encodeURIComponent(id)}/${decision}`,{reason})}/>
-  </Shell>;
+  if (mode === 'admin') {
+    return (
+      <AdminLotteryHistory
+        items={items}
+        message={message}
+        forms={
+          <>
+            <LotteryForm onSubmit={(data) => action('admin/lottery-draws', data)} />
+            <CaixaImportForm onSubmit={(extractionNumber) => action('admin/lottery-draws/import/caixa', { extractionNumber })} />
+          </>
+        }
+        renderReview={(item) =>
+          typeof item.id === 'string' && (item.status === 'PENDING_REVIEW' || item.status === 'VERIFIED') ? (
+            <ReviewLotteryForm
+              id={item.id}
+              extraction={String(item.extractionNumber ?? '')}
+              verified={item.status === 'VERIFIED'}
+              onReview={(id, decision, reason) => action(`admin/lottery-draws/${encodeURIComponent(id)}/${decision}`, { reason })}
+            />
+          ) : null
+        }
+      />
+    );
+  }
   if(mode==='buyer')return <Shell title="Meus prêmios" subtitle="Acompanhe entregas e confirme o recebimento com segurança."><ItemList items={items}/></Shell>;
   if(mode==='winners')return <Shell title="Ganhadores" subtitle="Contato, entrega, confirmação e material de divulgação."><ItemList items={items}/><div className={card}><h2 className="text-lg font-bold">Prévia vertical 9:16</h2><div className="mx-auto mt-4 aspect-[9/16] max-w-64 rounded-[2rem] bg-gradient-to-b from-violet-950 to-violet-600 p-5 text-white"><div className="flex justify-between text-xs"><span>LOGO ORGANIZADOR</span><b>SorteX</b></div><div className="flex h-full flex-col items-center justify-center text-center"><span className="text-5xl">🏆</span><h3 className="mt-4 text-2xl font-black">Prêmio entregue</h3><p className="mt-2">Verificado pela SorteX</p><div className="mt-8 rounded-xl bg-white/15 p-3 text-xs">QR CODE • código público</div></div></div></div></Shell>;
   return (

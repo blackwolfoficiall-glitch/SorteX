@@ -189,7 +189,7 @@ export const pageEvidence = [
   },
   {
     path: "/campanha/[slug]",
-    detail: "somente painel de quantidade, promoção separada, contraste a 320 px e cotação autorizada local com API d4; sem reservar ou pagar",
+    detail: "painel de quantidade e cotação d4 (96e9cd5); topo, galeria, capas, personalização, status e rascunho oculto (42c0214); sem reservar ou pagar",
     source: "apps/web/e2e-local/run-quick-quantity-contrast.mjs",
     revision: "96e9cd5",
   },
@@ -264,5 +264,17 @@ export const pageEvidence = [
     detail: "visão geral, seis abas consultadas, distinção de moeda e saldo interno, restrições de perfil; sem repasse ou ações",
     source: "apps/web/e2e/admin-finance-premium.spec.ts",
     revision: "87b13b2",
+  },
+  {
+    path: "/admin/loteria",
+    detail: "histórico e detalhes da extração, datas UTC, zeros e acesso administrativo; sem importar, revisar ou apurar",
+    source: "apps/web/e2e/admin-loteria-premium.spec.ts",
+    revision: "717d04d",
+  },
+  {
+    path: "/admin/auditoria",
+    detail: "lista por ação e período, paginação, recuperação e permissão; sem exportar ou mostrar metadados",
+    source: "apps/web/e2e/admin-audit-premium.spec.ts",
+    revision: "0ebc52f",
   },
 ];

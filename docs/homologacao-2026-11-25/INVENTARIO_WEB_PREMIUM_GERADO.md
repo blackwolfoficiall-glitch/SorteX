@@ -2,7 +2,7 @@
 
 Gerado por `node apps/web/qa/inventory-web.mjs`. Verificação com `--check`. O relatório orienta a rodada visual, não comprova execução.
 
-**109 páginas, 90 handlers (88 em /api), 8 layouts, 214 arquivos de componentes.**
+**109 páginas, 90 handlers (88 em /api), 8 layouts, 215 arquivos de componentes.**
 Padrões parametrizados: 17 páginas, 50 handlers; destes, 16 catch-all. Grupos reais no inventário: 0.
 Páginas por área: Acesso 13; Admin 26; Afiliado 3; Campanha e prova pública 4; Comprador 13; Conta 2; Diagnóstico 1; Equipe · entrada 2; Institucional/público a revisar 5; Organizador 39; Prévia 1.
 
@@ -29,7 +29,7 @@ Controle de revisão dos gates: alterações nestas fontes exigem rever a interp
 |---|---|---|---|---|---|
 | [/admin/afiliados](../../apps/web/app/admin/afiliados/page.tsx) | Admin · ADMIN da equipe + FINANCE_READ | — | [AdminExistingModuleCenter](../../apps/web/components/admin/AdminExistingModuleCenter.tsx) | [AdminExistingModuleCenter](../../apps/web/components/admin/AdminExistingModuleCenter.tsx) | ? / ? / não rodado |
 | [/admin/aprovacoes](../../apps/web/app/admin/aprovacoes/page.tsx) | Admin · ADMIN da equipe + ORGANIZERS_REVIEW | — | [AdminApprovalsCenter](../../apps/web/components/admin/AdminApprovalsCenter.tsx) | [AdminApprovalsCenter](../../apps/web/components/admin/AdminApprovalsCenter.tsx) | ? / ? / não rodado |
-| [/admin/auditoria](../../apps/web/app/admin/auditoria/page.tsx) | Admin · ADMIN da equipe + AUDIT_READ | — | [AdminOperationsCenter](../../apps/web/components/admin/AdminOperationsCenter.tsx) | [AdminOperationsCenter](../../apps/web/components/admin/AdminOperationsCenter.tsx) | ? / ? / não rodado |
+| [/admin/auditoria](../../apps/web/app/admin/auditoria/page.tsx) | Admin · ADMIN da equipe + AUDIT_READ | — | [PremiumScope](../../apps/web/components/premium/PremiumScope.tsx) | [page](../../apps/web/app/admin/auditoria/page.tsx) | verificado no recorte local / parcial / passou local · [0ebc52f](../../apps/web/e2e/admin-audit-premium.spec.ts): lista por ação e período, paginação, recuperação e permissão; sem exportar ou mostrar metadados |
 | [/admin/campanhas](../../apps/web/app/admin/campanhas/page.tsx) | Admin · ADMIN da equipe + CAMPAIGNS_REVIEW | — | [AdminResourcePage](../../apps/web/components/admin/AdminResourcePage.tsx) | [AdminResourcePage](../../apps/web/components/admin/AdminResourcePage.tsx) | verificado no recorte local / parcial / passou local · [da1b44b](../../apps/web/e2e/admin-campaigns-premium.spec.ts): lista, contagens, filtros, paginação e papéis; sem abrir detalhes ou executar moderação |
 | [/admin/configuracoes](../../apps/web/app/admin/configuracoes/page.tsx) | Admin · ADMIN da equipe + SETTINGS_WRITE | — | [AdminOperationsCenter](../../apps/web/components/admin/AdminOperationsCenter.tsx) | [AdminOperationsCenter](../../apps/web/components/admin/AdminOperationsCenter.tsx) | ? / ? / não rodado |
 | [/admin/conteudo](../../apps/web/app/admin/conteudo/page.tsx) | Admin · ADMIN da equipe + CONTENT_WRITE | — | [AdminOperationsCenter](../../apps/web/components/admin/AdminOperationsCenter.tsx) | [AdminOperationsCenter](../../apps/web/components/admin/AdminOperationsCenter.tsx) | ? / ? / não rodado |
@@ -44,7 +44,7 @@ Controle de revisão dos gates: alterações nestas fontes exigem rever a interp
 | [/admin/gateways](../../apps/web/app/admin/gateways/page.tsx) | Admin · ADMIN da equipe + FINANCE_READ | — | [AdminManagement](../../apps/web/components/admin/AdminManagement.tsx) | [AdminManagement](../../apps/web/components/admin/AdminManagement.tsx) | ? / ? / não rodado |
 | [/admin/juridico](../../apps/web/app/admin/juridico/page.tsx) | Admin · ADMIN da equipe + SETTINGS_WRITE | — | [LegalAdminCenter](../../apps/web/components/legal/LegalAdminCenter.tsx) | — | ? / ? / não rodado |
 | [/admin/login](../../apps/web/app/admin/login/page.tsx) | Equipe · entrada · Exceção do proxy e layout; convite validado no fluxo | — | — | [page](../../apps/web/app/admin/login/page.tsx) | ? / ? / não rodado |
-| [/admin/loteria](../../apps/web/app/admin/loteria/page.tsx) | Admin · ADMIN da equipe + LOTTERY_RESULTS_WRITE | — | [DrawWorkspace](../../apps/web/components/draws/DrawWorkspace.tsx) | [DrawWorkspace](../../apps/web/components/draws/DrawWorkspace.tsx) | ? / ? / não rodado |
+| [/admin/loteria](../../apps/web/app/admin/loteria/page.tsx) | Admin · ADMIN da equipe + LOTTERY_RESULTS_WRITE | — | [DrawWorkspace](../../apps/web/components/draws/DrawWorkspace.tsx) | [DrawWorkspace](../../apps/web/components/draws/DrawWorkspace.tsx) | verificado no recorte local / parcial / passou local · [717d04d](../../apps/web/e2e/admin-loteria-premium.spec.ts): histórico e detalhes da extração, datas UTC, zeros e acesso administrativo; sem importar, revisar ou apurar |
 | [/admin/midia](../../apps/web/app/admin/midia/page.tsx) | Admin · ADMIN da equipe + CONTENT_WRITE | — | [AdminExistingModuleCenter](../../apps/web/components/admin/AdminExistingModuleCenter.tsx) | [AdminExistingModuleCenter](../../apps/web/components/admin/AdminExistingModuleCenter.tsx) | ? / ? / não rodado |
 | [/admin/organizadores/\[id\]](../../apps/web/app/admin/organizadores/%5Bid%5D/page.tsx) | Admin · ADMIN da equipe + ORGANIZERS_REVIEW | — | [RoleGate](../../apps/web/components/auth/RoleGate.tsx), [VerificationStatusBadge](../../apps/web/components/organizador/VerificationStatusBadge.tsx), [Button](../../apps/web/components/ui/Button.tsx), [Card](../../apps/web/components/ui/Card.tsx), [Input](../../apps/web/components/ui/Input.tsx), [textarea](../../apps/web/components/ui/textarea.tsx) | — | ? / ? / não rodado |
 | [/admin/organizadores](../../apps/web/app/admin/organizadores/page.tsx) | Admin · ADMIN da equipe + ORGANIZERS_REVIEW | — | [VerificationStatusBadge](../../apps/web/components/organizador/VerificationStatusBadge.tsx), [PremiumScope](../../apps/web/components/premium/PremiumScope.tsx) | [page](../../apps/web/app/admin/organizadores/page.tsx) | verificado no recorte local / parcial / passou local · [6b040c7](../../apps/web/e2e/admin-organizers-premium.spec.ts): lista, paginação, filtros e acesso autorizado restrito, recuperação; sem aprovar, editar ou alterar permissões |
@@ -67,7 +67,7 @@ Controle de revisão dos gates: alterações nestas fontes exigem rever a interp
 | [/cadastro/sucesso](../../apps/web/app/cadastro/sucesso/page.tsx) | Acesso · Sem proxy de página; validações próprias do fluxo | — | — | — | ? / ? / não rodado |
 | [/cadastro/sucesso-comprador](../../apps/web/app/cadastro/sucesso-comprador/page.tsx) | Acesso · Sem proxy de página; validações próprias do fluxo | — | — | — | ? / ? / não rodado |
 | [/cadastro/sucesso-organizador](../../apps/web/app/cadastro/sucesso-organizador/page.tsx) | Acesso · Sem proxy de página; validações próprias do fluxo | — | — | — | ? / ? / não rodado |
-| [/campanha/\[slug\]](../../apps/web/app/campanha/%5Bslug%5D/page.tsx) | Campanha e prova pública · Sem proxy de página; regras e visibilidade dependem da API | — | [PublicCampaignView](../../apps/web/components/campaigns/PublicCampaignView.tsx) | [CampaignPublicChrome](../../apps/web/components/campaigns/CampaignPublicChrome.tsx), [PublicCampaignView](../../apps/web/components/campaigns/PublicCampaignView.tsx), [PurchasePanel](../../apps/web/components/purchases/PurchasePanel.tsx) | verificado no recorte local / parcial / passou local · [96e9cd5](../../apps/web/e2e-local/run-quick-quantity-contrast.mjs): somente painel de quantidade, promoção separada, contraste a 320 px e cotação autorizada local com API d4; sem reservar ou pagar |
+| [/campanha/\[slug\]](../../apps/web/app/campanha/%5Bslug%5D/page.tsx) | Campanha e prova pública · Sem proxy de página; regras e visibilidade dependem da API | — | [PublicCampaignView](../../apps/web/components/campaigns/PublicCampaignView.tsx) | [CampaignPublicChrome](../../apps/web/components/campaigns/CampaignPublicChrome.tsx), [PublicCampaignView](../../apps/web/components/campaigns/PublicCampaignView.tsx), [PurchasePanel](../../apps/web/components/purchases/PurchasePanel.tsx) | verificado no recorte local / parcial / passou local · [96e9cd5](../../apps/web/e2e-local/run-quick-quantity-contrast.mjs): painel de quantidade e cotação d4 (96e9cd5); topo, galeria, capas, personalização, status e rascunho oculto (42c0214); sem reservar ou pagar |
 | [/comprador/checkout/\[id\]](../../apps/web/app/comprador/checkout/%5Bid%5D/page.tsx) | Comprador · Proxy; BUYER ou ADMIN da equipe; aviso legal | — | [MercadoPagoCardBrick](../../apps/web/components/payments/MercadoPagoCardBrick.tsx), [PixPaymentView](../../apps/web/components/payments/PixPaymentView.tsx), [PremiumScope](../../apps/web/components/premium/PremiumScope.tsx), [ReservationCountdown](../../apps/web/components/purchases/ReservationCountdown.tsx) | — | verificado no recorte local / parcial / passou local · [0c3dc48](../../apps/web/e2e-local/run-buyer-checkout-premium.mjs): reservas sem pagamento, preços, termos, estados e isolamento; sem recarregar status, chamar provedor ou iniciar cobrança |
 | [/comprador/compras/\[id\]](../../apps/web/app/comprador/compras/%5Bid%5D/page.tsx) | Comprador · Proxy; BUYER ou ADMIN da equipe; aviso legal | — | [RoleGate](../../apps/web/components/auth/RoleGate.tsx), [PremiumScope](../../apps/web/components/premium/PremiumScope.tsx) | — | verificado no recorte local / parcial / passou local · [47bb97c](../../apps/web/e2e-local/run-buyer-purchase-detail-premium.mjs): detalhe pago, pendente, reservado e expirado, títulos, links e isolamento; sem chamar checkout ou gateway |
 | [/comprador/favoritos](../../apps/web/app/comprador/favoritos/page.tsx) | Comprador · Proxy; BUYER ou ADMIN da equipe; aviso legal | — | [RoleGate](../../apps/web/components/auth/RoleGate.tsx), [CampaignCard](../../apps/web/components/comprador/CampaignCard.tsx), [PremiumScope](../../apps/web/components/premium/PremiumScope.tsx) | — | verificado no recorte local / parcial / passou local · [638c3a2](../../apps/web/e2e/buyer-favorites-premium.spec.ts): campanhas públicas favoritas da conta, capas e recuperação; sem marcar nem remover |
@@ -258,6 +258,7 @@ O grafo segue imports estáticos de valor e reexports locais de App Router e com
 
 | Fonte | Alcançável no grafo | Formulários | Tabelas | Diálogos/sobreposições | Controles JSX |
 |---|---|---|---|---|---|
+| [app/admin/auditoria/page.tsx](../../apps/web/app/admin/auditoria/page.tsx) | fonte App Router | `form` | — | — | `button`, `input` |
 | [app/admin/convite/\[token\]/page.tsx](../../apps/web/app/admin/convite/%5Btoken%5D/page.tsx) | fonte App Router | `form` | — | — | `button`, `input` |
 | [app/admin/equipe/\[id\]/page.tsx](../../apps/web/app/admin/equipe/%5Bid%5D/page.tsx) | fonte App Router | — | — | — | `button`, `select` |
 | [app/admin/login/page.tsx](../../apps/web/app/admin/login/page.tsx) | fonte App Router | `form` | — | — | `button`, `input` |
@@ -441,6 +442,7 @@ O grafo segue imports estáticos de valor e reexports locais de App Router e com
 | [components/dashboard/recentsales.tsx](../../apps/web/components/dashboard/recentsales.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/dashboard/saleschart.tsx](../../apps/web/components/dashboard/saleschart.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/dashboard/statistics.tsx](../../apps/web/components/dashboard/statistics.tsx) | não encontrado estaticamente | — | — | — | — |
+| [components/draws/AdminLotteryHistory.tsx](../../apps/web/components/draws/AdminLotteryHistory.tsx) | sim | — | — | — | — |
 | [components/draws/DrawWorkspace.tsx](../../apps/web/components/draws/DrawWorkspace.tsx) | sim | `CaixaImportForm`, `LotteryForm`, `ReviewLotteryForm`, `form` | — | — | `Button`, `button`, `input` |
 | [components/draws/ExpiredInstantPrizeAlerts.tsx](../../apps/web/components/draws/ExpiredInstantPrizeAlerts.tsx) | não encontrado estaticamente | — | — | — | `Link`, `button` |
 | [components/draws/PostPaymentRewards.tsx](../../apps/web/components/draws/PostPaymentRewards.tsx) | sim | — | — | — | `Button` |
@@ -535,11 +537,13 @@ Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pel
 - [tests/dashboard-period-http.test.mjs](../../apps/web/tests/dashboard-period-http.test.mjs)
 - [tests/dashboard-period.test.mjs](../../apps/web/tests/dashboard-period.test.mjs)
 - [tests/premium-foundation.test.mjs](../../apps/web/tests/premium-foundation.test.mjs)
+- [e2e/admin-audit-premium.spec.ts](../../apps/web/e2e/admin-audit-premium.spec.ts)
 - [e2e/admin-authorization.spec.ts](../../apps/web/e2e/admin-authorization.spec.ts)
 - [e2e/admin-campaigns-premium.spec.ts](../../apps/web/e2e/admin-campaigns-premium.spec.ts)
 - [e2e/admin-critical-resources.spec.ts](../../apps/web/e2e/admin-critical-resources.spec.ts)
 - [e2e/admin-finance-premium.spec.ts](../../apps/web/e2e/admin-finance-premium.spec.ts)
 - [e2e/admin-finance.spec.ts](../../apps/web/e2e/admin-finance.spec.ts)
+- [e2e/admin-loteria-premium.spec.ts](../../apps/web/e2e/admin-loteria-premium.spec.ts)
 - [e2e/admin-organizers-premium.spec.ts](../../apps/web/e2e/admin-organizers-premium.spec.ts)
 - [e2e/admin-organizers.spec.ts](../../apps/web/e2e/admin-organizers.spec.ts)
 - [e2e/admin-overview-premium.spec.ts](../../apps/web/e2e/admin-overview-premium.spec.ts)
@@ -616,5 +620,6 @@ Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pel
 - [e2e-local/run-organizer-mini-campaigns-premium.mjs](../../apps/web/e2e-local/run-organizer-mini-campaigns-premium.mjs)
 - [e2e-local/run-organizer-order-detail-premium.mjs](../../apps/web/e2e-local/run-organizer-order-detail-premium.mjs)
 - [e2e-local/run-organizer-orders-premium.mjs](../../apps/web/e2e-local/run-organizer-orders-premium.mjs)
+- [e2e-local/run-public-campaign-premium.mjs](../../apps/web/e2e-local/run-public-campaign-premium.mjs)
 - [e2e-local/run-public-home-hero-premium.mjs](../../apps/web/e2e-local/run-public-home-hero-premium.mjs)
 - [e2e-local/run-quick-quantity-contrast.mjs](../../apps/web/e2e-local/run-quick-quantity-contrast.mjs)
