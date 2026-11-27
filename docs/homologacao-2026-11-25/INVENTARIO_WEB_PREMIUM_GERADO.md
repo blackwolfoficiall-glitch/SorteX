@@ -627,6 +627,7 @@ Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pel
 - [e2e-local/run-organizer-affiliates-premium.mjs](../../apps/web/e2e-local/run-organizer-affiliates-premium.mjs)
 - [e2e-local/run-organizer-dashboard-premium.mjs](../../apps/web/e2e-local/run-organizer-dashboard-premium.mjs)
 - [e2e-local/run-organizer-mini-campaigns-premium.mjs](../../apps/web/e2e-local/run-organizer-mini-campaigns-premium.mjs)
+- [e2e-local/run-organizer-mobile-ticket.mjs](../../apps/web/e2e-local/run-organizer-mobile-ticket.mjs)
 - [e2e-local/run-organizer-order-detail-premium.mjs](../../apps/web/e2e-local/run-organizer-order-detail-premium.mjs)
 - [e2e-local/run-organizer-orders-premium.mjs](../../apps/web/e2e-local/run-organizer-orders-premium.mjs)
 - [e2e-local/run-public-campaign-premium.mjs](../../apps/web/e2e-local/run-public-campaign-premium.mjs)

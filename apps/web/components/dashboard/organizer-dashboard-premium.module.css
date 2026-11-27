@@ -394,6 +394,9 @@
 }
 
 @media (max-width: 22.49rem) {
+  /* Keep the full legacy notice and touch targets; trim only surrounding space. */
+  .report { row-gap: .25rem; padding-block-start: .43rem; }
+  .report .notice { padding-block: .42rem; }
   .report .filters { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .report .filter { grid-column: span 2; }
   .report .filter:nth-last-child(-n + 2) { grid-column: span 3; }
