@@ -53,9 +53,9 @@ export function journeyTotals(input) {
 }
 
 function publicationStatus(route) {
-  return publication.directPaths.includes(route)
-    ? `Prévia privada v5 · \`${publication.revision.slice(0, 7)}\``
-    : "Não atestada na prévia v5";
+  return Object.hasOwn(publication.directScopes, route)
+    ? `Prévia privada v${publication.version} · \`${publication.revision.slice(0, 7)}\` · ${publication.directScopes[route]}`
+    : `Não atestada na prévia v${publication.version}`;
 }
 
 function nativeStatus(route) {
@@ -77,7 +77,7 @@ export function render({ inventory, scoreboard, evidence = pageEvidence }) {
   })) {
     throw new Error("Evidências e inventário divergentes. Atualize o inventário antes da matriz.");
   }
-  for (const entry of [...proof.keys(), ...publication.directPaths, ...Object.keys(simulator.partialPaths), ...Object.keys(notes)]) {
+  for (const entry of [...proof.keys(), ...Object.keys(publication.directScopes), ...Object.keys(simulator.partialPaths), ...Object.keys(notes)]) {
     if (!paths.has(entry)) throw new Error(`Rota declarada não encontrada: ${entry}`);
   }
   const pageLines = pages.map(({ route, source }) => {
@@ -102,13 +102,13 @@ export function render({ inventory, scoreboard, evidence = pageEvidence }) {
     "- **Design da página:** validação local de recorte não equivale à conclusão de todas as variantes, dispositivos e estados da rota.",
     "- **Funcionalidade da página:** recorte parcial não é jornada integral. Os números das jornadas ficam abaixo e não promovem páginas automaticamente.",
     "- **Testes:** cada link identifica apenas a prova registrada para a rota e sua revisão. Não combina resultados de revisões ou ambientes, nem comprova provedor externo.",
-    "- **Publicação:** a prévia v5 comprova somente a página explicitada. «Não atestada» não significa que a rota não exista em alguma versão anterior ou esteja quebrada.",
+    `- **Publicação:** a prévia v${publication.version} comprova apenas os recortes explicitados. «Não atestada» não significa que a rota não exista em alguma versão anterior ou esteja quebrada.`,
     "- **Paridade iOS:** a interface nativa não se mede por simplesmente abrir URLs Web. Um trecho no simulador não é paridade integral, build distribuído ou aceite físico. A administração fica fora do app comum.",
     "",
     "## Ambientes e revisões",
     "",
-    `- **Prévia privada v5**: [abrir SorteX QA](${publication.url}) · fonte \`${publication.revision}\` · publicação verificada em ${publication.verifiedUtc}. Evidência de conteúdo publicado: apenas \`/dashboard\` do organizador. ${publication.sharedShell}`,
-    "- **Base Web anterior**: a presença de telas em versões anteriores não prova que seu redesign Premium esteja na v5. O histórico de API QA, Netlify e ensaios anteriores continua documentado em [Progresso da homologação](PROGRESSO_HOMOLOGACAO.md); esses ambientes e revisões não são reclassificados como v5. Produção não foi atestada por esta matriz.",
+    `- **Prévia privada v${publication.version}**: [abrir SorteX QA](${publication.url}) · fonte \`${publication.revision}\` · publicação verificada em ${publication.verifiedUtc}. Evidência de conteúdo publicado: ${Object.entries(publication.directScopes).map(([route, scope]) => `\`${route}\` (${scope})`).join(", ")}. ${publication.sharedShell}`,
+    "- **Base Web anterior**: a presença de telas em versões anteriores não prova que seu redesign Premium esteja na prévia atual. O histórico de API QA, Netlify e ensaios anteriores continua documentado em [Progresso da homologação](PROGRESSO_HOMOLOGACAO.md); outras revisões não são reclassificadas como a versão atual. Produção não foi atestada por esta matriz.",
     `- **Simulador iOS**: [execução nativa registrada](${simulator.run}) · fonte \`${simulator.revision}\`. Login e abertura do Início com HTTP 2xx; não comprovou o percurso em Campanhas, as demais telas, a publicação hospedada ou o iPhone físico.`,
     `- **Placar separado (18 jornadas, 9 cenários)**: Web ${scores.web}/${JOURNEY_SCOPE} integrais no escopo do placar local; app ${scores.native}/${JOURNEY_SCOPE}; paridade integral ${scores.parity}/${JOURNEY_SCOPE}; aceite físico ${scores.physical}/${PHYSICAL_SCOPE}. Fonte: [placar e critérios](PLACAR_EVIDENCIAS_WEB_IOS.md). Esses indicadores não são percentuais das ${PAGE_SCOPE} páginas.`,
     "",
