@@ -42,12 +42,14 @@ test("imports exactly the recorded local recortes without promoting them to inte
 
 test("does not propagate the private release to links or extract native parity from Web proof", () => {
   const result = render(input);
-  assert.deepEqual(Object.keys(publication.directScopes), ["/", "/contato", "/dashboard", "/dashboard/configuracoes", "/suporte"]);
-  assert.equal(matrixRows(result).filter((line) => line.includes("| Prévia privada v7 ·")).length, 5);
-  assert.match(lineFor(result, "/"), /Prévia privada v7.*abertura da página inicial/);
-  assert.match(lineFor(result, "/dashboard"), /Prévia privada v7.*7387a1a.*painel do organizador/);
-  assert.match(lineFor(result, "/dashboard/configuracoes"), /Prévia privada v7.*visão geral de configurações/);
-  assert.match(lineFor(result, "/dashboard/campanhas"), /Não atestada na prévia v7.*não foi percorrida no simulador/);
+  assert.deepEqual(Object.keys(publication.directScopes), ["/", "/contato", "/dashboard", "/dashboard/configuracoes", "/dashboard/crm", "/dashboard/crm/contatos", "/dashboard/crm/contatos/[id]", "/dashboard/crm/segmentos", "/suporte"]);
+  assert.equal(matrixRows(result).filter((line) => line.includes("| Prévia privada v8 ·")).length, 9);
+  assert.match(lineFor(result, "/"), /Prévia privada v8.*abertura da página inicial/);
+  assert.match(lineFor(result, "/dashboard"), /Prévia privada v8.*029d325.*painel do organizador/);
+  assert.match(lineFor(result, "/dashboard/configuracoes"), /Prévia privada v8.*visão geral de configurações/);
+  assert.match(lineFor(result, "/dashboard/crm/contatos"), /Prévia privada v8.*listagem de contatos/);
+  assert.match(lineFor(result, "/dashboard/crm/automacoes"), /Não atestada na prévia v8/);
+  assert.match(lineFor(result, "/dashboard/campanhas"), /Não atestada na prévia v8.*não foi percorrida no simulador/);
   assert.deepEqual(Object.keys(simulator.partialPaths).sort(), ["/comprador", "/login"]);
   assert.match(lineFor(result, "/comprador"), /Início do comprador parcial no simulador/);
   assert.doesNotMatch(lineFor(result, "/dashboard"), /parcial no simulador/);

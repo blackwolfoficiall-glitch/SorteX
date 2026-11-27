@@ -1,14 +1,18 @@
 // Curadoria de escopo por URL. Ampliar só com prova do mesmo ambiente, revisão e rota.
 export const publication = {
-  version: 7,
-  revision: "7387a1a47fe64a11404dab98d57225035ffda538",
-  verifiedUtc: "2026-11-27 22:40 UTC",
+  version: 8,
+  revision: "029d325342796c18f8d358e30a6a487dcdce3da7",
+  verifiedUtc: "2026-11-27 22:45 UTC",
   url: "https://sortex-qa-privada.workspace-de-1136.chatgpt.site",
   directScopes: {
     "/": "abertura da página inicial",
     "/contato": "página de contato",
     "/dashboard": "painel do organizador, bilhete com linha no celular",
     "/dashboard/configuracoes": "visão geral de configurações",
+    "/dashboard/crm": "visão geral do CRM",
+    "/dashboard/crm/contatos": "listagem de contatos e atalhos de composição",
+    "/dashboard/crm/contatos/[id]": "perfil do contato e atalhos, sem envio externo",
+    "/dashboard/crm/segmentos": "construtor de segmentos e atalho de composição",
     "/suporte": "página de suporte",
   },
   sharedShell: "Navegação compartilhada do organizador. Links visíveis não atestam os destinos.",

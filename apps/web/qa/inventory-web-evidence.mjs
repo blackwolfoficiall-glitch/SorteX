@@ -355,4 +355,16 @@ export const pageEvidence = [
     source: "apps/web/e2e/admin-team-premium.spec.ts",
     revision: "fed855f",
   },
+  {
+    path: "/dashboard/mini-campanhas/[id]",
+    detail: "detalhe próprio, cotas e resultado persistidos, estado vazio, foco e conta distinta bloqueada; nenhuma apuração ou gravação",
+    source: "apps/web/e2e-local/run-mini-campaign-detail-premium.mjs",
+    revision: "e09b83c",
+  },
+  {
+    path: "/mini-campanhas/[slug]",
+    detail: "página pública da campanha publicada, sem exposição de pedidos; rascunho e encerrada não exibidos; nenhuma reserva",
+    source: "apps/web/e2e-local/run-mini-campaign-detail-premium.mjs",
+    revision: "e09b83c",
+  },
 ];
