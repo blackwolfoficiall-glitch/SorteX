@@ -26,7 +26,9 @@ import {
   type Brand,
 } from "@/lib/organizer-platform/client";
 import Image from "next/image";
-import { getDashboard, type DashboardSummary } from "@/lib/api/dashboard";
+import { getDashboard, type DashboardResponse } from "@/lib/api/dashboard";
+import { useAuthorizedUser } from "@/components/auth/RoleGate";
+import DashboardPeriodMetrics from "./DashboardPeriodMetrics";
 import {
   dashboard as getCrmDashboard,
   type CrmDashboard,
@@ -39,17 +41,19 @@ const money = (value: number) =>
   value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 export default function OrganizerDashboard() {
+  const user = useAuthorizedUser();
+  return user?.role === "ORGANIZER" ? <DashboardForAccount key={user.id} /> : null;
+}
+
+function DashboardForAccount() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dashboard, setDashboard] = useState<DashboardSummary | null>(null);
-  const [revenueHistory, setRevenueHistory] = useState<
-    { date: string; revenue: number }[]
-  >([]);
+  const [snapshot, setSnapshot] = useState<DashboardResponse | null>(null);
+  const dashboard = snapshot?.summary;
   const [dashboardError, setDashboardError] = useState("");
   const [crm, setCrm] = useState<CrmDashboard | null>(null);
   const [organizerProfile, setOrganizerProfile] =
     useState<OrganizerProfile | null>(null);
-  const [period, setPeriod] = useState("30 dias");
   const [renderedAt] = useState(() => Date.now());
   const [identity, setIdentity] = useState<{
     name: string;
@@ -62,8 +66,7 @@ export default function OrganizerDashboard() {
         if (campaignResult.status === "fulfilled")
           setCampaigns(campaignResult.value);
         if (dashboardResult.status === "fulfilled") {
-          setDashboard(dashboardResult.value.summary);
-          setRevenueHistory(dashboardResult.value.revenueHistory ?? []);
+          setSnapshot(dashboardResult.value);
         } else {
           setDashboardError(
             dashboardResult.reason instanceof Error
@@ -88,50 +91,9 @@ export default function OrganizerDashboard() {
     () => ({
       revenue: campaigns.reduce((sum, item) => sum + item.grossRevenue, 0),
       sold: campaigns.reduce((sum, item) => sum + item.soldNumbers, 0),
-      participants: campaigns.reduce((sum, item) => sum + item.soldNumbers, 0),
     }),
     [campaigns],
   );
-  const averageTicket =
-    dashboard?.averageTicket ??
-    (totals.sold ? totals.revenue / totals.sold : 0);
-  const chart = useMemo(() => {
-    const now = new Date(renderedAt);
-    const monthly = period === "12 meses";
-    const length = monthly
-      ? 12
-      : period === "Hoje"
-        ? 1
-        : period === "7 dias"
-          ? 7
-          : 30;
-    return Array.from({ length }, (_, i) => {
-      const date = monthly
-        ? new Date(
-            Date.UTC(
-              now.getUTCFullYear(),
-              now.getUTCMonth() - length + i + 1,
-              1,
-            ),
-          )
-        : new Date(
-            Date.UTC(
-              now.getUTCFullYear(),
-              now.getUTCMonth(),
-              now.getUTCDate() - length + i + 1,
-            ),
-          );
-      const key = date.toISOString().slice(0, monthly ? 7 : 10);
-      return {
-        label: monthly ? key : key.slice(5),
-        revenue: revenueHistory
-          .filter((item) => item.date.startsWith(key))
-          .reduce((sum, item) => sum + item.revenue, 0),
-      };
-    });
-  }, [period, renderedAt, revenueHistory]);
-  const chartMax = Math.max(1, ...chart.map((item) => item.revenue));
-
   if (loading)
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -264,54 +226,7 @@ export default function OrganizerDashboard() {
       )}
 
       <section className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
-        <div className="rounded-3xl border bg-white p-6 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-black">Desempenho de vendas</h2>
-              <p className="text-sm text-zinc-500">
-                Vendas confirmadas por período (UTC).
-              </p>
-            </div>
-            <div className="flex gap-2">
-              {["Hoje", "7 dias", "30 dias", "12 meses"].map((item) => (
-                <button
-                  key={item}
-                  onClick={() => setPeriod(item)}
-                  className={`rounded-xl px-3 py-2 text-xs font-bold ${period === item ? "bg-violet-700 text-white" : "bg-zinc-100"}`}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div
-            role="img"
-            aria-label={`Receita de ${period}: ${money(chart.reduce((sum, item) => sum + item.revenue, 0))}`}
-            className="mt-8 flex h-56 items-end gap-1 rounded-2xl bg-gradient-to-b from-violet-50/70 to-white px-4 pt-10"
-          >
-            {chart.map((item) => (
-              <div
-                key={item.label}
-                title={`${item.label}: ${money(item.revenue)}`}
-                className="flex-1 rounded-t-lg bg-gradient-to-t from-violet-700 to-violet-400"
-                style={{ height: `${(item.revenue / chartMax) * 100}%` }}
-              />
-            ))}
-          </div>
-          <p className="mt-2 flex justify-between text-xs text-zinc-500">
-            <span>{chart[0]?.label}</span>
-            <span>{chart.at(-1)?.label}</span>
-          </p>
-          <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
-            <SmallMetric
-              label="Participantes"
-              value={dashboard?.participants ?? totals.participants}
-            />
-            <SmallMetric label="Ticket médio" value={money(averageTicket)} />
-            <SmallMetric label="Conversão" value="—" />
-            <SmallMetric label="Visitantes" value="—" />
-          </div>
-        </div>
+        <DashboardPeriodMetrics snapshot={snapshot} renderedAt={renderedAt} />
         <div className="space-y-5">
           <div className="rounded-3xl bg-zinc-950 p-6 text-white">
             <div className="flex items-center justify-between">
