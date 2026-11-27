@@ -2,6 +2,7 @@ import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import type { PrismaService } from '../prisma/prisma.service';
 import { AdvisorModelService, advisorIntent } from './advisor-model.service';
 import { AiAdvisorService } from './ai-advisor.service';
+import type { AiUsageQuotaService } from './ai-usage-quota.service';
 
 const previousEnv = process.env;
 const organizer = {
@@ -27,12 +28,23 @@ const mockSummary = {
 const approved = {
   SORTEX_ADVISOR_PROVIDER: 'openai',
   SORTEX_ADVISOR_PILOT_BUDGET: 'approved',
+  SORTEX_ADVISOR_SYNTHETIC_DATA: 'verified-fixtures-only',
   SORTEX_ADVISOR_PILOT_ORGANIZER_ID: organizer.id,
   APP_ENV: 'staging',
   INTEGRATIONS_MODE: 'sandbox',
   FEATURE_REAL_PAYMENTS: 'false',
   OPENAI_API_KEY: 'unit-test-not-a-key',
   OPENAI_MODEL: 'test-model',
+};
+
+const quota = () => {
+  const reserve = jest.fn().mockResolvedValue(undefined);
+  return {
+    reserve,
+    service: new AdvisorModelService({
+      reserve,
+    } as unknown as AiUsageQuotaService),
+  };
 };
 
 const response = (data: unknown = { answer: 'Analise os seus dados.' }) =>
@@ -78,7 +90,7 @@ describe('Advisor model pilot boundary without external calls', () => {
         .spyOn(global, 'fetch')
         .mockResolvedValue(response());
       await expect(
-        new AdvisorModelService().analyze(organizer, 'OVERVIEW', mockSummary),
+        quota().service.analyze(organizer, 'OVERVIEW', mockSummary),
       ).resolves.toBeNull();
       expect(fetchSpy).not.toHaveBeenCalled();
     },
@@ -86,7 +98,7 @@ describe('Advisor model pilot boundary without external calls', () => {
 
   it('fails closed for other tenants, roles, non-synthetic accounts, invalid data, and unrecognized intent', async () => {
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(response());
-    const adapter = new AdvisorModelService();
+    const adapter = quota().service;
     for (const user of [
       { ...organizer, id: 'other-organizer' },
       { ...organizer, role: 'BUYER' as const },
@@ -112,7 +124,7 @@ describe('Advisor model pilot boundary without external calls', () => {
   it('sends only aggregate allowlist to the official endpoint without storage, tools, or redirects', async () => {
     const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(response());
     await expect(
-      new AdvisorModelService().analyze(organizer, 'OVERVIEW', mockSummary),
+      quota().service.analyze(organizer, 'OVERVIEW', mockSummary),
     ).resolves.toEqual({ answer: 'Analise os seus dados.', mode: 'OPENAI' });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0];
@@ -181,36 +193,83 @@ describe('Advisor model pilot boundary without external calls', () => {
     for (const reject of sample) {
       spy.mockImplementationOnce(reject);
       await expect(
-        new AdvisorModelService().analyze(organizer, 'OVERVIEW', mockSummary),
+        quota().service.analyze(organizer, 'OVERVIEW', mockSummary),
       ).resolves.toBeNull();
     }
     expect(spy).toHaveBeenCalledTimes(sample.length);
   });
 
-  it('fails closed for concurrent requests and limits attempts in one instance', async () => {
-    let release!: (value: Response) => void;
-    const spy = jest.spyOn(global, 'fetch').mockImplementationOnce(
-      () =>
-        new Promise<Response>((resolve) => {
-          release = resolve;
-        }),
+  it('never reaches a provider before the cross-worker reservation; stops on quota failure', async () => {
+    const spy = jest.spyOn(global, 'fetch').mockResolvedValue(response());
+    const { reserve, service } = quota();
+    const exhausted = new Error('synthetic quota exceeded');
+    reserve.mockRejectedValueOnce(exhausted);
+    await expect(
+      service.analyze(organizer, 'OVERVIEW', mockSummary),
+    ).rejects.toBe(exhausted);
+    expect(spy).not.toHaveBeenCalled();
+
+    const error = new Error('synthetic transport timeout');
+    spy.mockRejectedValueOnce(error);
+    await expect(
+      service.analyze(organizer, 'OVERVIEW', mockSummary),
+    ).resolves.toBeNull();
+    expect(reserve).toHaveBeenCalledTimes(2);
+    expect(reserve).toHaveBeenLastCalledWith({
+      organizerId: organizer.id,
+      inputUnits: expect.any(Number),
+      outputUnits: 512,
+    });
+    expect(reserve.mock.invocationCallOrder[1]).toBeLessThan(
+      spy.mock.invocationCallOrder[0],
     );
-    const adapter = new AdvisorModelService();
-    const request = adapter.analyze(organizer, 'OVERVIEW', mockSummary);
-    await expect(
-      adapter.analyze(organizer, 'OVERVIEW', mockSummary),
-    ).resolves.toBeNull();
-    release(response());
-    await expect(request).resolves.toMatchObject({ mode: 'OPENAI' });
-    spy.mockImplementation(() => Promise.resolve(response()));
-    for (let i = 0; i < 9; i++)
-      await expect(
-        adapter.analyze(organizer, 'OVERVIEW', mockSummary),
-      ).resolves.toMatchObject({ mode: 'OPENAI' });
-    await expect(
-      adapter.analyze(organizer, 'OVERVIEW', mockSummary),
-    ).resolves.toBeNull();
-    expect(spy).toHaveBeenCalledTimes(10);
+  });
+
+  it('resolves only allowlisted module aggregates, with explicit no-media and no-payout semantics', async () => {
+    const spy = jest.spyOn(global, 'fetch').mockResolvedValue(response());
+    const { service } = quota();
+    const finance = jest.fn(async () => ({
+      finance: {
+        availableBalance: '12.34',
+        pendingBalance: '4.56',
+        id: 'private-fixture-id',
+      },
+    }));
+    await service.analyze(organizer, 'FINANCE', mockSummary, finance);
+    await service.analyze(organizer, 'ADS', mockSummary, async () => ({
+      ads: {
+        affiliateOrders: 0,
+        unknownOriginOrders: 2,
+        sourceId: 'private-fixture-id',
+      },
+    }));
+    await service.analyze(
+      organizer,
+      'CRM',
+      { ...mockSummary, contacts: 3, automations: 4 },
+      finance,
+    );
+    expect(finance).toHaveBeenCalledTimes(1);
+    const inputs = spy.mock.calls.map(([, options]) =>
+      JSON.parse(JSON.parse(String(options?.body)).input),
+    );
+    expect(inputs[0].finance).toEqual({
+      currency: 'BRL',
+      internalAvailable: '12.34',
+      internalPending: '4.56',
+      payoutsVerified: false,
+    });
+    expect(inputs[1].ads).toEqual({
+      periodDays: 30,
+      affiliateOrders: 0,
+      unknownOriginOrders: 2,
+      paidMediaMetricsAvailable: false,
+    });
+    expect(inputs[2].crm).toEqual({
+      contactCount: 3,
+      activeAutomationCount: 4,
+    });
+    expect(JSON.stringify(inputs)).not.toContain('private-fixture-id');
   });
 });
 
@@ -232,7 +291,7 @@ describe('Existing Advisor chat', () => {
     const spy = jest
       .spyOn(global, 'fetch')
       .mockImplementation(() => Promise.resolve(response()));
-    const service = new AiAdvisorService(prisma, new AdvisorModelService());
+    const service = new AiAdvisorService(prisma, quota().service);
     await expect(
       service.chat(organizer, 'Como estão minhas vendas?'),
     ).resolves.toMatchObject({ mode: 'DETERMINISTIC' });

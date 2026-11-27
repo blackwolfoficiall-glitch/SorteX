@@ -3260,3 +3260,15 @@ model Notification {
 
   @@index([userId, readAt, createdAt])
 }
+
+// Only aggregate reservation counters, not prompts, provider data, or output.
+model AiUsageDailyQuota {
+  day          DateTime @db.Date
+  scope        String
+  scopeId      String
+  requestCount Int
+  inputUnits   Int
+  outputUnits  Int
+
+  @@id([day, scope, scopeId])
+}

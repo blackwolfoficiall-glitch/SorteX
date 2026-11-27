@@ -6,6 +6,7 @@ import {
   PremiumButton, PremiumGradient, PremiumPage, premiumShadow, premiumTypography, usePremiumTheme,
 } from "../theme/premium";
 import { organizerGroups } from "./premium-navigation";
+import { NativeOrganizerAdvisor } from "./NativeOrganizerAdvisor";
 
 const tabItems = {
   Home: ["⌂", "Início"],
@@ -87,7 +88,7 @@ export function OrganizerMore({ navigation }: { navigation: any }) {
                   <View style={{ flex: 1 }}>
                     <Text style={[premiumTypography.label, { color: t.text }]}>{entry.title}</Text>
                     <Text style={{ color: t.muted, fontSize: 12, marginTop: 3 }}>
-                      {"unavailable" in entry || entry.title === "IA SorteX" ? "Ainda indisponível" : "Abrir"}
+                      {"unavailable" in entry ? "Ainda indisponível" : "Abrir"}
                     </Text>
                   </View>
                 </Pressable>
@@ -101,17 +102,7 @@ export function OrganizerMore({ navigation }: { navigation: any }) {
 }
 
 export function OrganizerCopilot() {
-  const t = usePremiumTheme();
-  return (
-    <PremiumPage title="Copilot">
-      <View style={[styles.info, { borderColor: t.line, backgroundColor: t.surface }]}>
-        <Text accessibilityRole="header" style={[premiumTypography.section, { color: t.text }]}>IA SorteX ainda não conectada</Text>
-        <Text style={[premiumTypography.body, { color: t.muted }]}>
-          As recomendações aparecem aqui depois que um provedor de IA for conectado e validado. Nenhuma previsão está sendo exibida e nenhuma ação é executada automaticamente.
-        </Text>
-      </View>
-    </PremiumPage>
-  );
+  return <NativeOrganizerAdvisor />;
 }
 
 export function OrganizerModuleStatus({ route, navigation }: { route: any; navigation: any }) {

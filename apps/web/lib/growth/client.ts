@@ -257,6 +257,7 @@ export type AdvisorAlert = {
   actions: AdvisorAction[];
 };
 export type AdvisorSnapshot = {
+  aiPilotAvailable?: boolean;
   organizerName: string;
   generatedAt: string;
   summary: {
@@ -296,16 +297,16 @@ export type AdvisorAnswer = {
   evidence: string[];
   suggestedQuestions: string[];
   actions: AdvisorAction[];
-  mode: "OPENAI" | "DETERMINISTIC";
+  mode: "OPENAI" | "GEMINI" | "DETERMINISTIC";
 };
 export const getAdvisor = () =>
   authRequest<AdvisorSnapshot>("/api/platform/ai-sortex/advisor", {
     cache: "no-store",
   });
-export const askAdvisor = (question: string) =>
+export const askAdvisor = (question: string, allowAi = false) =>
   authRequest<AdvisorAnswer>("/api/platform/ai-sortex/advisor/chat", {
     method: "POST",
-    body: JSON.stringify({ question }),
+    body: JSON.stringify({ question, allowAi }),
   });
 export const simulateAdvisor = (body: {
   campaignId?: string;

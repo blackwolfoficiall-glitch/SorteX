@@ -11,6 +11,7 @@ import { GrowthService } from './growth.service';
 import { AiAdvisorService } from './ai-advisor.service';
 import { AdvisorModelService } from './advisor-model.service';
 import { MetaAdsService } from './meta-ads.service';
+import { AiUsageQuotaService } from './ai-usage-quota.service';
 @Module({
   imports: [PrismaModule],
   controllers: [
@@ -24,6 +25,7 @@ import { MetaAdsService } from './meta-ads.service';
     GrowthService,
     AiAdvisorService,
     AdvisorModelService,
+    AiUsageQuotaService,
     MetaAdsService,
   ],
 })

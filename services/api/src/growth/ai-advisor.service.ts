@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { AdvisorMessageDto, AdvisorSimulationDto } from './dto/growth.dto';
 import { AdvisorModelService, advisorIntent } from './advisor-model.service';
+import { readAdsConfirmedSales } from './ads-confirmed-sales';
 
 type AdvisorAction = { label: string; url: string; confirmation: string };
 type AdvisorAlert = {
@@ -193,6 +194,7 @@ export class AiAdvisorService {
     };
     return {
       organizerName: user.name.split(' ')[0],
+      aiPilotAvailable: this.models.canAnalyze(user),
       generatedAt: new Date().toISOString(),
       summary,
       campaigns: campaigns.map((c) => ({
@@ -220,10 +222,51 @@ export class AiAdvisorService {
     const context = await this.snapshot(user);
     const fallback = this.deterministicAnswer(question, context);
     if (allowAi) {
+      const intent = advisorIntent(question);
       const generated = await this.models.analyze(
         user,
-        advisorIntent(question),
+        intent,
         context.summary,
+        async () => {
+          if (intent === 'FINANCE') {
+            const account = await this.prisma.financialAccount.findUnique({
+              where: {
+                ownerType_ownerId_currency: {
+                  ownerType: 'ORGANIZER',
+                  ownerId: user.id,
+                  currency: 'BRL',
+                },
+              },
+              select: { availableBalance: true, pendingBalance: true },
+            });
+            return {
+              finance: account
+                ? {
+                    availableBalance: account.availableBalance.toFixed(2),
+                    pendingBalance: account.pendingBalance.toFixed(2),
+                  }
+                : null,
+            };
+          }
+          if (intent === 'ADS') {
+            const result = await readAdsConfirmedSales(this.prisma, user.id, {
+              period: '30D',
+            });
+            return {
+              ads: {
+                affiliateOrders:
+                  result.attribution.channels.find(
+                    (x) => x.origin === 'AFFILIATE',
+                  )?.confirmedOrders ?? 0,
+                unknownOriginOrders:
+                  result.attribution.channels.find(
+                    (x) => x.origin === 'UNKNOWN',
+                  )?.confirmedOrders ?? 0,
+              },
+            };
+          }
+          return {};
+        },
       );
       if (generated) {
         return { ...fallback, ...generated };
@@ -370,6 +413,13 @@ export class AiAdvisorService {
     if (q.includes('reserva') || q.includes('recuper')) {
       answer = `Existem ${s.abandonedReservations} reservas abandonadas e ${s.pendingPayments} pagamentos pendentes. Esses são os públicos mais diretos para recuperação, sem garantia de conversão.`;
       actions = context.alerts.find((a) => a.id === 'abandoned')?.actions ?? [];
+    } else if (advisorIntent(question) === 'CRM') {
+      answer = `O CRM tem ${s.contacts} contatos ativos no cadastro e ${s.automations} automações ativas. Há ${s.abandonedReservations} reservas expiradas. Nenhuma mensagem foi enviada.`;
+    } else if (advisorIntent(question) === 'FINANCE') {
+      answer = `Os pedidos aprovados somam R$ ${s.revenue.toFixed(2)} brutos. Isso não representa saldo disponível, valor líquido ou repasse. Confira o extrato em Financeiro.`;
+    } else if (advisorIntent(question) === 'ADS') {
+      answer =
+        'Consulte o SorteX Ads para ver vendas confirmadas por origem interna. Sem dados verificados de mídia, não é possível calcular ROAS ou comparar plataformas de anúncios.';
     } else if (q.includes('pior') || q.includes('potencial')) {
       const r = [...context.campaigns].sort(
         (a, b) => a.progress - b.progress,

@@ -156,7 +156,7 @@ export default function AiSortexCenter() {
         ))}
       </nav>
       {tab === "resumo" && <Summary data={data} />}
-      {tab === "chat" && <Chat />}
+      {tab === "chat" && <Chat pilotAvailable={data.aiPilotAvailable === true} />}
       {tab === "simulacoes" && <Simulations data={data} />}
       {tab === "mensagens" && <Messages data={data} />}
     </div>
@@ -215,7 +215,8 @@ function Summary({ data }: { data: AdvisorSnapshot }) {
   );
 }
 
-function Chat() {
+function Chat({ pilotAvailable }: { pilotAvailable: boolean }) {
+  const [consent, setConsent] = useState(false);
   const [q, setQ] = useState(""),
     [messages, setMessages] = useState<
       Array<{
@@ -235,7 +236,7 @@ function Chat() {
     setBusy(true);
     setError("");
     try {
-      const answer = await askAdvisor(question);
+      const answer = await askAdvisor(question, pilotAvailable && consent);
       setMessages((m) => [
         ...m,
         { role: "assistant", text: answer.answer, answer },
@@ -252,10 +253,12 @@ function Chat() {
         <h2 className="font-black">Perguntas rápidas</h2>
         <div className="mt-3 space-y-2">
           {[
-            "Como vender mais?",
-            "Qual campanha está pior?",
+            "Como estão minhas vendas?",
+            "Como está meu CRM?",
+            "Como está meu financeiro?",
+            "Qual a origem das vendas?",
             "Qual promoção devo criar?",
-            "Quantas reservas abandonadas existem?",
+            "Como recuperar reservas abandonadas?",
             "Qual horário devo divulgar?",
           ].map((x) => (
             <button
@@ -274,6 +277,15 @@ function Chat() {
             <Bot className="text-violet-600" />
             Converse com seu consultor
           </h2>
+          {pilotAvailable ? (
+            <label className="mt-3 flex items-start gap-2 text-sm text-zinc-700">
+              <input type="checkbox" className="mt-1" checked={consent}
+                onChange={(event) => setConsent(event.target.checked)} />
+              Usar IA externa nas perguntas rápidas compatíveis. Serão enviados somente indicadores fictícios agregados.
+            </label>
+          ) : (
+            <p className="mt-2 text-sm text-zinc-500">Provedor de IA indisponível nesta conta. As respostas usam regras locais.</p>
+          )}
         </div>
         <div className="flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
           {messages.length === 0 && (
@@ -281,7 +293,7 @@ function Chat() {
               <Sparkles className="mx-auto text-violet-400" size={38} />
               <h3 className="mt-3 font-black">Pergunte sobre a sua operação</h3>
               <p className="mt-2 text-sm text-zinc-500">
-                As respostas usam somente dados reais disponíveis na sua conta.
+                As respostas usam os indicadores disponíveis nesta conta. Nenhuma ação é executada automaticamente.
               </p>
             </div>
           )}
@@ -309,9 +321,11 @@ function Chat() {
                     ))}
                   </div>
                   <p className="mt-3 text-[11px] text-zinc-400">
-                    {m.answer.mode === "OPENAI"
-                      ? "Resposta estruturada pelo provedor de IA"
-                      : "Resposta do motor local determinístico"}
+                    {m.answer.mode === "GEMINI"
+                      ? "Resposta gerada pelo Google Gemini"
+                      : m.answer.mode === "OPENAI"
+                        ? "Resposta gerada pela OpenAI"
+                        : "Resposta de regras locais, sem IA externa"}
                   </p>
                 </>
               )}
