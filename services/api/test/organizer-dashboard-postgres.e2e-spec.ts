@@ -580,9 +580,12 @@ isolated('Organizer dashboard snapshots with isolated PostgreSQL', () => {
       });
       // The same owner and database snapshot must agree with Ads, which
       // applies its own confirmed-purchase query.
-      const ads = await fetch(base + '/sortex-ads/confirmed-sales?period=TODAY', {
-        headers,
-      });
+      const ads = await fetch(
+        base + '/sortex-ads/confirmed-sales?period=TODAY',
+        {
+          headers,
+        },
+      );
       expect(ads.status).toBe(200);
       expect(await ads.json()).toMatchObject({
         period: { fromDate: '2026-11-26', toDateExclusive: '2026-11-27' },
