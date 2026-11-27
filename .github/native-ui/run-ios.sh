@@ -25,7 +25,8 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 export MAESTRO_CLI_NO_ANALYTICS=true
 export MAESTRO_DISABLE_UPDATE_CHECK=true
 export MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
-export MAESTRO_DRIVER_STARTUP_TIMEOUT=60000
+# Keep the pinned Maestro default of 120 s for cold XCUITest startup.
+unset MAESTRO_DRIVER_STARTUP_TIMEOUT
 source "$root/.github/native-ui/checkpoint.sh"
 checkpoint launcher-validated
 unset MAESTRO_CLOUD_API_KEY

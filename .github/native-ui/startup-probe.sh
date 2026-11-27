@@ -10,7 +10,11 @@ trap 'rm -rf -- "$debug"' EXIT
 # credentials. Strip them from this entire probe subprocess, including any
 # screenshot command, and keep the raw Maestro output off public artifacts.
 unset SORTEX_IOS_UI_BUYER_PASSWORD BUYER_PASSWORD MAESTRO_CLOUD_API_KEY
+export MAESTRO_API_URL=http://127.0.0.1:1
 [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 64
+# The Release installer has already launched this exact bundle with simctl.
+# Do not repeat launch through Maestro: even stopApp:false implicitly changes
+# simulator permissions before the accessibility checks.
 if "$MAESTRO_BIN" --no-ansi --device "$SORTEX_SIMULATOR_ID" test \
    --debug-output "$debug" --test-output-dir "$debug" \
    "$root/.github/native-ui/buyer-startup.yaml" >"$debug/stdout.log" 2>&1; then

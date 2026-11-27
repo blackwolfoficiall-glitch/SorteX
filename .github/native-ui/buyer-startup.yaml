@@ -1,8 +1,6 @@
 appId: br.com.sortex.development
 name: Inicialização nativa sem credenciais
 ---
-- launchApp:
-    stopApp: false
 - extendedWaitUntil:
     visible:
       id: sortex-login-email

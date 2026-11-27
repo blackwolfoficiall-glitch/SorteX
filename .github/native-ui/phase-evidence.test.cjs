@@ -24,7 +24,7 @@ const block = workflow.match(/name: Guardar etapa da falha sem expor dados do ce
 assert.ok(block);
 const report = block[1].replace(/^ {10}/gm, '');
 const workflowOutcomes = Object.fromEntries(
-  ['CHECKOUT', 'NODE', 'JAVA', 'GUARDS', 'TOOLS', 'API', 'APP', 'SIMULATOR', 'SCENARIO', 'EVIDENCE']
+  ['CHECKOUT', 'NODE', 'JAVA', 'GUARDS', 'TOOLS', 'MAESTRO_PREFLIGHT', 'API', 'APP', 'SIMULATOR', 'SCENARIO', 'EVIDENCE']
     .map((phase) => [phase + '_OUTCOME', 'success']),
 );
 
@@ -56,6 +56,7 @@ for (const [phase, filename] of Object.entries(phases)) {
     writeFileSync(maestro, `#!/bin/bash
 set -eu
 [ -z "\${SORTEX_IOS_UI_BUYER_PASSWORD-}\${BUYER_PASSWORD-}\${MAESTRO_CLOUD_API_KEY-}" ] || exit 61
+[ "$MAESTRO_API_URL" = http://127.0.0.1:1 ] || exit 67
 [ "$1" = "--no-ansi" ] && [ "$2" = "--device" ] && [ "$4" = "test" ] &&
 [ "$5" = "--debug-output" ] && [ "$7" = "--test-output-dir" ] && [ "$6" = "$8" ] || exit 62
 printf 'raw credential: %s\n' "$EXPECTED_CREDENTIAL" > "$6/private-screen.png"
@@ -77,6 +78,7 @@ exit "$MAESTRO_EXIT"
           SORTEX_SIMULATOR_ID: '00000000-0000-0000-0000-000000000001',
           SORTEX_IOS_UI_BUYER_PASSWORD: credential, BUYER_PASSWORD: otherSecrets,
           MAESTRO_CLOUD_API_KEY: otherSecrets, EXPECTED_CREDENTIAL: credential,
+          MAESTRO_API_URL: 'https://should-not-reach.invalid',
           EXPECTED_DATA: otherSecrets, EXPECTED_PHASE: phase, EXPECTED_FILE: filename,
           MAESTRO_EXIT: String(maestroExit), BASH_ENV: '',
         }, encoding: 'utf8',
@@ -94,6 +96,7 @@ test('immutable failure summary works even before checkout and ignores unknown v
   const scenarios = [
     { step: 'checkout', outcomes: { CHECKOUT_OUTCOME: 'failure' }, phase: '', last: 'none' },
     { step: 'tools', outcomes: { TOOLS_OUTCOME: 'failure' }, phase: '', last: 'none' },
+    { step: 'maestro-preflight', outcomes: { MAESTRO_PREFLIGHT_OUTCOME: 'failure' }, phase: '', last: 'none' },
     { step: 'evidence-upload', outcomes: { EVIDENCE_OUTCOME: 'failure' }, phase: 'server-verification-complete\n', last: 'server-verification-complete' },
     { step: 'scenario', outcomes: { SCENARIO_OUTCOME: 'failure' }, phase: 'fixture-entered\n', last: 'fixture-entered' },
     { step: 'scenario', outcomes: { SCENARIO_OUTCOME: 'failure' }, phase: 'campaign-verified\n' + otherSecrets, last: 'campaign-verified' },

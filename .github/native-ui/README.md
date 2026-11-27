@@ -18,6 +18,12 @@ não usa certificado, perfil de dispositivo, time Apple ou modo alternativo
 de armazenar a sessão. O teste usa o CLI Maestro local
 [2.12.1](https://github.com/mobile-dev-inc/Maestro/releases/tag/cli-2.12.1),
 verificado por SHA-256, sem Maestro Cloud, telemetria ou análise externa.
+Antes de compilar ou gerar dados de login, o executável confirma a versão
+e valida a sintaxe dos seis fluxos. A prontidão inspeciona o Release já
+aberto por `simctl`, sem relançamento do Maestro ou alteração de permissões.
+O driver XCTest mantém os 120 segundos padrão do CLI para início a frio.
+O destino de relatórios de exceção do CLI é explicitamente limitado ao
+loopback sem listener; esse caminho do Maestro é separado da telemetria.
 
 A API Nest real escuta exclusivamente em `127.0.0.1:3338`, com migrações
 aplicadas a um cluster PostgreSQL 18 novo, local e descartável. A fixture

@@ -66,6 +66,10 @@ jobs:
           unzip -q "$archive" -d "$RUNNER_TEMP"
           test -x "$RUNNER_TEMP/maestro/bin/maestro"
           echo "MAESTRO_BIN=$RUNNER_TEMP/maestro/bin/maestro" >> "$GITHUB_ENV"
+      - name: Conferir o executável do Maestro e os seis fluxos
+        id: maestro-preflight
+        shell: bash
+        run: bash .github/native-ui/check-maestro.sh
       - name: Preparar API Nest local
         id: api
         working-directory: services/api
@@ -121,6 +125,7 @@ jobs:
           JAVA_OUTCOME: ${{ steps.java.outcome }}
           GUARDS_OUTCOME: ${{ steps.guards.outcome }}
           TOOLS_OUTCOME: ${{ steps.tools.outcome }}
+          MAESTRO_PREFLIGHT_OUTCOME: ${{ steps.maestro-preflight.outcome }}
           API_OUTCOME: ${{ steps.api.outcome }}
           APP_OUTCOME: ${{ steps.app.outcome }}
           SIMULATOR_OUTCOME: ${{ steps.simulator.outcome }}
@@ -138,6 +143,7 @@ jobs:
           elif [[ "$JAVA_OUTCOME" == failure ]]; then failed=java
           elif [[ "$GUARDS_OUTCOME" == failure ]]; then failed=guards
           elif [[ "$TOOLS_OUTCOME" == failure ]]; then failed=tools
+          elif [[ "$MAESTRO_PREFLIGHT_OUTCOME" == failure ]]; then failed=maestro-preflight
           elif [[ "$API_OUTCOME" == failure ]]; then failed=api-build
           elif [[ "$APP_OUTCOME" == failure ]]; then failed=app-prebuild
           elif [[ "$SIMULATOR_OUTCOME" == failure ]]; then failed=simulator-boot

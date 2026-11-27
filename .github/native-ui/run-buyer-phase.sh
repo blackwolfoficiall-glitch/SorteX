@@ -16,6 +16,7 @@ case "${1:-}" in
   *) exit 64 ;;
 esac
 unset SORTEX_IOS_UI_BUYER_PASSWORD BUYER_PASSWORD MAESTRO_CLOUD_API_KEY
+export MAESTRO_API_URL=http://127.0.0.1:1
 debug="$(mktemp -d "$RUNNER_TEMP/sortex-ui-debug.XXXXXX")"
 trap 'rm -rf -- "$debug"' EXIT
 # Maestro needs a writable scratch directory for its private metadata. Do not

@@ -17,7 +17,7 @@ test('startup Maestro probes real login view without typing or receiving credent
   assert.match(flow, /scrollUntilVisible:\s+element:\s+id: sortex-login-submit/);
   assert.match(flow, /assertVisible:\s+id: sortex-login-submit/);
   assert.match(flow, /id: sortex-login-password/);
-  assert.doesNotMatch(flow, /tapOn|inputText|runScript|runFlow|BUYER_PASSWORD|optional:|point:/);
+  assert.doesNotMatch(flow, /launchApp|setPermissions|tapOn|inputText|runScript|runFlow|BUYER_PASSWORD|optional:|point:/);
 });
 
 test('credentialed flow keeps strict login selectors and only the login phase enters input', () => {
@@ -42,6 +42,7 @@ set -eu
 [ -z "\${SORTEX_IOS_UI_BUYER_PASSWORD-}" ] || exit 90
 [ -z "\${BUYER_PASSWORD-}" ] || exit 91
 [ -z "\${MAESTRO_CLOUD_API_KEY-}" ] || exit 92
+[ "$MAESTRO_API_URL" = "http://127.0.0.1:1" ] || exit 97
 [ "$1" = "--no-ansi" ] && [ "$2" = "--device" ] && [ "$4" = "test" ] &&
   [ "$5" = "--debug-output" ] && [ "$7" = "--test-output-dir" ] && [ "$#" -eq 9 ] || exit 93
 case "$9" in */buyer-startup.yaml) ;; *) exit 94 ;; esac
@@ -75,6 +76,7 @@ exit "$SCREENSHOT_EXIT"
         SORTEX_IOS_UI_BUYER_PASSWORD: secretMarker,
         BUYER_PASSWORD: secretMarker,
         MAESTRO_CLOUD_API_KEY: secretMarker,
+        MAESTRO_API_URL: 'https://should-not-reach.invalid',
         PROBE_TRACE: trace,
         PROBE_EXIT: failed ? '1' : '0',
         SCREENSHOT_EXIT: screenshotFails ? '1' : '0',
@@ -122,6 +124,12 @@ for (const [input, expected] of [
   ['Could not find element id: sortex-login-submit', 'submit-selector-not-found'],
   ['Assertion is false: fake secret text', 'accessibility-assertion-failed'],
   ['Unable to start iOS driver: fake secret text', 'ios-driver-startup-failed'],
+  ['xcuitest.installer.LocalXCTestInstaller$IOSDriverTimeoutException: iOS driver not ready in time, fixture path', 'ios-driver-startup-timeout'],
+  ['Device 00000000-0000-0000-0000-000000000001 was requested, but it is not connected.', 'simulator-not-connected'],
+  ['Error: Unable to set permissions: failed marker', 'ios-driver-permissions-failed'],
+  ['Maestro driver timed out during viewHierarchy call with: fixture path', 'ios-driver-ui-query-timeout'],
+  ['Caused by: java.nio.file.NoSuchFileException: /private/maestro/logs/maestro.log.lck', 'maestro-local-storage-unavailable'],
+  ['Exception: maestro.cli.util.Unpacker.createFileIfDoesNotExist()', 'maestro-local-storage-unavailable'],
   ['Unmatched argument private path', 'cli-or-flow-configuration-failed'],
   ['unrecognized private content', 'unclassified'],
 ]) {
@@ -133,3 +141,44 @@ for (const [input, expected] of [
     assert.equal(result.stdout.trim(), expected);
   });
 }
+
+test('pinned CLI preflight rejects a wrong version before syntax and strips credentials', (t) => {
+  const tmp = mkdtempSync(join(tmpdir(), 'sortex-maestro-preflight-test-'));
+  t.after(() => rmSync(tmp, { recursive: true, force: true }));
+  const cli = join(tmp, 'maestro');
+  const trace = join(tmp, 'trace');
+  writeFileSync(cli, `#!/bin/sh
+set -eu
+[ -z "\${SORTEX_IOS_UI_BUYER_PASSWORD-}\${BUYER_PASSWORD-}\${MAESTRO_CLOUD_API_KEY-}" ] || exit 90
+[ "$MAESTRO_CLI_NO_ANALYTICS" = true ] || exit 91
+[ "$MAESTRO_API_URL" = "http://127.0.0.1:1" ] || exit 93
+if [ "$1" = --version ]; then printf '%s\\n' "$VERSION"; exit 0; fi
+[ "$1" = check-syntax ] && [ "$#" -eq 2 ] || exit 92
+printf '%s\\n' "${"$"}{2##*/}" >> "$PROBE_TRACE"
+if [ "${"$"}{2##*/}" = "$BROKEN" ]; then printf 'raw-particulars\\n' >&2; exit 1; fi
+`, { mode: 0o700 });
+  const run = (version, broken = '') => spawnSync('bash', [resolve(dir, 'check-maestro.sh')], {
+    encoding: 'utf8',
+    env: {
+      ...process.env, BASH_ENV: '', MAESTRO_BIN: cli, PROBE_TRACE: trace,
+      VERSION: version, BROKEN: broken, SORTEX_IOS_UI_BUYER_PASSWORD: secretMarker,
+      BUYER_PASSWORD: secretMarker, MAESTRO_CLOUD_API_KEY: secretMarker,
+      MAESTRO_API_URL: 'https://should-not-reach.invalid',
+    },
+  });
+  let result = run('2.13.0');
+  assert.equal(result.status, 64);
+  assert.equal(existsSync(trace), false);
+  result = run('2.12.1', 'buyer-campaign.yaml');
+  assert.equal(result.status, 64);
+  assert.match(result.stderr, /rejected the campaign flow/);
+  assert.doesNotMatch(result.stdout + result.stderr, /raw-particulars/);
+  rmSync(trace);
+  result = run('2.12.1');
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /accepted all six isolated iOS flows/);
+  assert.deepEqual(readFileSync(trace, 'utf8').trim().split('\n'), [
+    'buyer-startup.yaml', 'buyer-session.yaml', 'buyer-campaign.yaml',
+    'buyer-signed-in-relaunch.yaml', 'buyer-logout.yaml', 'buyer-signed-out-relaunch.yaml',
+  ]);
+});
