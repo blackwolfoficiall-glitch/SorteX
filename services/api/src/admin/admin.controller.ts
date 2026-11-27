@@ -8,7 +8,7 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
-import { AdminPermission, ReportStatus, UserRole } from '@prisma/client';
+import { AdminPermission, UserRole } from '@prisma/client';
 import { AdminPermissions } from '../auth/decorators/admin-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -34,6 +34,7 @@ import {
   OrganizerDecisionDto,
   OrganizerChecklistDto,
   OrganizerFeeDto,
+  ReportListDto,
   ResolveReportDto,
   SupportActionDto,
   SupportListDto,
@@ -231,8 +232,8 @@ export class AdminController {
   }
   @Get('reports')
   @AdminPermissions(AdminPermission.SUPPORT_WRITE)
-  reports(@Query() q: AdminListDto, @Query('status') status?: ReportStatus) {
-    return this.admin.reports(q, status);
+  reports(@Query() q: ReportListDto) {
+    return this.admin.reports(q, q.status);
   }
   @Get('reports/:id')
   @AdminPermissions(AdminPermission.SUPPORT_WRITE)

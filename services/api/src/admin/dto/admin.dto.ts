@@ -125,6 +125,9 @@ export class AdminNoteDto {
   @IsString() @MinLength(5) reason!: string;
   @IsOptional() @IsString() note?: string;
 }
+export class ReportListDto extends AdminListDto {
+  @IsOptional() @IsEnum(ReportStatus) status?: ReportStatus;
+}
 export class ResolveReportDto {
   @IsEnum(ReportStatus) status!: ReportStatus;
   @IsString() @MinLength(5) resolution!: string;

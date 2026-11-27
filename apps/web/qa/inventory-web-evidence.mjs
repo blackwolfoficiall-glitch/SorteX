@@ -367,4 +367,16 @@ export const pageEvidence = [
     source: "apps/web/e2e-local/run-mini-campaign-detail-premium.mjs",
     revision: "e09b83c",
   },
+  {
+    path: "/admin/suporte",
+    detail: "lista, busca, status, detalhes, recuperação de erro e permissões de suporte; sem responder ou alterar chamados",
+    source: "apps/web/e2e-local/run-admin-casework-premium.mjs",
+    revision: "97904b9",
+  },
+  {
+    path: "/admin/denuncias",
+    detail: "lista, busca, filtro por situação, detalhes e permissões de suporte; sem moderar, enviar ou alterar denúncias",
+    source: "apps/web/e2e-local/run-admin-casework-premium.mjs",
+    revision: "97904b9",
+  },
 ];
