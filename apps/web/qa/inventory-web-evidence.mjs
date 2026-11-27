@@ -3,9 +3,9 @@
 export const pageEvidence = [
   {
     path: "/dashboard",
-    detail: "Dashboard e navegação, vendas por período, estado vazio e recuperação, temas e foco a 320 px",
-    source: "apps/web/e2e-local/run-organizer-dashboard-premium.mjs",
-    revision: "db136a8",
+    detail: "bilhete com barras no desktop e linha e indicadores no celular; valores reais, filtros, estado vazio, foco e navegação nas duas APIs locais",
+    source: "apps/web/e2e-local/run-organizer-definitive-dashboard.mjs",
+    revision: "5846161",
   },
   {
     path: "/dashboard/campanhas",

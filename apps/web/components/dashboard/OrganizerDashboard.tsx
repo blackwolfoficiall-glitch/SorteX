@@ -100,7 +100,7 @@ function DashboardForAccount() {
   );
   if (loading)
     return (
-      <div className={styles.dashboard}>
+      <div data-organizer-dashboard className={styles.dashboard}>
         <div className={styles.loading} role="status">
           <LoaderCircle aria-hidden="true" />
           Carregando painel…
@@ -108,7 +108,7 @@ function DashboardForAccount() {
       </div>
     );
   return (
-    <div className={styles.dashboard}>
+    <div data-organizer-dashboard className={styles.dashboard}>
       {organizerProfile &&
         organizerProfile.verificationStatus !== "VERIFIED" && (
           <section className={styles.approval}>
@@ -183,39 +183,52 @@ function DashboardForAccount() {
 
       <div className={styles.topGrid}>
         <DashboardPeriodMetrics snapshot={snapshot} renderedAt={renderedAt} />
-        <section className={styles.panel} aria-labelledby="dashboard-quick-actions">
-          <header className={styles.panelHeading}>
-            <div>
-              <p className={styles.eyebrow}>Sua operação</p>
-              <h2 id="dashboard-quick-actions">Ações rápidas</h2>
+        <div className={styles.shortcuts}>
+          <section className={`${styles.panel} ${styles.quickPanel}`} aria-labelledby="dashboard-quick-actions">
+            <header className={styles.panelHeading}>
+              <div>
+                <p className={styles.eyebrow}>Sua operação</p>
+                <h2 id="dashboard-quick-actions">Ações rápidas</h2>
+              </div>
+              <span className={styles.panelIcon}><ListChecks size={20} aria-hidden="true" /></span>
+            </header>
+            <div className={styles.quickActions}>
+              {[
+                { key: "create", icon: Plus, label: "Criar campanha", href: "/dashboard/campanhas/nova", hint: "Abrir editor" },
+                { key: "promotion", icon: Gift, label: "Criar promoção", href: "/dashboard/promocoes", hint: "Gerenciar benefícios" },
+                { key: "coupon", icon: Ticket, label: "Criar cupom", href: "/dashboard/promocoes", hint: "Consultar cupons" },
+                { key: "communication", icon: Megaphone, label: "Enviar WhatsApp", href: "/dashboard/comunicacao", hint: "Ver canais e disponibilidade" },
+                { key: "ads", icon: Sparkles, label: "Impulsionar", href: `/dashboard/ads?action=create${published[0] ? `&campaignId=${published[0].id}` : ""}`, hint: "Ads · somente leitura" },
+                { key: "reports", icon: BarChart3, label: "Relatórios", href: "/dashboard/financeiro", hint: "Abrir financeiro" },
+              ].map(({ key, icon: Icon, label, href, hint }) => (
+                <Link
+                  key={key}
+                  href={href}
+                  className={styles.quickAction}
+                  aria-label={label}
+                  aria-describedby={`dashboard-action-${key}`}
+                >
+                  <span className={styles.quickIcon}><Icon size={18} aria-hidden="true" /></span>
+                  <span>
+                    <strong>{label}</strong>
+                    <small id={`dashboard-action-${key}`}>{hint}</small>
+                  </span>
+                </Link>
+              ))}
             </div>
-            <span className={styles.panelIcon}><ListChecks size={20} aria-hidden="true" /></span>
-          </header>
-          <div className={styles.quickActions}>
-            {[
-              { key: "create", icon: Plus, label: "Criar campanha", href: "/dashboard/campanhas/nova", hint: "Abrir editor" },
-              { key: "promotion", icon: Gift, label: "Criar promoção", href: "/dashboard/promocoes", hint: "Gerenciar benefícios" },
-              { key: "coupon", icon: Ticket, label: "Criar cupom", href: "/dashboard/promocoes", hint: "Consultar cupons" },
-              { key: "communication", icon: Megaphone, label: "Enviar WhatsApp", href: "/dashboard/comunicacao", hint: "Ver canais e disponibilidade" },
-              { key: "ads", icon: Sparkles, label: "Impulsionar", href: `/dashboard/ads?action=create${published[0] ? `&campaignId=${published[0].id}` : ""}`, hint: "Ads · somente leitura" },
-              { key: "reports", icon: BarChart3, label: "Relatórios", href: "/dashboard/financeiro", hint: "Abrir financeiro" },
-            ].map(({ key, icon: Icon, label, href, hint }) => (
-              <Link
-                key={key}
-                href={href}
-                className={styles.quickAction}
-                aria-label={label}
-                aria-describedby={`dashboard-action-${key}`}
-              >
-                <span className={styles.quickIcon}><Icon size={18} aria-hidden="true" /></span>
-                <span>
-                  <strong>{label}</strong>
-                  <small id={`dashboard-action-${key}`}>{hint}</small>
-                </span>
-              </Link>
-            ))}
-          </div>
-        </section>
+          </section>
+          <section className={styles.copilot} aria-labelledby="dashboard-copilot">
+            <header className={styles.panelHeading}>
+              <div>
+                <p className={styles.eyebrow}>Inteligência da operação</p>
+                <h2 id="dashboard-copilot">SorteX Copilot</h2>
+              </div>
+              <span className={styles.panelIcon}><Sparkles size={20} aria-hidden="true" /></span>
+            </header>
+            <p className={styles.muted}>Consulte indicadores e explore sugestões na IA SorteX. Nenhuma ação é executada automaticamente.</p>
+            <Link className={styles.actionButton} href="/dashboard/ia">Abrir Copilot <ArrowUpRight size={16} aria-hidden="true" /></Link>
+          </section>
+        </div>
       </div>
 
       <section aria-labelledby="dashboard-overview" className={styles.overview}>

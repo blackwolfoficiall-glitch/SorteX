@@ -371,3 +371,74 @@
     .sxorg-rail { transition: width 160ms ease; }
   }
 }
+
+.sxorg-mobile-header { display: none; }
+
+@media (max-width: 1023.98px) {
+  .sxorg-mobile-header,
+  .sxorg-mobile-tools,
+  .sxorg-mobile-header .sxorg-wordmark {
+    display: flex;
+    align-items: center;
+  }
+  .sxorg-mobile-header {
+    justify-content: space-between;
+    gap: .5rem;
+    padding: max(.35rem, env(safe-area-inset-top, 0px))
+      max(.95rem, env(safe-area-inset-right, 0px)) .35rem
+      max(.95rem, env(safe-area-inset-left, 0px));
+    background: var(--sxorg-nav-surface);
+    color: var(--sxorg-nav-text);
+    border-bottom: 1px solid var(--sxorg-nav-line);
+  }
+  .sxorg-mobile-header .sxorg-wordmark {
+    min-height: 2.75rem;
+    gap: .45rem;
+    border-radius: .7rem;
+    font-family: var(--sxp-font-heading, system-ui, sans-serif);
+    font-size: 1.14rem;
+    font-weight: 850;
+    letter-spacing: -.045em;
+  }
+  .sxorg-mobile-header .sxorg-wordmark > span > span {
+    color: var(--sxorg-nav-accent);
+  }
+  .sxorg-mobile-header .sxorg-wordmark-icon,
+  .sxorg-mobile-header .sxorg-avatar {
+    display: grid;
+    place-items: center;
+    height: 2rem;
+    width: 2rem;
+    flex: none;
+  }
+  .sxorg-mobile-header .sxorg-wordmark-icon {
+    border-radius: .65rem;
+    background: var(--sxorg-nav-gradient);
+    color: #fff;
+  }
+  .sxorg-mobile-tools { gap: .15rem; }
+  .sxorg-unavailable-bell:disabled { cursor: not-allowed; color: var(--sxorg-nav-muted); background: transparent; }
+  .sxorg-mobile-profile {
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  .sxorg-mobile-profile:focus-visible {
+    outline: 2px solid var(--sxorg-nav-focus);
+    outline-offset: -2px;
+  }
+  .sxorg-mobile-header .sxorg-avatar {
+    border-radius: 50%;
+    object-fit: cover;
+    background: var(--sxorg-nav-selected);
+    color: var(--sxorg-nav-accent);
+    font-weight: 800;
+  }
+  .sxorg-main:has(> .sx-premium [data-organizer-dashboard]) {
+    padding-block-start: .4rem;
+  }
+  .sxorg-mobile-tabs { border-radius: 1.4rem; }
+  .sxorg-tab-create .sxorg-tab-icon { border-radius: 50%; }
+}

@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import type { KeyboardEvent, ReactNode } from "react";
 import {
+  Bell,
   Ellipsis,
   House,
   PanelLeftClose,
@@ -153,6 +154,21 @@ export default function Sidebar({
     organizerPaths.copilot,
   ];
 
+  const avatar = brand.profileImage && user ? (
+    <Image
+      src={`/api/brand-assets/${user.id}/profile`}
+      width={40}
+      height={40}
+      unoptimized
+      alt=""
+      className="sxorg-avatar"
+    />
+  ) : (
+    <span aria-hidden="true" className="sxorg-avatar">
+      {name.trim().charAt(0).toUpperCase() || "O"}
+    </span>
+  );
+
   return (
     <>
       <aside
@@ -190,20 +206,7 @@ export default function Sidebar({
             aria-label={`Abrir perfil de ${name}`}
             title={collapsed ? name : undefined}
           >
-            {brand.profileImage && user ? (
-              <Image
-                src={`/api/brand-assets/${user.id}/profile`}
-                width={40}
-                height={40}
-                unoptimized
-                alt=""
-                className="sxorg-avatar"
-              />
-            ) : (
-              <span aria-hidden="true" className="sxorg-avatar">
-                {name.trim().charAt(0).toUpperCase() || "O"}
-              </span>
-            )}
+            {avatar}
             <span className="sxorg-profile-details sxorg-rail-label">
               <span>Organizador</span>
               <strong>{name}</strong>
@@ -219,6 +222,22 @@ export default function Sidebar({
           )}
         </div>
       </aside>
+      {!onboarding && (
+        <header className="sxorg-mobile-header">
+          <Link href={organizerPaths.home} aria-label="SorteX · painel do organizador" className="sxorg-wordmark">
+            <span className="sxorg-wordmark-icon" aria-hidden="true">X</span>
+            <span aria-hidden="true">Sorte<span>X</span></span>
+          </Link>
+          <div className="sxorg-mobile-tools">
+            <button type="button" disabled aria-label="Notificações do organizador indisponíveis" title="Notificações do organizador indisponíveis" className="sxorg-icon-button sxorg-unavailable-bell">
+              <Bell size={20} aria-hidden="true" />
+            </button>
+            <Link href={organizerPaths.profile} className="sxorg-mobile-profile" aria-label={`Abrir perfil de ${name}`}>
+              {avatar}
+            </Link>
+          </div>
+        </header>
+      )}
       {onboarding ? (
         <div className="sxorg-mobile-setup">
           <SetupNotice onLogout={logout} />

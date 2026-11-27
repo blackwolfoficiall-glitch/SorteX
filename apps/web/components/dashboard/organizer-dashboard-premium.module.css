@@ -401,3 +401,96 @@
   .report .filter { grid-column: span 2; }
   .report .filter:nth-last-child(-n + 2) { grid-column: span 3; }
 }
+
+.ticketGroup,
+.shortcuts { display: grid; min-inline-size: 0; gap: .7rem; }
+.ticketGroup { gap: .85rem; }
+.salesTrend { display: none; }
+.copilot {
+  display: grid;
+  gap: .52rem;
+  padding: clamp(.85rem, 2vw, 1.25rem);
+  border: 1px solid var(--dash-line);
+  border-radius: var(--dash-radius);
+  background: linear-gradient(145deg, var(--dash-tint), var(--dash-surface));
+  box-shadow: var(--dash-shadow);
+}
+.copilot .actionButton { justify-self: start; }
+
+@media (max-width: 63.99rem) {
+  .dashboard { padding: clamp(.48rem, 1.8vw, 1rem); }
+  .heroIdentity { grid-template-columns: minmax(0, 1fr); }
+  .heroIdentity .avatar { display: none; }
+  .salesTrend { display: grid; min-inline-size: 0; margin: 0; }
+  .salesTrend svg { display: block; inline-size: 100%; block-size: clamp(4.4rem, 17vw, 6.25rem); }
+  .salesTrend + .chart { display: none; }
+  .chartGrid { stroke: #e2deff65; vector-effect: non-scaling-stroke; }
+  .chartArea { fill: #f2ecff44; }
+  .chartLine, .chartPoint {
+    fill: none;
+    vector-effect: non-scaling-stroke;
+    stroke: #fff;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .chartLine { stroke-width: 2; }
+  .chartPoint { stroke-width: 4; }
+  .chartCaption {
+    display: flex;
+    justify-content: space-between;
+    font-size: .68rem;
+    line-height: 1.22;
+  }
+  .chartValues { margin-block: .04rem; font-size: .75rem; }
+  .chartValues summary {
+    cursor: pointer;
+    min-block-size: 2.75rem;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: .42rem;
+  }
+  .chartValues summary::-webkit-details-marker { display: none; }
+  .chartValues summary::before {
+    content: "";
+    display: block;
+    inline-size: .42rem;
+    block-size: .42rem;
+    border-block-end: 2px solid currentColor;
+    border-inline-end: 2px solid currentColor;
+    transform: rotate(-45deg);
+  }
+  .chartValues[open] summary::before { transform: rotate(45deg); }
+  .chartValues summary:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+  .chartValues ol { display: grid; gap: .2rem; margin: .15rem 0 .3rem; padding: 0; list-style: none; }
+  .chartValues li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .15rem .5rem; }
+  .ticketGroup {
+    position: relative;
+    gap: 0;
+    border-radius: clamp(.95rem, 2.5vw, 1.35rem);
+    background-color: #4529c1;
+    background-image: radial-gradient(circle at 88% 0%, #a581ff25, transparent 45%), var(--dash-gradient);
+  }
+  .report .ticket {
+    padding-block-end: .12rem;
+    background: none;
+  }
+  .ticket::before, .ticket::after { inset-block-start: 56%; }
+  .periodStats {
+    gap: .38rem;
+    margin: .02rem .65rem .65rem;
+    padding-block-start: .42rem;
+    border-block-start: 1px dashed #fff9;
+  }
+  .periodStats .smallMetric { color: #fff; background: #170a512e; padding: .33rem .38rem; }
+  .periodStats .smallMetric :is(dt, .metricScope) { color: #fff; }
+  .periodStats .smallMetric dd { color: #fff; line-height: 1.15; }
+  .quickPanel .quickAction { flex-direction: row; align-items: center; }
+  .quickPanel .quickAction strong { line-height: 1.2; }
+}
+
+@media (max-width: 22.49rem) {
+  .report .ticket { padding-inline: .58rem; }
+  .salesTrend svg { block-size: 4.3rem; }
+  .quickPanel .quickAction { flex-direction: column; align-items: start; }
+}

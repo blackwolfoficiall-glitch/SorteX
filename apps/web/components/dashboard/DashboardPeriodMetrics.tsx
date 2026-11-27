@@ -255,71 +255,127 @@ export default function DashboardPeriodMetrics({
               são do histórico total, não do período.
             </p>
           )}
-          <div className={styles.ticket}>
-            <div className={styles.ticketTitle}>
-              <span><Ticket size={17} aria-hidden="true" /> Total bruto confirmado</span>
-              {rangeCaption && <p>{rangeCaption}</p>}
-            </div>
-            {relevantSales === null ? (
-              <p className={styles.ticketEmpty}>
-                Histórico de receita indisponível para esse intervalo.
-              </p>
-            ) : (
-              <>
-                <p className={styles.ticketAmount}>{money(relevantSales)}</p>
-              {chart.some((point) => point.revenue > 0) ? (
-                <div
-                  role="img"
-                  aria-label={`Receita no intervalo: ${money(relevantSales)}`}
-                  className={styles.chart}
-                >
-                  {chart.map((point) => (
-                    <div
-                      key={point.first}
-                      title={`${dateLabel(point.first)} a ${dateLabel(point.last)}: ${money(point.revenue)}`}
-                      className={styles.chartBar}
-                      style={{ height: `${(point.revenue / chartMax) * 100}%` }}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <p className={styles.ticketEmpty}>
-                  Sem receita registrada nesse intervalo.
-                </p>
-              )}
-              </>
-            )}
-          </div>
-          <dl className={styles.periodStats}>
-            {[
-              [
-                "Títulos vendidos",
-                confirmed?.soldTickets.toLocaleString("pt-BR") ?? "—",
-              ],
-              [
-                "Participantes",
-                confirmed?.participants.toLocaleString("pt-BR") ?? "—",
-              ],
-              [
-                "Ticket médio",
-                confirmed?.averageTicket === undefined ? "—" : money(confirmed.averageTicket),
-              ],
-              [
-                "Pedidos pagos",
-                data?.summary.paidOrders.toLocaleString("pt-BR") ?? "—",
-              ],
-            ].map(([label, value]) => (
-              <div key={label} className={styles.smallMetric}>
-                <dt>
-                  {label}{" "}
-                  <span className={styles.metricScope}>({metricScope})</span>
-                </dt>
-                <dd>{value}</dd>
+          <div className={styles.ticketGroup}>
+            <div className={styles.ticket}>
+              <div className={styles.ticketTitle}>
+                <span><Ticket size={17} aria-hidden="true" /> Total bruto confirmado</span>
+                {rangeCaption && <p>{rangeCaption}</p>}
               </div>
-            ))}
-          </dl>
+              {relevantSales === null ? (
+                <p className={styles.ticketEmpty}>
+                  Histórico de receita indisponível para esse intervalo.
+                </p>
+              ) : (
+                <>
+                  <p className={styles.ticketAmount}>{money(relevantSales)}</p>
+                  {chart.length > 0 && <SalesTrend chart={chart} />}
+                  {chart.some((point) => point.revenue > 0) ? (
+                    <div
+                      role="img"
+                      aria-label={`Receita no intervalo: ${money(relevantSales)}`}
+                      className={styles.chart}
+                    >
+                      {chart.map((point) => (
+                        <div
+                          key={point.first}
+                          title={`${dateLabel(point.first)} a ${dateLabel(point.last)}: ${money(point.revenue)}`}
+                          className={styles.chartBar}
+                          style={{ height: `${(point.revenue / chartMax) * 100}%` }}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={styles.ticketEmpty}>
+                      Sem receita registrada nesse intervalo.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+            <dl className={styles.periodStats}>
+              {[
+                [
+                  "Títulos vendidos",
+                  confirmed?.soldTickets.toLocaleString("pt-BR") ?? "—",
+                ],
+                [
+                  "Participantes",
+                  confirmed?.participants.toLocaleString("pt-BR") ?? "—",
+                ],
+                [
+                  "Ticket médio",
+                  confirmed?.averageTicket === undefined ? "—" : money(confirmed.averageTicket),
+                ],
+                [
+                  "Pedidos pagos",
+                  data?.summary.paidOrders.toLocaleString("pt-BR") ?? "—",
+                ],
+              ].map(([label, value]) => (
+                <div key={label} className={styles.smallMetric}>
+                  <dt>
+                    {label}{" "}
+                    <span className={styles.metricScope}>({metricScope})</span>
+                  </dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         </>
       )}
     </section>
+  );
+}
+
+function SalesTrend({ chart }: { chart: ReturnType<typeof salesChart> }) {
+  const width = 640;
+  const baseline = 92;
+  const top = 10;
+  const margin = 7;
+  const max = Math.max(...chart.map(({ revenue }) => revenue));
+  const points = chart.map(({ revenue }, index) => ({
+    x: chart.length === 1 ? width / 2 : margin + ((width - margin * 2) * index) / (chart.length - 1),
+    y: max > 0 ? baseline - (revenue / max) * (baseline - top) : baseline,
+  }));
+  const line = points.map(({ x, y }) => `${x},${y}`).join(" ");
+  const periodLabel = ({ first, last }: (typeof chart)[number]) =>
+    first === last ? dateLabel(first) : `${dateLabel(first)} a ${dateLabel(last)}`;
+  const shortDate = (date: string) => dateLabel(date).slice(0, 5);
+
+  return (
+    <figure className={styles.salesTrend} aria-label="Evolução das vendas confirmadas">
+      <svg aria-hidden="true" viewBox={`0 0 ${width} 100`} preserveAspectRatio="none">
+        {[top, (top + baseline) / 2, baseline].map((y) => (
+          <line key={y} className={styles.chartGrid} x1="0" x2={width} y1={y} y2={y} />
+        ))}
+        {points.length > 1 && (
+          <>
+            <polygon
+              className={styles.chartArea}
+              points={`${points[0].x},${baseline} ${line} ${points.at(-1)!.x},${baseline}`}
+            />
+            <polyline className={styles.chartLine} points={line} />
+          </>
+        )}
+        {points.map(({ x, y }, index) => (
+          <path key={chart[index].first} className={styles.chartPoint} d={`M ${x} ${y} l 0.01 0`}>
+            <title>{periodLabel(chart[index])}: {money(chart[index].revenue)}</title>
+          </path>
+        ))}
+      </svg>
+      <figcaption className={styles.chartCaption} aria-hidden="true">
+        <span>{shortDate(chart[0].first)}</span>
+        {chart.length > 2 && <span>{shortDate(chart[Math.floor(chart.length / 2)].first)}</span>}
+        {chart.length > 1 && <span>{shortDate(chart.at(-1)!.last)}</span>}
+      </figcaption>
+      <details className={styles.chartValues}>
+        <summary>Ver valores do gráfico</summary>
+        <ol>
+          {chart.map((point) => (
+            <li key={point.first}><span>{periodLabel(point)}</span><strong>{money(point.revenue)}</strong></li>
+          ))}
+        </ol>
+      </details>
+    </figure>
   );
 }
