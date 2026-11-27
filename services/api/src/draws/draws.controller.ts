@@ -240,7 +240,10 @@ export class DrawsController {
   ) {
     return this.instant.myResults(user.id);
   }
-  @Get('public/campaigns/:slug/instant-prizes') @Public() publicInstant(
+  @Get('public/campaigns/:slug/instant-prizes')
+  @Public()
+  @Header('Cache-Control', 'no-store')
+  publicInstant(
     @Param('slug') slug: string,
   ) {
     return this.instant.publicResults(slug);

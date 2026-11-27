@@ -12,6 +12,7 @@ import {
   TicketStatus,
 } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { publicCampaignResultStatus } from '../campaigns/public-campaign-result-visibility';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateInstantPrizeDto,
@@ -746,48 +747,52 @@ export class InstantPrizeDetectionService {
       ? `(${digits.slice(-11, -9)}) ${digits.slice(-9, -8)}****-${digits.slice(-4)}`
       : 'Não informado';
   }
-  publicResults(slug: string) {
-    return this.prisma.instantPrizeResult
-      .findMany({
-        where: {
-          campaign: { slug },
-          instantPrize: { status: { in: ['FOUND', 'DELIVERED'] } },
+  async publicResults(slug: string) {
+    const visibleCampaign = { slug, status: publicCampaignResultStatus() };
+    const campaign = await this.prisma.campaign.findFirst({
+      where: visibleCampaign,
+      select: { id: true },
+    });
+    if (!campaign) throw new NotFoundException('Campanha não encontrada.');
+
+    const items = await this.prisma.instantPrizeResult.findMany({
+      where: {
+        campaignId: campaign.id,
+        // Reapply visibility when selecting results; a campaign may have been
+        // withdrawn after the initial existence check.
+        campaign: visibleCampaign,
+        instantPrize: {
+          status: { in: [InstantPrizeStatus.FOUND, InstantPrizeStatus.DELIVERED] },
         },
-        select: {
-          winningNumber: true,
-          status: true,
-          identifiedAt: true,
-          buyer: { select: { name: true, city: true, state: true } },
-          instantPrize: {
-            select: { description: true, value: true, type: true },
-          },
+      },
+      select: {
+        winningNumber: true,
+        status: true,
+        identifiedAt: true,
+        instantPrize: {
+          select: { description: true, value: true, type: true },
         },
-        orderBy: { identifiedAt: 'desc' },
-      })
-      .then((items) =>
-        items.map((item) => ({
-          ...item,
-          winningNumber: this.maskNumber(item.winningNumber),
-          buyer: {
-            name: this.publicName(item.buyer.name),
-            city: item.buyer.city,
-            state: item.buyer.state,
-          },
-          instantPrize: {
-            ...item.instantPrize,
-            value: Number(item.instantPrize.value),
-          },
-        })),
-      );
+      },
+      orderBy: { identifiedAt: 'desc' },
+    });
+    return items.map((item) => ({
+      winningNumber: this.maskNumber(item.winningNumber),
+      status: item.status,
+      identifiedAt: item.identifiedAt,
+      // Instant prizes have no verified public disclosure opt-in. Keep the
+      // existing public table shape, but do not read or serialize buyer data.
+      buyer: { name: 'Identidade preservada', city: null, state: null },
+      instantPrize: {
+        description: item.instantPrize.description,
+        value: Number(item.instantPrize.value),
+        type: item.instantPrize.type,
+      },
+    }));
   }
 
   private maskNumber(number: string) {
     if (number.length <= 2) return '*'.repeat(number.length);
     return `${number.slice(0, 1)}${'*'.repeat(Math.max(2, number.length - 2))}${number.slice(-1)}`;
-  }
-  private publicName(name: string) {
-    const parts = name.trim().split(/\s+/);
-    return parts.length > 1 ? `${parts[0]} ${parts.at(-1)?.[0]}.` : parts[0];
   }
   myResults(buyerId: string) {
     return this.prisma.instantPrizeResult.findMany({

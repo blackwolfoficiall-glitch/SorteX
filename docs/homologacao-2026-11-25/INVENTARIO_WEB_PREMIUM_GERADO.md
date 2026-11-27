@@ -537,6 +537,7 @@ Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pel
 - [tests/dashboard-period-http.test.mjs](../../apps/web/tests/dashboard-period-http.test.mjs)
 - [tests/dashboard-period.test.mjs](../../apps/web/tests/dashboard-period.test.mjs)
 - [tests/premium-foundation.test.mjs](../../apps/web/tests/premium-foundation.test.mjs)
+- [tests/public-instant-prize-bff.test.mjs](../../apps/web/tests/public-instant-prize-bff.test.mjs)
 - [e2e/admin-audit-premium.spec.ts](../../apps/web/e2e/admin-audit-premium.spec.ts)
 - [e2e/admin-authorization.spec.ts](../../apps/web/e2e/admin-authorization.spec.ts)
 - [e2e/admin-campaigns-premium.spec.ts](../../apps/web/e2e/admin-campaigns-premium.spec.ts)

@@ -24,6 +24,7 @@ import {
   civilDrawInstant,
 } from './campaign-sales-window';
 import type { SaveCampaignMilestonesDto } from './dto/campaign-milestone.dto';
+import { publicCampaignResultStatus } from './public-campaign-result-visibility';
 
 const brasiliaDayFormatter = new Intl.DateTimeFormat('en', {
   timeZone: CAMPAIGN_DRAW_TIME_ZONE,
@@ -73,7 +74,7 @@ export class CampaignMilestonesService {
     const campaign = await this.prisma.campaign.findFirst({
       where: {
         slug,
-        status: { in: ['PUBLISHED', 'SOLD_OUT', 'DRAWN', 'FINISHED'] },
+        status: publicCampaignResultStatus(),
       },
       select: { id: true, milestoneWinnersRemainEligible: true },
     });
