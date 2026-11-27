@@ -8,6 +8,7 @@ import {
   confirmedAdsTimeline,
   formatConfirmedAdsMoney,
   originOptions,
+  summarizeConfirmedAdsOrigins,
   parseConfirmedAdsSales,
   type AdsSalesFilter,
   type ConfirmedAdsSales,
@@ -96,8 +97,10 @@ export default function AdsConfirmedSales({
         Vendas confirmadas
       </h2>
       <p className="mt-2 max-w-3xl text-sm text-zinc-600">
-        O relatório conta pedidos pagos na SorteX pela data de confirmação. O
-        valor é bruto e não desconta estornos, taxas ou gastos de mídia.
+        O relatório conta pedidos pagos pela data de confirmação. O total bruto
+        soma os valores registrados nos pedidos, com os descontos já aplicados
+        na compra. Não é receita líquida: estornos, taxas e gastos de mídia não
+        são deduzidos aqui.
       </p>
       <form
         onSubmit={apply}
@@ -296,7 +299,7 @@ function SalesSnapshot({ data }: { data: ConfirmedAdsSales }) {
     ["Pedidos pagos", counts.format(confirmedOrders)],
     ["Compradores únicos", counts.format(buyers)],
     ["Títulos vendidos", counts.format(titlesSold)],
-    ["Valor dos pedidos pagos", formatConfirmedAdsMoney(paidOrderValue)],
+    ["Valor bruto dos pedidos pagos", formatConfirmedAdsMoney(paidOrderValue)],
     ["Ticket médio", formatConfirmedAdsMoney(averageOrderValue)],
   ];
   const lastDay = new Date(Date.parse(data.period.toDateExclusive) - 86_400_000)
@@ -321,6 +324,7 @@ function SalesSnapshot({ data }: { data: ConfirmedAdsSales }) {
           </div>
         ))}
       </dl>
+      <AdsOriginSummary data={data} />
       {confirmedOrders === 0 ? (
         <p className="rounded-xl border p-4 text-sm text-zinc-700">
           Nenhum pedido pago no período selecionado.
@@ -397,6 +401,45 @@ function SalesSnapshot({ data }: { data: ConfirmedAdsSales }) {
         </div>
       )}
     </div>
+  );
+}
+
+function AdsOriginSummary({ data }: { data: ConfirmedAdsSales }) {
+  const summary = summarizeConfirmedAdsOrigins(data);
+  return (
+    <aside
+      aria-label="Resumo das origens internas"
+      className="rounded-xl border border-violet-100 bg-violet-50/60 p-4 text-sm text-violet-950"
+    >
+      <h3 className="font-bold">O que sabemos sobre a origem dos pedidos</h3>
+      {summary.kind === "FILTERED" ? (
+        <p className="mt-1">
+          Origem selecionada: <strong>{originLabel(summary.origin)}</strong>.
+          Este recorte não compara origens.
+        </p>
+      ) : summary.kind === "EMPTY" ? (
+        <p className="mt-1">
+          Não há pedidos para comparar origens neste recorte.
+        </p>
+      ) : summary.kind === "UNKNOWN_ONLY" ? (
+        <p className="mt-1">
+          Nenhuma origem verificada neste recorte. Pedidos sem origem
+          identificada: <strong>{counts.format(summary.unknownOrders)}</strong>.
+        </p>
+      ) : (
+        <p className="mt-1">
+          Única origem verificada:{" "}
+          <strong>Afiliados ({counts.format(summary.affiliateOrders)})</strong>.{" "}
+          Pedidos sem origem identificada:{" "}
+          <strong>{counts.format(summary.unknownOrders)}</strong>.
+          {summary.equalCoverage &&
+            " A quantidade é a mesma, mas origem não identificada não é um canal."}
+        </p>
+      )}
+      <p className="mt-2 text-xs text-violet-900">
+        Esses números não medem eficiência de mídia.
+      </p>
+    </aside>
   );
 }
 

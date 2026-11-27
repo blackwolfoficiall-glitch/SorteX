@@ -218,6 +218,33 @@ export function confirmedAdsQuery(filters: AdsSalesFilter) {
   return query.toString();
 }
 
+export function summarizeConfirmedAdsOrigins(
+  data: Pick<ConfirmedAdsSales, "originFilter" | "totals" | "attribution">,
+) {
+  if (data.originFilter !== "ALL") {
+    return { kind: "FILTERED", origin: data.originFilter } as const;
+  }
+  if (!data.totals.confirmedOrders) return { kind: "EMPTY" } as const;
+
+  const affiliateOrders =
+    data.attribution.find((row) => row.origin === "AFFILIATE")
+      ?.confirmedOrders ?? 0;
+  const unknownOrders =
+    data.attribution.find((row) => row.origin === "UNKNOWN")?.confirmedOrders ??
+    0;
+  // The paid-report contract currently recognizes one verified origin.
+  // UNKNOWN remains a coverage gap, never a candidate in an origin ranking.
+  if (!affiliateOrders) {
+    return { kind: "UNKNOWN_ONLY", unknownOrders } as const;
+  }
+  return {
+    kind: "KNOWN_AFFILIATE",
+    affiliateOrders,
+    unknownOrders,
+    equalCoverage: affiliateOrders === unknownOrders,
+  } as const;
+}
+
 export function confirmedAdsTimeline(data: ConfirmedAdsSales) {
   const start = Date.parse(data.period.fromDate);
   const count = (Date.parse(data.period.toDateExclusive) - start) / dayMs;

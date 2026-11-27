@@ -27,8 +27,18 @@ test("SorteX Ads separates paid orders from unverified media data on mobile web"
   expect(login.ok()).toBe(true);
   await page.goto("/dashboard/ads");
   const report = page.getByRole("region", { name: "Vendas confirmadas" });
-  await expect(report.getByText("Valor dos pedidos pagos")).toBeVisible();
+  await expect(report.getByText("Valor bruto dos pedidos pagos")).toBeVisible();
   await expect(report.getByText(/R\$\s0,20/).first()).toBeVisible();
+  const originSummary = report.getByRole("complementary", {
+    name: "Resumo das origens internas",
+  });
+  await expect(
+    originSummary.getByText(/Nenhuma origem verificada neste recorte/),
+  ).toBeVisible();
+  await expect(
+    originSummary.getByText("Esses números não medem eficiência de mídia."),
+  ).toBeVisible();
+
   await expect(
     report.getByRole("term").filter({ hasText: /^Origem não identificada$/ }),
   ).toBeVisible();
@@ -57,6 +67,13 @@ test("SorteX Ads separates paid orders from unverified media data on mobile web"
   await expect(
     report.getByText(/Período aplicado: .*Origem não identificada/),
   ).toBeVisible();
+  await expect(
+    originSummary.getByText(/Origem selecionada: Origem não identificada/),
+  ).toBeVisible();
+  await expect(
+    originSummary.getByText(/Este recorte não compara origens/),
+  ).toBeVisible();
+
   await expect(
     report.getByRole("term").filter({ hasText: /^Afiliados verificados$/ }),
   ).not.toBeVisible();
@@ -89,6 +106,12 @@ test("SorteX Ads separates paid orders from unverified media data on mobile web"
     report.getByText("Nenhum pedido pago no período selecionado."),
   ).toBeVisible();
   await expect(report.getByText(/R\$\s0,20/)).toHaveCount(0);
+  await expect(
+    originSummary.getByText(
+      "Não há pedidos para comparar origens neste recorte.",
+    ),
+  ).toBeVisible();
+
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);

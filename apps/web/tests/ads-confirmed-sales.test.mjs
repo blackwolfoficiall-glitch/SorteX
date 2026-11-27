@@ -5,6 +5,7 @@ import {
   confirmedAdsTimeline,
   formatConfirmedAdsMoney,
   parseConfirmedAdsSales,
+  summarizeConfirmedAdsOrigins,
 } from "../lib/growth/ads-confirmed-sales.ts";
 
 const filter = { period: "30D", campaignId: "", startDate: "", endDate: "" };
@@ -206,4 +207,63 @@ test("plots a calendar day for every position without shifting holes", () => {
   const unsupported = fixture();
   unsupported.period.toDateExclusive = "2030-01-01";
   assert.throws(() => parseConfirmedAdsSales(unsupported, filter));
+});
+
+test("unknown orders do not become a leading channel, even if they outnumber verified affiliate orders", () => {
+  const data = parseConfirmedAdsSales(fixture(), filter);
+  assert.deepEqual(summarizeConfirmedAdsOrigins(data), {
+    kind: "UNKNOWN_ONLY",
+    unknownOrders: 1,
+  });
+  const affiliate = { ...data.attribution[0], confirmedOrders: 2 };
+  const unknown = { ...data.attribution[1], confirmedOrders: 8 };
+  assert.deepEqual(
+    summarizeConfirmedAdsOrigins({
+      ...data,
+      totals: { ...data.totals, confirmedOrders: 10 },
+      attribution: [affiliate, unknown],
+    }),
+    {
+      kind: "KNOWN_AFFILIATE",
+      affiliateOrders: 2,
+      unknownOrders: 8,
+      equalCoverage: false,
+    },
+  );
+});
+
+test("equal known and unknown counts show a coverage tie, not tied channels", () => {
+  const data = parseConfirmedAdsSales(fixture(), filter);
+  assert.deepEqual(
+    summarizeConfirmedAdsOrigins({
+      ...data,
+      totals: { ...data.totals, confirmedOrders: 2 },
+      attribution: [
+        { ...data.attribution[0], confirmedOrders: 1 },
+        data.attribution[1],
+      ],
+    }),
+    {
+      kind: "KNOWN_AFFILIATE",
+      affiliateOrders: 1,
+      unknownOrders: 1,
+      equalCoverage: true,
+    },
+  );
+});
+
+test("empty and explicitly filtered summaries avoid ranking entirely", () => {
+  const data = parseConfirmedAdsSales(fixture(), filter);
+  const empty = {
+    ...data,
+    totals: { ...data.totals, confirmedOrders: 0 },
+    attribution: [],
+  };
+  assert.deepEqual(summarizeConfirmedAdsOrigins(empty), { kind: "EMPTY" });
+  for (const originFilter of ["AFFILIATE", "UNKNOWN"]) {
+    assert.deepEqual(summarizeConfirmedAdsOrigins({ ...empty, originFilter }), {
+      kind: "FILTERED",
+      origin: originFilter,
+    });
+  }
 });
