@@ -80,10 +80,12 @@ export const s = StyleSheet.create({
 export function Page({
   children,
   title,
+  titleTestID,
   standalone = false,
 }: {
   children: React.ReactNode;
   title?: string;
+  titleTestID?: string;
   standalone?: boolean;
 }) {
   return (
@@ -104,7 +106,7 @@ export function Page({
           keyboardShouldPersistTaps="handled"
         >
           {title && (
-            <Text accessibilityRole="header" style={s.title}>
+            <Text accessibilityRole="header" testID={titleTestID} style={s.title}>
               {title}
             </Text>
           )}

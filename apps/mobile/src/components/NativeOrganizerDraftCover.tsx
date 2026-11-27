@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Platform, Text, View } from "react-native";
+import { Platform } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { ApiError, type SortexClient } from "../api/client";
 import {
@@ -11,7 +11,7 @@ import {
   validateNativeDraftCover,
 } from "../domain/organizer-draft-cover";
 import type { OrganizerDraftRecord } from "../domain/organizer-draft";
-import { Button, Notice, s } from "./ui";
+import { PremiumButton, PremiumMessage, PremiumPanel } from "../theme/premium";
 
 export function NativeOrganizerDraftCover({
   client,
@@ -46,8 +46,7 @@ export function NativeOrganizerDraftCover({
   }, []);
   const current = draftCoverRevision(campaign, accountId);
   if (Platform.OS === "web" || !current) return null;
-  const active = () =>
-    mounted.current && activeCoverSession(client, accountId, revision);
+  const active = () => mounted.current && activeCoverSession(client, accountId, revision);
 
   async function act(refresh = false) {
     if (locked.current || disabled || !canStart() || !active()) return;
@@ -63,9 +62,7 @@ export function NativeOrganizerDraftCover({
         );
         if (!active()) return;
         if (fresh?.id !== campaign.id || fresh?.organizerId !== accountId)
-          throw new Error(
-            "Não foi possível confirmar a campanha. Abra os detalhes novamente.",
-          );
+          throw new Error("Não foi possível confirmar a campanha. Abra os detalhes novamente.");
         onChange(fresh);
         setNeedsRefresh(false);
         return;
@@ -90,20 +87,14 @@ export function NativeOrganizerDraftCover({
       if (!active()) return;
       onChange(updated);
       setSuccess(
-        current === "none"
-          ? "Capa adicionada e conferida."
-          : "Nova capa salva e conferida.",
+        current === "none" ? "Capa adicionada e conferida." : "Nova capa salva e conferida.",
       );
     } catch (cause) {
       if (!active()) return;
       const ambiguous =
         cause instanceof ApiError &&
-        (cause.status === 0 ||
-          cause.status >= 500 ||
-          (cause.status >= 200 && cause.status < 300));
-      const stale =
-        cause instanceof ApiError &&
-        [401, 403, 404, 409].includes(cause.status);
+        (cause.status === 0 || cause.status >= 500 || (cause.status >= 200 && cause.status < 300));
+      const stale = cause instanceof ApiError && [401, 403, 404, 409].includes(cause.status);
       setNeedsRefresh(ambiguous || stale || refresh);
       setError(
         ambiguous
@@ -122,22 +113,18 @@ export function NativeOrganizerDraftCover({
   }
 
   return (
-    <View style={s.card}>
-      <Text accessibilityRole="header" style={s.label}>
-        Capa da campanha
-      </Text>
-      <Notice
+    <PremiumPanel title="Capa da campanha">
+      <PremiumMessage
         message={
           current === "none"
             ? "Sem capa cadastrada. Adicione um JPG, PNG ou WEBP de até 20 MB."
             : "Capa cadastrada. Você pode substituí-la por um JPG, PNG ou WEBP de até 20 MB."
         }
       />
-      <Notice message="A capa é um dos requisitos de publicação. Ela permanece privada no rascunho." />
-      {success ? <Notice message={success} /> : null}
-      {error ? <Notice error message={error} /> : null}
-      <Button
-        secondary
+      <PremiumMessage message="A capa é um dos requisitos de publicação. Ela permanece privada no rascunho." />
+      {success ? <PremiumMessage success message={success} /> : null}
+      {error ? <PremiumMessage error message={error} /> : null}
+      <PremiumButton
         title={
           needsRefresh
             ? "Atualizar situação da capa"
@@ -149,6 +136,6 @@ export function NativeOrganizerDraftCover({
         disabled={disabled}
         onPress={() => void act(needsRefresh)}
       />
-    </View>
+    </PremiumPanel>
   );
 }

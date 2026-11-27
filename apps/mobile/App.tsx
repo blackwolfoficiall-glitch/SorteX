@@ -15,7 +15,7 @@ import {
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { recoveryTokenFromUrl } from "./src/auth/callback";
 import { isLoginReady } from "./src/auth/login-input";
 import { StatusBar } from "expo-status-bar";
@@ -34,6 +34,8 @@ import {
 import { LocationPicker } from "./src/components/LocationPicker";
 import { NativeOrganizerDraft } from "./src/components/NativeOrganizerDraft";
 import { OrganizerDashboardHome } from "./src/organizer/NativeOrganizerDashboard";
+import { NativeOrganizerCampaignDetails, NativeOrganizerCampaignList } from "./src/organizer/NativeOrganizerCampaignWorkspace";
+import { usePremiumTheme } from "./src/theme/premium";
 import { OrganizerCopilot, OrganizerModuleStatus, OrganizerMore, OrganizerTabBar } from "./src/organizer/NativeOrganizerNavigation";
 import { premiumNotices } from "./src/organizer/premium-navigation";
 import { organizerCampaignShareUrl, shareableSlug } from "./src/organizer/campaign-share";
@@ -44,6 +46,7 @@ import { NativeOrganizerDraftPrizes } from "./src/components/NativeOrganizerDraf
 import { NativeOrganizerCampaignLifecycle } from "./src/components/NativeOrganizerCampaignLifecycle";
 import type { OrganizerCampaignState } from "./src/domain/organizer-campaign-lifecycle";
 import { NativeBuyerPrizes } from "./src/buyer/NativeBuyerPrizes";
+import { NativeBuyerCampaignTabButton } from "./src/buyer/NativeBuyerCampaignTabButton";
 import { BuyerInboxScreen } from "./src/buyer/NativeBuyerInbox";
 import { BuyerFavoritesScreen, NativeBuyerFavoriteToggle } from "./src/buyer/NativeBuyerFavorites";
 import { NativeBuyerOrderHistory } from "./src/buyer/NativeBuyerOrderHistory";
@@ -553,7 +556,7 @@ function Home({ navigation }: any) {
       onCampaigns={() => navigation.navigate("Campaigns")}
       onFinance={() => navigation.navigate("OrganizerFinance")}
       onPayout={() => navigation.navigate("OrganizerModuleStatus", { title: "Sacar", message: premiumNotices.Sacar, finance: true })}
-      onCampaign={(item) => navigation.navigate("Campaign", { item })}
+      onCampaign={(item) => navigation.navigate("OrganizerCampaign", { campaignId: item.id })}
     />
   ) : (
     <BuyerHome greeting={greeting} navigation={navigation} />
@@ -591,7 +594,10 @@ function Campaigns({ navigation }: any) {
     ? state.data
     : state.data?.items || [];
   return (
-    <Page title="Campanhas">
+    <Page
+      title="Campanhas"
+      titleTestID={!organizer && focused ? "sortex-buyer-campaigns-screen" : undefined}
+    >
       {organizer && <Button title="Criar rascunho" onPress={() => navigation.navigate("OrganizerDraft")} />}
       <Load state={state}>
         {items.map((item) => (
@@ -1050,14 +1056,18 @@ function BuyerResults({ buyerId }: { buyerId: string | null }) {
     </Page>
   );
 }
-function OrganizerCampaignsTab(props: { navigation: any }) {
-  const focused = useIsFocused();
-  return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.bg }}>
-      {focused && <StatusBar style="dark" />}
-      <Campaigns {...props} />
-    </SafeAreaView>
-  );
+function OrganizerCampaignsTab({ navigation }: { navigation: any }) {
+  return <NativeOrganizerCampaignList
+    onNew={() => navigation.navigate("OrganizerDraft")}
+    onOpen={(campaignId) => navigation.navigate("OrganizerCampaign", { campaignId })} />;
+}
+
+function OrganizerCampaignScreen({ route, navigation }: any) {
+  return <NativeOrganizerCampaignDetails
+    campaignId={route.params?.campaignId}
+    onEdit={(campaignId) => navigation.navigate("OrganizerDraft", { campaignId })}
+    onPrizes={(campaignId) => navigation.navigate("OrganizerDraftPrizes", { campaignId })}
+    onOrders={(campaignId) => navigation.navigate("CampaignOrders", { campaignId })} />;
 }
 
 function OrganizerShareScreen() {
@@ -1146,7 +1156,13 @@ function MainTabs() {
       <Tabs.Screen
         name="Campaigns"
         component={Campaigns}
-        options={{ title: "Campanhas", tabBarButtonTestID: "sortex-buyer-campaigns-tab" }}
+        options={{
+          title: "Campanhas",
+          tabBarButtonTestID: "sortex-buyer-campaigns-tab",
+          ...(Platform.OS === "ios" ? {
+            tabBarButton: (props) => <NativeBuyerCampaignTabButton {...props} />,
+          } : {}),
+        }}
       />
       <Tabs.Screen
         name="Orders"
@@ -1169,6 +1185,13 @@ function MainTabs() {
   );
 }
 export default function App() {
+  const premium = usePremiumTheme();
+  const organizerCampaignHeader = {
+    headerStyle: { backgroundColor: premium.surface },
+    headerTintColor: premium.text,
+    headerShadowVisible: false,
+    contentStyle: { backgroundColor: premium.bg },
+  };
   const auth = useSyncExternalStore(client.subscribe, client.snapshot);
   useEffect(() => {
     void client.restore().catch(() => {});
@@ -1237,6 +1260,10 @@ export default function App() {
                     <Stack.Screen name="OrganizerProfile" component={Profile} options={{ title: "Perfil" }} />
                     <Stack.Screen name="OrganizerModuleStatus" component={OrganizerModuleStatus} options={{ headerShown: false }} />
                     <Stack.Screen name="OrganizerShare" component={OrganizerShareScreen} options={{ title: "Divulgar" }} />
+                    <Stack.Screen name="OrganizerCampaign" component={OrganizerCampaignScreen}
+                      options={{ ...organizerCampaignHeader, title: "Campanha" }} />
+                    <Stack.Screen name="OrganizerDraft" component={OrganizerDraftScreen}
+                      options={{ ...organizerCampaignHeader, title: "Editor de campanha" }} />
                   </>
                 )}
                 {auth.user?.role === "BUYER" && (
@@ -1255,11 +1282,6 @@ export default function App() {
                   name="Campaign"
                   component={CampaignDetail}
                   options={{ title: "Campanha" }}
-                />
-                <Stack.Screen
-                  name="OrganizerDraft"
-                  component={OrganizerDraftScreen}
-                  options={{ title: "Editor de campanha" }}
                 />
                 {auth.user?.role === "ORGANIZER" && (
                   <Stack.Screen name="OrganizerDraftPrizes" component={OrganizerDraftPrizesScreen}

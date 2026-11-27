@@ -78,7 +78,8 @@ class FailureDiagnostic(unittest.TestCase):
         self.assertEqual(observed_phase({"activities": [{"title": "sortex-email: " + PRIVATE}]}), "not-observed")
         self.assertEqual(observed_phase({"testRuns": []}), "not-observed")
         for phase in ("campaign-home-ready", "campaign-tab-discover",
-                      "campaign-tab-actionable", "campaign-tab-tap"):
+                      "campaign-tab-actionable", "campaign-tab-tap",
+                      "campaign-tab-selected", "campaign-screen-visible"):
             with self.subTest(phase=phase):
                 self.assertEqual(observed_phase({"activities": [
                     {"title": "sortex-" + phase}, {"title": "sortex-campaign-tab"},

@@ -13,7 +13,8 @@ from evidence import TEST
 PHASES = (
     "startup", "email", "password", "login", "campaign", "campaign-tab",
     "campaign-home-ready", "campaign-tab-discover", "campaign-tab-actionable",
-    "campaign-tab-tap", "campaign-list", "campaign-open", "campaign-detail", "campaign-prize",
+    "campaign-tab-tap", "campaign-tab-selected", "campaign-screen-visible",
+    "campaign-list", "campaign-open", "campaign-detail", "campaign-prize",
     "campaign-regulation", "signed-in-relaunch", "logout", "signed-out-relaunch",
 )
 CASES = {"Failed": "failed", "Passed": "passed", "Skipped": "skipped",

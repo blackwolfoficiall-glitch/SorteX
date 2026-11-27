@@ -250,7 +250,7 @@ esac
         swift = (ROOT / "BuyerJourneys.swift").read_text()
         for stage in ("startup", "email", "password", "login", "campaign-home-ready",
                       "campaign-tab-discover", "campaign-tab-actionable", "campaign-tab-tap",
-                      "campaign-list", "campaign-open", "campaign-detail", "campaign-prize", "campaign-regulation",
+                      "campaign-tab-selected", "campaign-screen-visible", "campaign-list", "campaign-open", "campaign-detail", "campaign-prize", "campaign-regulation",
                       "signed-in-relaunch", "logout", "signed-out-relaunch"):
             self.assertIn('"sortex-' + stage + '"', swift)
         self.assertIn('secureTextFields["sortex-login-password"]', swift)
@@ -259,12 +259,28 @@ esac
         self.assertNotIn("launchEnvironment", swift)
         app = (ROOT.parent.parent / "apps/mobile/App.tsx").read_text()
         self.assertIn('tabBarButtonTestID: "sortex-buyer-campaigns-tab"', app)
+        self.assertIn('titleTestID={!organizer && focused ? "sortex-buyer-campaigns-screen"', app)
         self.assertIn('detailsTestID={!organizer ? `sortex-buyer-campaign-open-${item.slug}` : undefined}', app)
         self.assertIn('identified("sortex-buyer-campaigns-tab", in: app)', swift)
         self.assertIn('identified("sortex-buyer-campaign-open-campanha-sintetica-ios", in: app)', swift)
         self.assertIn('descendants(matching: .any).matching(NSPredicate(format: "identifier == %@", identifier))', swift)
         self.assertIn('campaignTab.isEnabled && campaignTab.isHittable', swift)
         self.assertIn('campaignTabQuery.count, 1', swift)
+        self.assertIn('XCTAssertFalse(campaignTab.isSelected', swift)
+        self.assertIn('waitUntil(timeout: 10) { campaignTab.isSelected }', swift)
+        self.assertLess(swift.index('sortex-campaign-tab-tap'), swift.index('sortex-campaign-tab-selected'))
+        self.assertLess(swift.index('sortex-campaign-tab-selected'), swift.index('sortex-campaign-screen-visible'))
+        self.assertLess(swift.index('sortex-campaign-screen-visible'), swift.index('sortex-campaign-list'))
+        self.assertIn('identified("sortex-buyer-campaigns-screen", in: app)', swift)
+        component = (ROOT.parent.parent / "apps/mobile/src/buyer/NativeBuyerCampaignTabButton.tsx").read_text()
+        buyer_options = app.split('function MainTabs()', 1)[1].split('export default function App()', 1)[0]
+        self.assertIn('...(Platform.OS === "ios" ?', buyer_options)
+        self.assertIn('tabBarButton: (props) => <NativeBuyerCampaignTabButton {...props} />', buyer_options)
+        self.assertIn('accessibilityRole="button"', component)
+        self.assertIn('accessibilityState={{ selected, disabled }}', component)
+        self.assertIn('onPress={onPress}', component)
+        self.assertIn('onLongPress={onLongPress}', component)
+        self.assertNotIn('navigate(', component)
         self.assertIn('fixtureCampaignQuery.count, 1', swift)
         campaign_stage = swift.split('let campaignTabQuery', 1)[1].split('sortex-signed-in-relaunch', 1)[0]
         self.assertEqual(campaign_stage.count('campaignTab.tap()'), 1)

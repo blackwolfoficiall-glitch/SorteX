@@ -141,3 +141,59 @@ test("finished and unknown campaigns are not editable and do not send requests",
     assert.throws(() => saveOrganizerCampaign(api, draftFields(campaign), campaign), /não pode mais ser editada/);
   }
 });
+
+import type { AuthState } from "../src/api/client";
+import {
+  campaignStateLabel,
+  loadOrganizerWorkspace,
+  parseOwnedCampaign,
+  parseOwnedCampaignList,
+} from "../src/organizer/campaign-workspace";
+
+const ownedCampaign = {
+  id: "owned-campaign", organizerId: "organizer-a", title: "Rascunho de teste",
+  status: "DRAFT", numberPrice: 0.2, totalNumbers: 100, soldNumbers: 9,
+  publishedAt: null, publicationBlocked: false, secretNotUsed: "never display",
+};
+
+test("organizer campaign workspace projects only owned values and never fabricates missing progress", () => {
+  const record = parseOwnedCampaign(ownedCampaign, "organizer-a", "owned-campaign");
+  assert.deepEqual(record.progress, { sold: 9, total: 100, percent: 9 });
+  assert.equal(record.numberPrice, 0.2);
+  assert.equal(record.publishedAt, null);
+  assert.equal("secretNotUsed" in record, false);
+  assert.equal(parseOwnedCampaign({ ...ownedCampaign, soldNumbers: 101 }, "organizer-a").progress, undefined);
+  assert.equal(parseOwnedCampaign({ ...ownedCampaign, totalNumbers: 0 }, "organizer-a").progress, undefined);
+  assert.equal(parseOwnedCampaign({ ...ownedCampaign, numberPrice: NaN }, "organizer-a").numberPrice, undefined);
+  assert.equal(campaignStateLabel("DRAFT"), "Rascunho");
+  assert.equal(campaignStateLabel("CANCELLED"), "Cancelada");
+  assert.equal(campaignStateLabel("toString"), "Situação indisponível");
+  assert.throws(() => parseOwnedCampaign(ownedCampaign, "organizer-b"));
+  assert.throws(() => parseOwnedCampaign(ownedCampaign, "organizer-a", "different-id"));
+  assert.throws(() => parseOwnedCampaignList([ownedCampaign, ownedCampaign], "organizer-a"));
+  assert.throws(() => parseOwnedCampaignList([ownedCampaign, { ...ownedCampaign, id: "b", organizerId: "organizer-b" }], "organizer-a"));
+  assert.deepEqual(parseOwnedCampaignList({ items: [] }, "organizer-a"), []);
+});
+
+test("organizer workspace rejects buyers before network and drops stale reads after a revision change", async () => {
+  const owner = { id: "organizer-a", name: "Organizador", email: "organizer@example.test", role: "ORGANIZER" as const };
+  let auth: AuthState = { status: "signedIn", user: { ...owner, role: "BUYER" } };
+  let revision = 1;
+  let calls = 0;
+  const expected = { organizerId: owner.id, revision };
+  const fixture = {
+    snapshot: () => auth,
+    activeSessionRevision: () => revision,
+    request: async <T>(path: string): Promise<T> => {
+      assert.equal(path, "/campaigns/my");
+      calls++;
+      revision++;
+      return [ownedCampaign] as T;
+    },
+  };
+  assert.equal(await loadOrganizerWorkspace(fixture, expected, "/campaigns/my", parseOwnedCampaignList), null);
+  assert.equal(calls, 0);
+  auth = { status: "signedIn", user: owner };
+  assert.equal(await loadOrganizerWorkspace(fixture, expected, "/campaigns/my", parseOwnedCampaignList), null);
+  assert.equal(calls, 1);
+});

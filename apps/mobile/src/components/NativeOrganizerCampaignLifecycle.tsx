@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
 import { ApiError, type SortexClient } from "../api/client";
 import {
   organizerLifecycleOptions,
@@ -7,12 +6,9 @@ import {
   type OrganizerCampaignState,
   type OrganizerLifecycleAction,
 } from "../domain/organizer-campaign-lifecycle";
-import { Button, Notice, s } from "./ui";
+import { PremiumButton, PremiumMessage, PremiumPanel } from "../theme/premium";
 
-const labels: Record<
-  OrganizerLifecycleAction,
-  { label: string; warning: string }
-> = {
+const labels: Record<OrganizerLifecycleAction, { label: string; warning: string }> = {
   publish: {
     label: "Publicar campanha",
     warning:
@@ -46,9 +42,7 @@ export function NativeOrganizerCampaignLifecycle({
   campaign: OrganizerCampaignState;
   onRefresh: () => void;
 }) {
-  const [selected, setSelected] = useState<OrganizerLifecycleAction | null>(
-    null,
-  );
+  const [selected, setSelected] = useState<OrganizerLifecycleAction | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [needsRefresh, setNeedsRefresh] = useState(false);
@@ -76,11 +70,8 @@ export function NativeOrganizerCampaignLifecycle({
       }
     } catch (cause) {
       if (mounted.current) {
-        const ambiguous =
-          cause instanceof ApiError &&
-          (cause.status === 0 || cause.status >= 500);
-        const stale =
-          cause instanceof ApiError && [401, 403, 409].includes(cause.status);
+        const ambiguous = cause instanceof ApiError && (cause.status === 0 || cause.status >= 500);
+        const stale = cause instanceof ApiError && [401, 403, 409].includes(cause.status);
         setNeedsRefresh(ambiguous || stale);
         setSelected(null);
         setError(
@@ -98,24 +89,21 @@ export function NativeOrganizerCampaignLifecycle({
   }
 
   return (
-    <View style={s.card}>
-      <Text accessibilityRole="header" style={s.label}>
-        Situação da campanha
-      </Text>
-      {notice ? <Notice message={notice} /> : null}
-      {error ? <Notice error message={error} /> : null}
+    <PremiumPanel title="Situação da campanha">
+      {notice ? <PremiumMessage message={notice} /> : null}
+      {error ? <PremiumMessage error message={error} /> : null}
       {needsRefresh ? (
-        <Button secondary title="Atualizar situação" onPress={onRefresh} />
+        <PremiumButton title="Atualizar situação" onPress={onRefresh} />
       ) : selected ? (
         <>
-          <Notice message={labels[selected].warning} />
-          <Button
+          <PremiumMessage message={labels[selected].warning} />
+          <PremiumButton
+            filled
             title={`Confirmar: ${labels[selected].label.toLocaleLowerCase("pt-BR")}`}
             busy={busy}
             onPress={() => void confirm(selected)}
           />
-          <Button
-            secondary
+          <PremiumButton
             title="Voltar sem alterar"
             disabled={busy}
             onPress={() => setSelected(null)}
@@ -123,9 +111,8 @@ export function NativeOrganizerCampaignLifecycle({
         </>
       ) : (
         actions.map((action) => (
-          <Button
+          <PremiumButton
             key={action}
-            secondary
             title={labels[action].label}
             onPress={() => {
               setError("");
@@ -134,6 +121,6 @@ export function NativeOrganizerCampaignLifecycle({
           />
         ))
       )}
-    </View>
+    </PremiumPanel>
   );
 }

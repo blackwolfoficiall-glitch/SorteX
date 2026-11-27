@@ -103,3 +103,9 @@ mensagem é enviada pelo app. A prévia compartilhada continua protegida.
 Copilot, notificações do organizador, apuração e saques ainda exibem sua
 disponibilidade real e não simulam operação. O atalho Sacar leva à consulta
 financeira, sem iniciar movimentação.
+
+**Organizador › Campanhas:** a lista e os detalhes usam o mesmo tema claro e
+escuro do painel. A lista mostra o status, o valor e o progresso somente
+quando confirmado nos dados da própria conta. O editor separa informações,
+regras, prêmio, cotas e datas, sem alterar o que já pode ser editado ou
+publicado. Criar e salvar um rascunho não publica nem vende cotas.

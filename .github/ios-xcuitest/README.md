@@ -59,7 +59,8 @@ local, os dados JSON brutos e o bundle de resultados não são publicados.
 
 Campanhas separa a confirmação da tela inicial e do teclado, a localização
 da aba pelo identificador nativo (independente da classe reportada pelo
-iOS), sua disponibilidade para toque, o toque, a lista, a abertura, o
+iOS), sua disponibilidade para toque, o toque, a mudança de seleção da aba,
+o cabeçalho da rota focada, a lista, a abertura, o
 detalhe, o prêmio e o regulamento. Quando o caso falha, as leituras da tela
 inicial e da campanha sintética recebem classificações independentes (sem
 URL, parâmetros, contagem, corpo ou status exato). O diagnóstico nunca

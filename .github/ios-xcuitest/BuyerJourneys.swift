@@ -61,6 +61,7 @@ final class BuyerJourneys: XCTestCase {
         // Match that exact identifier across kinds, not a label or a position.
         let campaignTabQuery = identified("sortex-buyer-campaigns-tab", in: app)
         let campaignTab = campaignTabQuery.firstMatch
+        let campaignScreen = identified("sortex-buyer-campaigns-screen", in: app).firstMatch
         let fixtureCampaignQuery = identified("sortex-buyer-campaign-open-campanha-sintetica-ios", in: app)
         let fixtureCampaign = fixtureCampaignQuery.firstMatch
 
@@ -81,10 +82,22 @@ final class BuyerJourneys: XCTestCase {
         XCTContext.runActivity(named: "sortex-campaign-tab-actionable") { _ in
             XCTAssertTrue(waitUntil(timeout: 10) { campaignTab.isEnabled && campaignTab.isHittable },
                           "Buyer campaign tab never became actionable")
+            XCTAssertFalse(campaignTab.isSelected, "Buyer campaign tab was already selected on Home")
         }
 
         XCTContext.runActivity(named: "sortex-campaign-tab-tap") { _ in
             campaignTab.tap()
+        }
+
+        XCTContext.runActivity(named: "sortex-campaign-tab-selected") { _ in
+            XCTAssertTrue(waitUntil(timeout: 10) { campaignTab.isSelected },
+                          "Native tab tap did not change selection")
+        }
+
+        XCTContext.runActivity(named: "sortex-campaign-screen-visible") { _ in
+            XCTAssertTrue(campaignScreen.waitForExistence(timeout: 15), "Buyer campaigns screen did not mount")
+            XCTAssertTrue(waitUntil(timeout: 10) { campaignScreen.isHittable },
+                          "Buyer campaigns screen is not shown")
         }
 
         XCTContext.runActivity(named: "sortex-campaign-list") { _ in
