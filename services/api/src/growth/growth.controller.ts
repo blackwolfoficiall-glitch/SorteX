@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -28,6 +29,7 @@ import {
   SortexAdsDashboardQueryDto,
 } from './dto/growth.dto';
 import { GrowthService } from './growth.service';
+import { AdsConfirmedSalesQuery } from './ads-confirmed-sales';
 import { AiAdvisorService } from './ai-advisor.service';
 import { MetaAdsService } from './meta-ads.service';
 
@@ -128,6 +130,15 @@ export class SortexAdsController {
     @Body() body: { adAccountId: string; pageId: string },
   ) {
     return this.metaAds.selectAssets(user, body.adAccountId, body.pageId);
+  }
+
+  @Get('confirmed-sales')
+  @Header('Cache-Control', 'private, no-store')
+  confirmedSales(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: AdsConfirmedSalesQuery,
+  ) {
+    return this.growthService.adsConfirmedSales(user, query);
   }
 
   @Get('dashboard')
@@ -237,7 +248,7 @@ export class AiSortexController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: AdvisorChatDto,
   ) {
-    return this.advisor.chat(user, dto.question);
+    return this.advisor.chat(user, dto.question, dto.allowAi);
   }
   @Post('advisor/simulate') advisorSimulation(
     @CurrentUser() user: AuthenticatedUser,

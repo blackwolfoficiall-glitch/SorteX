@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { AdvisorMessageDto, AdvisorSimulationDto } from './dto/growth.dto';
+import { AdvisorModelService, advisorIntent } from './advisor-model.service';
 
 type AdvisorAction = { label: string; url: string; confirmation: string };
 type AdvisorAlert = {
@@ -21,7 +22,10 @@ type AdvisorAlert = {
 
 @Injectable()
 export class AiAdvisorService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly models: AdvisorModelService,
+  ) {}
 
   async snapshot(user: AuthenticatedUser) {
     const campaigns = await this.prisma.campaign.findMany({
@@ -212,142 +216,20 @@ export class AiAdvisorService {
     };
   }
 
-  async chat(user: AuthenticatedUser, question: string) {
+  async chat(user: AuthenticatedUser, question: string, allowAi = false) {
     const context = await this.snapshot(user);
     const fallback = this.deterministicAnswer(question, context);
-    if (
-      process.env.INTEGRATIONS_MODE === 'sandbox' ||
-      !process.env.OPENAI_API_KEY
-    )
-      return { ...fallback, mode: 'DETERMINISTIC' as const };
-    try {
-      const tools = [
-        {
-          type: 'function',
-          name: 'get_account_summary',
-          description: 'Consulta os indicadores reais da conta do organizador.',
-          strict: true,
-          parameters: {
-            type: 'object',
-            properties: {},
-            required: [],
-            additionalProperties: false,
-          },
-        },
-        {
-          type: 'function',
-          name: 'get_campaign_performance',
-          description:
-            'Consulta o desempenho real das campanhas do organizador.',
-          strict: true,
-          parameters: {
-            type: 'object',
-            properties: {},
-            required: [],
-            additionalProperties: false,
-          },
-        },
-        {
-          type: 'function',
-          name: 'get_recovery_opportunities',
-          description:
-            'Consulta reservas abandonadas, pagamentos pendentes e alertas reais.',
-          strict: true,
-          parameters: {
-            type: 'object',
-            properties: {},
-            required: [],
-            additionalProperties: false,
-          },
-        },
-      ];
-      const first = await this.openAi({
-        model: process.env.OPENAI_MODEL || 'gpt-5.4',
-        instructions:
-          'Você é o SorteX Advisor. Use as ferramentas somente leitura antes de responder. Nunca invente métricas ou execute alterações.',
-        input: question,
-        tools,
-        tool_choice: 'required',
-      });
-      const calls = (first.output ?? []).filter(
-        (item: any) => item.type === 'function_call',
+    if (allowAi) {
+      const generated = await this.models.analyze(
+        user,
+        advisorIntent(question),
+        context.summary,
       );
-      if (!calls.length) throw new Error('Nenhuma ferramenta consultada');
-      const toolOutput = calls.map((call: any) => ({
-        type: 'function_call_output',
-        call_id: call.call_id,
-        output: JSON.stringify(this.toolResult(call.name, context)),
-      }));
-      const body = await this.openAi({
-        model: process.env.OPENAI_MODEL || 'gpt-5.4',
-        previous_response_id: first.id,
-        instructions:
-          'Responda em português do Brasil somente com os dados retornados pelas ferramentas. Não prometa resultados. Sugira ações, mas informe que exigem confirmação.',
-        input: toolOutput,
-        text: {
-          format: {
-            type: 'json_schema',
-            name: 'advisor_answer',
-            strict: true,
-            schema: {
-              type: 'object',
-              additionalProperties: false,
-              properties: {
-                answer: { type: 'string' },
-                evidence: { type: 'array', items: { type: 'string' } },
-                suggestedQuestions: {
-                  type: 'array',
-                  items: { type: 'string' },
-                },
-              },
-              required: ['answer', 'evidence', 'suggestedQuestions'],
-            },
-          },
-        },
-      });
-      const raw =
-        body.output_text ??
-        body.output
-          ?.flatMap((o: any) => o.content ?? [])
-          .find((c: any) => typeof c.text === 'string')?.text;
-      if (!raw) throw new Error('Resposta vazia');
-      return {
-        ...JSON.parse(raw),
-        actions: fallback.actions,
-        mode: 'OPENAI' as const,
-      };
-    } catch {
-      return { ...fallback, mode: 'DETERMINISTIC' as const };
+      if (generated) {
+        return { ...fallback, ...generated };
+      }
     }
-  }
-
-  private async openAi(payload: Record<string, unknown>) {
-    const response = await fetch('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-    if (!response.ok)
-      throw new Error(`Provedor indisponível (${response.status})`);
-    return response.json();
-  }
-
-  private toolResult(
-    name: string,
-    context: Awaited<ReturnType<AiAdvisorService['snapshot']>>,
-  ) {
-    if (name === 'get_account_summary') return context.summary;
-    if (name === 'get_campaign_performance') return context.campaigns;
-    if (name === 'get_recovery_opportunities')
-      return {
-        abandonedReservations: context.summary.abandonedReservations,
-        pendingPayments: context.summary.pendingPayments,
-        alerts: context.alerts,
-      };
-    return { error: 'Ferramenta não autorizada' };
+    return { ...fallback, mode: 'DETERMINISTIC' as const };
   }
 
   async simulate(user: AuthenticatedUser, dto: AdvisorSimulationDto) {

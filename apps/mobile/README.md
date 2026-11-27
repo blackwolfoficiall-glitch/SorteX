@@ -78,3 +78,26 @@ Este caminho requer a API candidata com a verificação de revisão de capa e um
 ### Cotas premiadas de rascunho
 
 Em **Campanhas → Detalhes → Gerenciar cotas premiadas**, o organizador pode incluir uma cota exata com os zeros à esquerda, editar nome, tipo e valor do prêmio e remover uma cota sem reserva ou resultado. O app usa o mesmo cadastro consultado no painel web. As ações não valem para campanhas já publicadas e não apuram nem pagam prêmios. Metas, roleta e geração em lote não fazem parte deste fluxo.
+
+### Primeira etapa visual do organizador
+
+O painel nativo tem cabeçalho, ticket de vendas, gráfico, atalhos e uma barra
+flutuante com Início, Campanhas, Criar, Copilot e Mais. A central Mais mantém os
+módulos já existentes no app e identifica os que ainda não estão homologados.
+O painel e essa navegação têm temas claro e escuro; telas legadas preservam
+a aparência anterior. O fluxo do comprador permanece disponível sem mudança
+de navegação.
+
+Os filtros consultam `GET /dashboard/period?start=AAAA-MM-DD&end=AAAA-MM-DD`
+e a evolução usa as mesmas datas civis de Brasília do resultado. Sem essa
+rota (HTTP 404), o app mostra só a série UTC disponível no `/dashboard`
+anterior, com os contadores explicitamente de todo o histórico; a rota antiga
+não é usada para ocultar erros de autorização ou dados inválidos. Esses
+valores não representam repasses nem saldo disponível.
+
+O compartilhamento abre a ação do sistema somente após a API pública de
+homologação confirmar o identificador e o slug da campanha publicada. Nenhuma
+mensagem é enviada pelo app. A prévia compartilhada continua protegida.
+Copilot, notificações do organizador, apuração e saques ainda exibem sua
+disponibilidade real e não simulam operação. O atalho Sacar leva à consulta
+financeira, sem iniciar movimentação.

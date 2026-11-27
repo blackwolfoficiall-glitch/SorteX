@@ -20,6 +20,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OrganizerStorageService } from '../organizers/organizer-storage.service';
 import type { UploadedOrganizerFile } from '../organizers/types/uploaded-file.type';
 import {
+  type DashboardPeriodQuery,
+  validateDashboardPeriod,
+} from './dashboard-period';
+import {
   CampaignTemplateDto,
   CommunityLinkDto,
   DomainDto,
@@ -128,6 +132,58 @@ export class OrganizerPlatformService {
       })),
       generatedAt: now.toISOString(),
     };
+  }
+
+  async dashboardPeriod(user: AuthenticatedUser, query: DashboardPeriodQuery) {
+    this.organizer(user);
+    const period = validateDashboardPeriod(query);
+    type PeriodMetrics = {
+      summary: {
+        grossRevenue: number;
+        soldTickets: number;
+        participants: number;
+        averageTicket: number;
+        paidOrders: number;
+      };
+      revenueHistory: Array<{ date: string; revenue: number }>;
+    };
+    // Prisma stores confirmedAt as timestamp (without time zone) in UTC.
+    // Use local civil bounds converted to UTC and group back into the same
+    // local days. One scoped statement guarantees a consistent snapshot and
+    // returns only aggregates, never buyer or purchase rows.
+    const [metrics] = await this.prisma.$queryRaw<PeriodMetrics[]>`
+      WITH paid AS (
+        SELECT p."buyerId", p.total, p.quantity,
+          ((p."confirmedAt" AT TIME ZONE 'UTC') AT TIME ZONE ${period.timeZone})::date AS day
+        FROM "Purchase" AS p
+        JOIN "Campaign" AS c ON c.id = p."campaignId"
+        WHERE c."organizerId" = ${user.id}
+          AND p.status = 'PAID'
+          AND p."confirmedAt" >=
+            ((${period.start}::date::timestamp AT TIME ZONE ${period.timeZone}) AT TIME ZONE 'UTC')
+          AND p."confirmedAt" <
+            (((${period.end}::date + 1)::timestamp AT TIME ZONE ${period.timeZone}) AT TIME ZONE 'UTC')
+      ),
+      daily AS (
+        SELECT day, SUM(total) AS revenue
+        FROM paid
+        GROUP BY day
+      )
+      SELECT jsonb_build_object(
+        'grossRevenue', COALESCE(SUM(total), 0),
+        'soldTickets', COALESCE(SUM(quantity), 0),
+        'participants', COUNT(DISTINCT "buyerId"),
+        'averageTicket', COALESCE(ROUND(AVG(total), 2), 0),
+        'paidOrders', COUNT(*)
+      ) AS summary, COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object('date', to_char(day, 'YYYY-MM-DD'), 'revenue', revenue)
+          ORDER BY day
+        ) FROM daily
+      ), '[]'::jsonb) AS "revenueHistory"
+      FROM paid
+    `;
+    return { version: 1 as const, period, ...metrics };
   }
 
   listPlans() {

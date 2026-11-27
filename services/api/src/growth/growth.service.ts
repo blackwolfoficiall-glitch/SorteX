@@ -23,6 +23,10 @@ import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { PrismaService } from '../prisma/prisma.service';
 import { reservationPricing } from '../purchases/reservation-pricing';
 import {
+  AdsConfirmedSalesQuery,
+  readAdsConfirmedSales,
+} from './ads-confirmed-sales';
+import {
   AdTrackDto,
   PromotionDto,
   PromotionListDto,
@@ -491,6 +495,11 @@ export class GrowthService {
       promotionId: pricing.promotionId ?? null,
     };
   }
+  adsConfirmedSales(user: AuthenticatedUser, query: AdsConfirmedSalesQuery) {
+    this.organizer(user);
+    return readAdsConfirmedSales(this.prisma, user.id, query);
+  }
+
   async adsDashboard(
     user: AuthenticatedUser,
     query: SortexAdsDashboardQueryDto,

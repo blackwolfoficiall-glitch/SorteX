@@ -10,6 +10,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -101,6 +102,7 @@ export class RecommendationFeedbackDto {
 }
 export class AdvisorChatDto {
   @IsString() @MinLength(3) @MaxLength(600) question: string;
+  @IsOptional() @IsBoolean() allowAi?: boolean;
 }
 export class AdvisorSimulationDto {
   @IsOptional() @IsString() campaignId?: string;

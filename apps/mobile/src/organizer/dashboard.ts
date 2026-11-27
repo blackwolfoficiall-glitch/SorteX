@@ -24,11 +24,13 @@ export type DashboardSummary = {
   activeCampaigns: number;
   participants: number;
   soldTickets: number;
+  averageTicket?: number;
 };
 export type Dashboard = {
   summary: DashboardSummary;
   campaigns: DashboardCampaign[];
   generatedAt: string;
+  revenueHistory?: { date: string; revenue: number }[];
 };
 export type DashboardClient = Pick<
   SortexClient,
@@ -66,7 +68,8 @@ export function parseOrganizerDashboard(payload: unknown): Dashboard {
     !monetary(summary.grossRevenue) ||
     !count(summary.activeCampaigns) ||
     !count(summary.participants) ||
-    !count(summary.soldTickets)
+    !count(summary.soldTickets) ||
+    (summary.averageTicket !== undefined && !monetary(summary.averageTicket))
   )
     throw invalid();
   const seen = new Set<string>();
@@ -108,7 +111,23 @@ export function parseOrganizerDashboard(payload: unknown): Dashboard {
         summary.soldTickets !== 0))
   )
     throw invalid();
+  const history = data.revenueHistory;
+  let revenueHistory: Dashboard["revenueHistory"];
+  if (history !== undefined) {
+    if (!Array.isArray(history) || history.length > 367) throw invalid();
+    let after = "";
+    revenueHistory = history.map((item) => {
+      const row = record(item);
+      if (!row || typeof row.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(row.date) ||
+          !Number.isFinite(Date.parse(row.date)) ||
+          new Date(row.date).toISOString().slice(0, 10) !== row.date ||
+          row.date <= after || !monetary(row.revenue)) throw invalid();
+      after = row.date;
+      return { date: row.date, revenue: row.revenue };
+    });
+  }
   return {
+    ...(revenueHistory ? { revenueHistory } : {}),
     generatedAt: data.generatedAt,
     campaigns,
     summary: {
@@ -116,6 +135,7 @@ export function parseOrganizerDashboard(payload: unknown): Dashboard {
       activeCampaigns: summary.activeCampaigns,
       participants: summary.participants,
       soldTickets: summary.soldTickets,
+      ...(typeof summary.averageTicket === "number" ? { averageTicket: summary.averageTicket } : {}),
     },
   };
 }

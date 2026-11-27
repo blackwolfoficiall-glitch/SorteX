@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Linking,
   Platform,
+  Share,
   Text,
   View,
   Switch,
@@ -14,7 +15,7 @@ import {
 } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { recoveryTokenFromUrl } from "./src/auth/callback";
 import { isLoginReady } from "./src/auth/login-input";
 import { StatusBar } from "expo-status-bar";
@@ -33,6 +34,10 @@ import {
 import { LocationPicker } from "./src/components/LocationPicker";
 import { NativeOrganizerDraft } from "./src/components/NativeOrganizerDraft";
 import { OrganizerDashboardHome } from "./src/organizer/NativeOrganizerDashboard";
+import { OrganizerCopilot, OrganizerModuleStatus, OrganizerMore, OrganizerTabBar } from "./src/organizer/NativeOrganizerNavigation";
+import { premiumNotices } from "./src/organizer/premium-navigation";
+import { organizerCampaignShareUrl, shareableSlug } from "./src/organizer/campaign-share";
+import { QA_API } from "./src/api/config";
 import { NativeOrganizerFinance } from "./src/organizer/NativeOrganizerFinance";
 import { organizerFinanceSession } from "./src/organizer/finance";
 import { NativeOrganizerDraftPrizes } from "./src/components/NativeOrganizerDraftPrizes";
@@ -526,8 +531,16 @@ function Home({ navigation }: any) {
   return auth.user?.role === "ORGANIZER" ? (
     <OrganizerDashboardHome
       greeting={greeting}
+      initial={Array.from(auth.user.name.trim())[0]?.toLocaleUpperCase("pt-BR") ?? "S"}
+      onCreate={() => navigation.navigate("OrganizerDraft")}
+      onProfile={() => navigation.navigate("OrganizerProfile")}
+      onCopilot={() => navigation.navigate("Copilot")}
+      onNotifications={() => navigation.navigate("OrganizerModuleStatus", { title: "Notificações", message: premiumNotices["Notificações"] })}
+      onDraw={() => navigation.navigate("OrganizerModuleStatus", { title: "Sortear", message: premiumNotices.Sortear })}
+      onShare={() => navigation.navigate("OrganizerShare")}
       onCampaigns={() => navigation.navigate("Campaigns")}
       onFinance={() => navigation.navigate("OrganizerFinance")}
+      onPayout={() => navigation.navigate("OrganizerModuleStatus", { title: "Sacar", message: premiumNotices.Sacar, finance: true })}
       onCampaign={(item) => navigation.navigate("Campaign", { item })}
     />
   ) : (
@@ -1020,8 +1033,88 @@ function BuyerResults({ buyerId }: { buyerId: string | null }) {
     </Page>
   );
 }
+function OrganizerCampaignsTab(props: { navigation: any }) {
+  const focused = useIsFocused();
+  return (
+    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.bg }}>
+      {focused && <StatusBar style="dark" />}
+      <Campaigns {...props} />
+    </SafeAreaView>
+  );
+}
+
+function OrganizerShareScreen() {
+  const auth = useSyncExternalStore(client.subscribe, client.snapshot);
+  const revision = useSyncExternalStore(client.subscribe, client.activeSessionRevision);
+  return auth.status === "signedIn" && auth.user?.role === "ORGANIZER" && revision !== null
+    ? <OrganizerShareContent key={`${auth.user.id}:${revision}`} revision={revision} />
+    : null;
+}
+
+function OrganizerShareContent({ revision }: { revision: number }) {
+  const state = useData<Campaign[]>(API_URL === QA_API ? "/campaigns/my" : null);
+  const pending = React.useRef(false);
+  const [sharing, setSharing] = useState<string | null>(null);
+  const [info, setInfo] = useState("");
+  const published = Array.isArray(state.data) ? state.data.filter((campaign) =>
+    campaign?.status === "PUBLISHED" && typeof campaign.id === "string" &&
+    typeof campaign.title === "string" && shareableSlug(campaign.slug)) : [];
+  const share = async (campaign: Campaign) => {
+    if (pending.current || client.activeSessionRevision() !== revision) return;
+    pending.current = true;
+    setSharing(campaign.id);
+    setInfo("");
+    try {
+      // Use the public contract without authorization. Drafts, private and
+      // blocked campaigns must never open the native share sheet.
+      const result = await client.publicRequest<unknown>(`/public/campaigns/${encodeURIComponent(campaign.slug)}`);
+      const url = organizerCampaignShareUrl(API_URL, campaign, result);
+      if (client.activeSessionRevision() !== revision) return;
+      if (!url) {
+        setInfo("Esta campanha não está disponível no endereço de homologação.");
+        return;
+      }
+      await Share.share({ message: `${campaign.title}\n${url}`, title: campaign.title });
+    } catch {
+      if (client.activeSessionRevision() === revision)
+        setInfo("Não foi possível abrir o compartilhamento. Confira se a campanha está publicada e tente novamente.");
+    } finally {
+      pending.current = false;
+      setSharing(null);
+    }
+  };
+  return (
+    <Page title="Divulgar campanha">
+      {API_URL !== QA_API ? <Notice message="O compartilhamento está disponível somente com a API oficial de homologação." /> :
+        <Load state={state}>
+          <Notice message="Você escolhe se e para quem enviar. O link de homologação exige acesso à prévia privada." />
+          {!!info && <Notice error message={info} />}
+          {!published.length && <Notice message="Nenhuma campanha publicada para compartilhar." />}
+          {published.map((campaign) => (
+            <View key={campaign.id} style={s.card}>
+              <Text style={s.text}>{campaign.title}</Text>
+              <Button title="Compartilhar link" busy={sharing === campaign.id} disabled={sharing !== null} onPress={() => void share(campaign)} />
+            </View>
+          ))}
+        </Load>}
+    </Page>
+  );
+}
+
+function OrganizerTabs() {
+  return (
+    <Tabs.Navigator screenOptions={{ headerShown: false }} tabBar={(props) => <OrganizerTabBar {...props} />}>
+      <Tabs.Screen name="Home" component={Home} options={{ title: "Início" }} />
+      <Tabs.Screen name="Campaigns" component={OrganizerCampaignsTab} options={{ title: "Campanhas" }} />
+      <Tabs.Screen name="Copilot" component={OrganizerCopilot} options={{ title: "Copilot" }} />
+      <Tabs.Screen name="More" component={OrganizerMore} options={{ title: "Mais" }} />
+    </Tabs.Navigator>
+  );
+}
+
 function MainTabs() {
   const auth = useSyncExternalStore(client.subscribe, client.snapshot);
+  if (auth.user?.role === "ORGANIZER") return <OrganizerTabs key={auth.user.id} />;
   return (
     <Tabs.Navigator
       screenOptions={{
@@ -1120,8 +1213,15 @@ export default function App() {
                 <Stack.Screen
                   name="Main"
                   component={MainTabs}
-                  options={{ title: "SorteX · Teste" }}
+                  options={{ title: "SorteX · Teste", headerShown: auth.user?.role !== "ORGANIZER" }}
                 />
+                {auth.user?.role === "ORGANIZER" && (
+                  <>
+                    <Stack.Screen name="OrganizerProfile" component={Profile} options={{ title: "Perfil" }} />
+                    <Stack.Screen name="OrganizerModuleStatus" component={OrganizerModuleStatus} options={{ headerShown: false }} />
+                    <Stack.Screen name="OrganizerShare" component={OrganizerShareScreen} options={{ title: "Divulgar" }} />
+                  </>
+                )}
                 {auth.user?.role === "BUYER" && (
                   <Stack.Screen name="BuyerInbox" component={BuyerInboxScreen}
                     options={{ title: "Notificações" }} />

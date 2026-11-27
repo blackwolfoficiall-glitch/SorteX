@@ -5,7 +5,7 @@ const config: ExpoConfig = {
   version: "0.1.0",
   scheme: "sortex-dev",
   orientation: "portrait",
-  userInterfaceStyle: "light",
+  userInterfaceStyle: "automatic",
   icon: "./assets/icon.png",
   ios: {
     bundleIdentifier: "br.com.sortex.development",
