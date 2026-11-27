@@ -303,6 +303,9 @@ isolated('Ads confirmed sales with HTTP and disposable PostgreSQL', () => {
       400,
     );
 
+    expect((await visit(organizerToken, '&origin=META_ADS')).status).toBe(400);
+    expect((await visit(organizerToken, '&origin=')).status).toBe(400);
+
     const response = await visit(organizerToken);
     expect(response.status).toBe(200);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
@@ -314,6 +317,7 @@ isolated('Ads confirmed sales with HTTP and disposable PostgreSQL', () => {
       averageOrderValue: '11.54',
     };
     expect(await response.json()).toMatchObject({
+      originFilter: 'ALL',
       totals,
       daily: [{ date: '2026-01-13', ...totals }],
       attribution: {
@@ -329,13 +333,53 @@ isolated('Ads confirmed sales with HTTP and disposable PostgreSQL', () => {
         attributedRevenue: null,
         roas: null,
         roi: null,
+        reportingProviders: ['META_ADS', 'GOOGLE_ADS', 'TIKTOK_ADS'].map(
+          (provider) => ({
+            provider,
+            intendedCapability: 'READ_ONLY_REPORTING',
+            status: 'DISABLED',
+            canReadProviderData: false,
+            canPublish: false,
+            canChangeBudget: false,
+          }),
+        ),
       },
+    });
+    const onlyAffiliate = await visit(organizerToken, '&origin=AFFILIATE');
+    expect(onlyAffiliate.status).toBe(200);
+    expect(await onlyAffiliate.json()).toMatchObject({
+      originFilter: 'AFFILIATE',
+      totals: {
+        confirmedOrders: 1,
+        buyers: 1,
+        titlesSold: 5,
+        paidOrderValue: '10.00',
+      },
+      daily: [
+        { date: '2026-01-13', confirmedOrders: 1, paidOrderValue: '10.00' },
+      ],
+      attribution: { channels: [{ origin: 'AFFILIATE', confirmedOrders: 1 }] },
+    });
+    const onlyUnknown = await visit(organizerToken, '&origin=UNKNOWN');
+    expect(onlyUnknown.status).toBe(200);
+    expect(await onlyUnknown.json()).toMatchObject({
+      originFilter: 'UNKNOWN',
+      totals: {
+        confirmedOrders: 2,
+        buyers: 2,
+        titlesSold: 6,
+        paidOrderValue: '24.61',
+      },
+      attribution: { channels: [{ origin: 'UNKNOWN', confirmedOrders: 2 }] },
     });
     const scoped = await visit(organizerToken, '&campaignId=' + main.id);
     expect(await scoped.json()).toMatchObject({
       totals: { confirmedOrders: 2, buyers: 1, paidOrderValue: '16.60' },
     });
-    const foreign = await visit(organizerToken, '&campaignId=' + external.id);
+    const foreign = await visit(
+      organizerToken,
+      '&origin=AFFILIATE&campaignId=' + external.id,
+    );
     const missing = await visit(organizerToken, '&campaignId=' + 'nonexistent');
     for (const filtered of [foreign, missing])
       expect(await filtered.json()).toMatchObject({

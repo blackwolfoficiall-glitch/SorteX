@@ -30,7 +30,7 @@ test("SorteX Ads separates paid orders from unverified media data on mobile web"
   await expect(report.getByText("Valor dos pedidos pagos")).toBeVisible();
   await expect(report.getByText(/R\$\s0,20/).first()).toBeVisible();
   await expect(
-    report.getByText("Origem não identificada", { exact: true }),
+    report.getByRole("term").filter({ hasText: /^Origem não identificada$/ }),
   ).toBeVisible();
   await expect(
     report.getByRole("heading", { name: "Desempenho de mídia indisponível" }),
@@ -39,6 +39,37 @@ test("SorteX Ads separates paid orders from unverified media data on mobile web"
     page.getByRole("heading", { name: "IA SorteX analisa" }),
   ).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Conexões" })).toBeVisible();
+  await expect(
+    report.getByRole("figure", { name: "Gráfico diário de pedidos pagos" }),
+  ).toBeVisible();
+  await expect(
+    report.getByText("100% dos pedidos", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    report
+      .getByRole("list", { name: "Leitura de plataformas publicitárias" })
+      .getByRole("listitem"),
+  ).toHaveCount(3);
+  const origins = report.getByRole("combobox", { name: "Origem dos pedidos" });
+  await expect(origins).toBeEnabled();
+  await origins.selectOption("UNKNOWN");
+  await report.getByRole("button", { name: "Aplicar filtros" }).click();
+  await expect(
+    report.getByText(/Período aplicado: .*Origem não identificada/),
+  ).toBeVisible();
+  await expect(
+    report.getByRole("term").filter({ hasText: /^Afiliados verificados$/ }),
+  ).not.toBeVisible();
+  await expect(report.getByText(/R\$\s0,20/).first()).toBeVisible();
+  await origins.selectOption("AFFILIATE");
+  await report.getByRole("button", { name: "Aplicar filtros" }).click();
+  await expect(
+    report.getByText(/Período aplicado: .*Afiliados verificados/),
+  ).toBeVisible();
+  await expect(
+    report.getByText("Nenhum pedido pago no período selecionado."),
+  ).toBeVisible();
+  await origins.selectOption("ALL");
 
   await report
     .getByRole("combobox", { name: "Período", exact: true })

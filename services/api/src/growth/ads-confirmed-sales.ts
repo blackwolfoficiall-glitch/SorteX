@@ -1,11 +1,14 @@
 import { BadRequestException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { IsIn, IsOptional, Matches } from 'class-validator';
+import { inactiveAdsReportingCapabilities } from './ads-reporting-capabilities';
 
 const zone = 'America/Sao_Paulo';
 const dayMs = 86_400_000;
 const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
 const trailingDays = { '7D': 7, '15D': 15, '30D': 30, '90D': 90 } as const;
+const origins = ['AFFILIATE', 'UNKNOWN'] as const;
+const originFilters = ['ALL', ...origins] as const;
 const periods = [
   'TODAY',
   'YESTERDAY',
@@ -24,6 +27,10 @@ export class AdsConfirmedSalesQuery {
   @IsOptional()
   @Matches(/^[A-Za-z0-9_-]{1,128}$/)
   campaignId?: string;
+
+  @IsOptional()
+  @IsIn(originFilters)
+  origin?: (typeof originFilters)[number];
 
   @IsOptional()
   @Matches(dayPattern)
@@ -86,7 +93,7 @@ export function confirmedSalesPeriod(query: AdsConfirmedSalesQuery, now: Date) {
   };
 }
 
-type Origin = 'AFFILIATE' | 'UNKNOWN';
+type Origin = (typeof origins)[number];
 type Aggregate = {
   origin: Origin | null;
   day: string | null;
@@ -127,6 +134,10 @@ export async function readAdsConfirmedSales(
   now = new Date(),
 ) {
   const period = confirmedSalesPeriod(query, now);
+  const origin = query.origin ?? 'ALL';
+  const channels: readonly Origin[] = origin === 'ALL' ? origins : [origin];
+  const restrictOrigin =
+    origin === 'ALL' ? Prisma.empty : Prisma.sql`WHERE origin = ${origin}`;
   const restrictCampaign = query.campaignId
     ? Prisma.sql`AND p."campaignId" = ${query.campaignId}`
     : Prisma.empty;
@@ -166,6 +177,7 @@ export async function readAdsConfirmedSales(
            COALESCE(SUM(total), 0.00)::text AS "paidOrderValue",
            ROUND(AVG(total), 2)::text AS "averageOrderValue"
     FROM paid
+    ${restrictOrigin}
     GROUP BY GROUPING SETS ((), (origin), (day))
     ORDER BY day NULLS FIRST, origin NULLS FIRST
   `);
@@ -174,6 +186,7 @@ export async function readAdsConfirmedSales(
     currency: 'BRL' as const,
     period,
     campaignId: query.campaignId ?? null,
+    originFilter: origin,
     totals: metrics(
       rows.find((row) => row.origin === null && row.day === null),
     ),
@@ -183,12 +196,13 @@ export async function readAdsConfirmedSales(
     attribution: {
       model: 'APPROVED_AFFILIATE_CONVERSION_ONLY' as const,
       adsWindowDays: null,
-      channels: (['AFFILIATE', 'UNKNOWN'] as const).map((origin) => ({
-        origin,
-        ...metrics(rows.find((row) => row.origin === origin)),
+      channels: channels.map((channel) => ({
+        origin: channel,
+        ...metrics(rows.find((row) => row.origin === channel)),
       })),
     },
     paidMedia: {
+      reportingProviders: inactiveAdsReportingCapabilities(),
       status: 'UNAVAILABLE' as const,
       reason: 'NO_VERIFIED_AD_ATTRIBUTION_OR_PERIOD_SPEND' as const,
       spend: null,

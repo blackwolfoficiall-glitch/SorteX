@@ -8,9 +8,27 @@ export const adsSalesPeriods = [
   ["CUSTOM", "Personalizado"],
 ] as const;
 
+export const originOptions = [
+  ["ALL", "Todas as origens"],
+  ["AFFILIATE", "Afiliados verificados"],
+  ["UNKNOWN", "Origem não identificada"],
+] as const;
+
+export const adsReportingProviders = [
+  "META_ADS",
+  "GOOGLE_ADS",
+  "TIKTOK_ADS",
+] as const;
+
+type OrderOrigin = (typeof originOptions)[1 | 2][0];
+export type OriginFilter = (typeof originOptions)[number][0];
+
+const dayMs = 86_400_000;
+
 export type AdsSalesFilter = {
   period: (typeof adsSalesPeriods)[number][0];
   campaignId: string;
+  origin?: OriginFilter;
   startDate: string;
   endDate: string;
 };
@@ -27,7 +45,10 @@ export type ConfirmedAdsSales = {
   period: { fromDate: string; toDateExclusive: string };
   totals: SalesMetrics;
   daily: Array<SalesMetrics & { date: string }>;
-  attribution: Array<SalesMetrics & { origin: "AFFILIATE" | "UNKNOWN" }>;
+  attribution: Array<SalesMetrics & { origin: OrderOrigin }>;
+  originFilter: OriginFilter;
+  supportsOriginFilter: boolean;
+  readOnlyReportingProviders: Array<(typeof adsReportingProviders)[number]>;
 };
 
 const dayPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -74,6 +95,9 @@ export function parseConfirmedAdsSales(
   value: unknown,
   filters: AdsSalesFilter,
 ): ConfirmedAdsSales {
+  const originFilter = filters.origin ?? "ALL";
+  const expectedOrigins: OrderOrigin[] =
+    originFilter === "ALL" ? ["AFFILIATE", "UNKNOWN"] : [originFilter];
   if (
     !isRecord(value) ||
     value.source !== "SORTEX_CONFIRMED_PURCHASES" ||
@@ -85,24 +109,30 @@ export function parseConfirmedAdsSales(
     !isDay(value.period.toDateExclusive) ||
     value.period.fromDate >= value.period.toDateExclusive ||
     value.campaignId !== (filters.campaignId || null) ||
+    (value.originFilter === undefined && originFilter !== "ALL") ||
+    (value.originFilter !== undefined && value.originFilter !== originFilter) ||
     !isRecord(value.attribution) ||
     value.attribution.model !== "APPROVED_AFFILIATE_CONVERSION_ONLY" ||
     !Array.isArray(value.attribution.channels) ||
-    value.attribution.channels.length !== 2 ||
+    value.attribution.channels.length !== expectedOrigins.length ||
     !Array.isArray(value.daily) ||
     value.daily.length > 366
   ) {
     return invalid();
   }
   const { fromDate, toDateExclusive } = value.period;
+  const calendarDays =
+    (Date.parse(toDateExclusive) - Date.parse(fromDate)) / dayMs;
+  if (!Number.isInteger(calendarDays) || calendarDays < 1 || calendarDays > 366)
+    return invalid();
   if (
     filters.period === "CUSTOM" &&
     (fromDate !== filters.startDate ||
-      Date.parse(toDateExclusive) - Date.parse(filters.endDate) !== 86_400_000)
+      Date.parse(toDateExclusive) - Date.parse(filters.endDate) !== dayMs)
   )
     return invalid();
   const channels: unknown[] = value.attribution.channels;
-  const attribution = (["AFFILIATE", "UNKNOWN"] as const).map((origin) => {
+  const attribution = expectedOrigins.map((origin) => {
     const rows = channels.filter(
       (row) => isRecord(row) && row.origin === origin,
     );
@@ -137,12 +167,43 @@ export function parseConfirmedAdsSales(
     )
       return invalid();
   }
-  return { period: { fromDate, toDateExclusive }, totals, daily, attribution };
+  const providerRows: unknown[] =
+    isRecord(value.paidMedia) &&
+    value.paidMedia.status === "UNAVAILABLE" &&
+    Array.isArray(value.paidMedia.reportingProviders)
+      ? value.paidMedia.reportingProviders
+      : [];
+  const readOnlyReportingProviders = adsReportingProviders.filter(
+    (provider) =>
+      providerRows.filter((row) => isRecord(row) && row.provider === provider)
+        .length === 1 &&
+      providerRows.some(
+        (row) =>
+          isRecord(row) &&
+          row.provider === provider &&
+          row.intendedCapability === "READ_ONLY_REPORTING" &&
+          row.status === "DISABLED" &&
+          row.canReadProviderData === false &&
+          row.canPublish === false &&
+          row.canChangeBudget === false,
+      ),
+  );
+  return {
+    period: { fromDate, toDateExclusive },
+    totals,
+    daily,
+    attribution,
+    originFilter,
+    supportsOriginFilter: value.originFilter !== undefined,
+    readOnlyReportingProviders,
+  };
 }
 
 export function confirmedAdsQuery(filters: AdsSalesFilter) {
   const query = new URLSearchParams({ period: filters.period });
   if (filters.campaignId) query.set("campaignId", filters.campaignId);
+  if (filters.origin && filters.origin !== "ALL")
+    query.set("origin", filters.origin);
   if (filters.period === "CUSTOM") {
     if (
       !isDay(filters.startDate) ||
@@ -155,6 +216,19 @@ export function confirmedAdsQuery(filters: AdsSalesFilter) {
     query.set("endDate", filters.endDate);
   }
   return query.toString();
+}
+
+export function confirmedAdsTimeline(data: ConfirmedAdsSales) {
+  const start = Date.parse(data.period.fromDate);
+  const count = (Date.parse(data.period.toDateExclusive) - start) / dayMs;
+  if (!Number.isInteger(count) || count < 1 || count > 366) return [];
+  const ordersByDay = new Map(
+    data.daily.map((row) => [row.date, row.confirmedOrders]),
+  );
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(start + index * dayMs).toISOString().slice(0, 10);
+    return { date, orders: ordersByDay.get(date) ?? 0 };
+  });
 }
 
 const amountFormat = new Intl.NumberFormat("pt-BR", {

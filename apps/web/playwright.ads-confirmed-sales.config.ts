@@ -20,7 +20,14 @@ export default defineConfig({
     browserName: "chromium",
     launchOptions: {
       ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
-        ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+        ? {
+            executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
+            args: [
+              "--disable-gpu",
+              "--no-zygote",
+              "--renderer-process-limit=1",
+            ],
+          }
         : {}),
     },
   },
