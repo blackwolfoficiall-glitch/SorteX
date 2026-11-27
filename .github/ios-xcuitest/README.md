@@ -14,9 +14,11 @@ o plist gerado pelo Xcode. O diagnóstico retido lista exclusivamente versão
 validada do Xcode, formato v1/v2, cardinalidade de configurações/alvos,
 categorias de caminhos (nunca valores), presença de variáveis/argumentos e
 um código fixo do validador. Mesmo um relatório inconclusivo não executa o
-cenário completo. A execução longa só pode ser habilitada em commit separado
-depois de confirmar a saída real de macOS; a guarda atual fixa
-`run_full=false`. A execução original do Maestro está preservada.
+cenário completo. Depois de confirmar a pré-checagem, a execução longa deve
+ser solicitada com `[xcui-full] ` no início da mensagem do commit que modifica
+os arquivos do teste. Uma marca no fim da mensagem, um commit vazio ou uma
+nova tentativa de um run de pré-checagem não habilitam a jornada. A execução
+original do Maestro está preservada.
 
 Não contar a pré-checagem, startup ou aprovação local como login aprovado,
 o simulador como iPhone físico, nem este cenário como homologação de
