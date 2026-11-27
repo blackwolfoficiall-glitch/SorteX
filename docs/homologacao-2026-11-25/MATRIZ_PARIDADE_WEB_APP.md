@@ -1,4 +1,4 @@
-# Matriz de paridade SorteX • atualizada em 26/11/2026
+# Matriz de paridade SorteX • atualizada em 27/11/2026
 
 Portal indica link para o site dentro do aplicativo. Restrito indica exclusão intencional da administração no app. As fontes de Banco são modelos Prisma. Cada teste citado por nome pode cobrir apenas parte da linha. A tabela distingue caminhos presentes e evidência executada; veja a seção de aceite para as verificações mais recentes. A classificação é da jornada integrada; a classificação por cliente consta nas colunas Site e App. A existência de rota ou de um botão não certifica sua execução.
 
@@ -10,7 +10,7 @@ Portal indica link para o site dentro do aplicativo. Restrito indica exclusão i
 | Apple e Google | login | Indisponíveis | social-auth | SocialIdentity | 15 OIDC | Provedores simulados; callbacks reais pendentes | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Recuperação de senha | esqueci-senha, recuperar-senha | Forgot, Reset | auth | PasswordResetToken | password-reset-mail | Entrega e abertura do link no celular | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Sessões e permissões | login, admin/login | Main, SecureStore | auth/guards | AuthSession | Rotação HTTP no Neon QA; 27 mobile | Persistência em SecureStore ainda não exercitada no iPhone; portal abre sessão distinta | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
-| Dashboard | dashboard | Home | dashboard | Campaign/Payment | dashboard.spec | Comparar totais por ID e período | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
+| Dashboard | dashboard | Home nativa redesenhada, filtros e navegação flutuante | dashboard, dashboard/period | Campaign/Purchase | Navegação contra Nest e PostgreSQL; KPIs por período isolados, incluindo participantes distintos | API hospedada ainda usa contrato anterior; comparativo no iPhone pendente | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Criar campanhas | dashboard/campanhas/nova | Rascunho nativo com salvamento parcial, dados para publicar, incluindo seleção de modelos da Federal; portal para regras personalizadas | campaigns, draw-rule-templates | Campaign/DrawRuleTemplate | BFF↔cliente no Neon QA para rascunho; [cliente HTTP e Chromium/WebKit no PostgreSQL local](PUBLICACAO_NATIVA_LOCAL_QA.md) para publicação | Interface autenticada no iOS e iPhone físico pendentes | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Editar campanhas | dashboard/campanhas/[id]/editar | Rascunho nativo; edição limitada de título/resumo/descrição de publicada ou pausada; portal para edição avançada | campaigns | Campaign | BFF↔cliente no Neon QA para rascunhos; jornada HTTP/PG e Chromium local para publicada | Repetir na interface física | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Gerenciar campanhas e publicações | dashboard/campanhas | Campaigns, Campaign; publicação nativa com confirmação | campaigns | Campaign | campaigns.spec; [ciclo nativo por HTTP local](PUBLICACAO_NATIVA_LOCAL_QA.md) da criação à publicação com regra preservada e autorização do organizador | Publicação e bloqueios no dispositivo | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
@@ -21,12 +21,12 @@ Portal indica link para o site dentro do aplicativo. Restrito indica exclusão i
 | Afiliados | dashboard/afiliados | Portal | affiliates | AffiliateCommission | affiliate-commission | Conversão e repasse pendentes | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Financeiro organizador | dashboard/financeiro | Portal | finance | FinancialAccount/LedgerEntry | finance, ledger | Conciliar o mesmo pagamento | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | CRM: contatos, segmentos, tarefas, automações e abandonos | dashboard/crm e subrotas | Crm resumo; portal | crm | CrmContact/Segment/Automation | crm, crm-sync | Operações completas no iPhone pendentes | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
-| IA SorteX | dashboard/ia | Advisor resumo; portal | growth | AiRecommendation | ai-advisor-full web | Ver falhas e precondições no diagnóstico | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
+| IA SorteX e Copilot | dashboard/ia | Copilot com disponibilidade explícita; Advisor existente | growth | AiRecommendation | Acesso e minimização do piloto validados com transporte substituído | Provedor real desligado; pendentes credencial, limite sem custo, consentimento, quota e histórico | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | SorteX Live (streaming e chat) | Sem rota localizada | Ausente | Sem módulo identificado | — | — | Sala de apuração não transmite vídeo | P3 | fora da janela | NÃO IMPLEMENTADO |
 | Configurações e marca | dashboard/configuracoes, perfil | Profile; portal | organizers,personalization | OrganizerBrandProfile | navegador: slogan | Edição de endereço completo pendente | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Mini-campanhas | dashboard/mini-campanhas | Portal | mini-campaigns | MiniCampaign | mini-affiliates web | Ciclo de compra no iPhone pendente | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Comunicação e notificações CRM | dashboard/comunicacao | Portal | crm,growth | OutboundMessage | communication-full web | Confirmar entrega em cada canal | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
-| Ads e Modo Turbo | dashboard/ads, painel-mobile.html#turbo | Portal | growth, CRM | SortexAdCampaign | inspeção | Ads sandbox; Turbo é agrupador de atalhos | P2 | 0,5–1 d de teste | SOMENTE INTERFACE (atalhos Turbo); Ads simulado |
+| Ads e Modo Turbo | dashboard/ads, painel-mobile.html#turbo | Mais indica disponibilidade; relatório nativo pendente | growth, CRM | Purchase/AffiliateCommission/SortexAdCampaign | API local autenticada e PostgreSQL: vendas pagas, afiliado comprovado e origem desconhecida | Meta, Google e TikTok não conectados; sem gastos, atribuição de mídia, ROI ou ROAS homologados | P2 | fora da janela do núcleo | PARCIALMENTE FUNCIONAL (relatório de compras em QA local) |
 | Domínio, redes e prévia | dashboard/personalizacao | Portal | personalization | OrganizerDomain | personalization-persistence web | Publicação do domínio pendente | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Mídias e documentos | organizador/midias e organizador/verificacao | Portal | media,organizers | MediaAsset/OrganizerDocument | media, organizer-storage | Storage local exercitado; desabilitado na API de homologação | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
 | Planos e jurídico | dashboard/configuracoes/plano, juridico | Portal | plans,legal | Subscription/LegalAcceptance | legal | Validar aceite e plano correto no portal | P1 | 0,5–1 d de teste | PARCIALMENTE FUNCIONAL |
@@ -57,6 +57,12 @@ Portal indica link para o site dentro do aplicativo. Restrito indica exclusão i
 | Loteria Federal automática | admin/loteria | DrawRoom consulta | ManualLotteryResultsProvider | LotteryDraw | draws | Consulta automática desativada | P1 | fora da janela | NÃO IMPLEMENTADO |
 | Builder de regras e apuração | editor, dashboard/sorteios | Portal; DrawRoom consulta | draw-rule-templates,draws | DrawRuleTemplate/CampaignDraw | draw-rule-engine e auditoria HTTP/PG | Prova recalculável e bloqueio de divergência testados; replay no aparelho pendente | P0 | 1–2 d de teste | PARCIALMENTE FUNCIONAL |
 | Notificações externas | dashboard/comunicacao | Sem push nativo | crm/fila | OutboundMessage | crm | Entrega externa pendente | P1 | 0,5–1 d de teste | BLOQUEADO POR DEPENDÊNCIA EXTERNA |
+
+## Evidência da rodada Premium • 27/11/2026
+
+- **Já na prévia privada:** menu Web do organizador limpo. Mantidos 17 destinos e a página interna do app. Chromium desktop/Android e WebKit em tamanho de iPhone/320 px passaram. Verificação externa confirmou a mesma API de homologação e as campanhas fictícias preservadas.
+- **Na candidata de código, não na prévia/API:** navegação nativa e indicadores pagos por período, fonte de dados de compras pagas para Ads e adaptador de IA desativado. A validação de UI do app em navegador de desenvolvimento e a exportação Metro/Hermes não substituem a execução no simulador, a assinatura ou o iPhone físico. Sem conectar provedores, gastos nem envio de dados.
+- **Placar:** nenhuma jornada física, de provedor ou integrada é promovida por essas evidências parciais.
 
 ## Evidências dos nove cenários • 26/11/2026
 
