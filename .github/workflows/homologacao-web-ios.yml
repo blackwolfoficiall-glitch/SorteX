@@ -145,6 +145,21 @@ jobs:
           docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_dashboard_ci
           DATABASE_URL="$SORTEX_DASHBOARD_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
           npm run test:e2e -- --runInBand --runTestsByPath test/organizer-dashboard-postgres.e2e-spec.ts
+      - name: Validar Advisor fictício e limites compartilhados (sem provedor externo)
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_ADVISOR_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_advisor_ci
+          SORTEX_AI_QUOTA_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_ai_quota_ci
+          PRISMA_USE_PG_ADAPTER: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_advisor_ci
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_ai_quota_ci
+          DATABASE_URL="$SORTEX_ADVISOR_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          DATABASE_URL="$SORTEX_AI_QUOTA_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          npm run test:e2e -- --runInBand --runTestsByPath test/advisor-provider-postgres.e2e-spec.ts test/ai-usage-quota-postgres.e2e-spec.ts
       - name: Validar permissões administrativas e revogação isoladas (cenário 9)
         working-directory: services/api
         env:
