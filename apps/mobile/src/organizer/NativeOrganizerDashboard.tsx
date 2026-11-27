@@ -11,7 +11,7 @@ import {
   loadOrganizerDashboard, organizerDashboardSession,
   type Dashboard, type DashboardCampaign, type DashboardSession,
 } from "./dashboard";
-import { chartFor, dayInSaoPaulo, loadDashboardPeriod, parseCustomPeriod, periodFor,
+import { DEFAULT_DASHBOARD_PERIOD, chartFor, dayInSaoPaulo, legacyHistoryCovers, legacyUtcRange, loadDashboardPeriod, parseCustomPeriod, periodFor,
   type Period, type PeriodDashboard, type PeriodKey } from "./dashboard-period";
 
 type Actions = {
@@ -28,6 +28,7 @@ type Actions = {
 };
 const date = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
 const count = new Intl.NumberFormat("pt-BR");
+const dateLabel = (day: string) => day.split("-").reverse().join("/");
 const campaignStatus: Record<DashboardCampaign["status"], string> = {
   DRAFT: "Rascunho", PENDING_REVIEW: "Em análise", PUBLISHED: "Publicada", PAUSED: "Pausada",
   SOLD_OUT: "Esgotada", DRAWN: "Apurada", FINISHED: "Finalizada", CANCELLED: "Cancelada",
@@ -67,7 +68,7 @@ type PeriodState = { kind: "loading" | "error" | "legacy" } | { kind: "ok"; data
 
 function DashboardContent({ session: { organizerId, revision }, ...actions }: Actions & { session: DashboardSession }) {
   const [state, setState] = useState<State>({ kind: "loading" });
-  const [selected, setSelected] = useState<PeriodKey>("week");
+  const [selected, setSelected] = useState<PeriodKey>(DEFAULT_DASHBOARD_PERIOD);
   const [custom, setCustom] = useState<Period | null>(null);
   const [inputs, setInputs] = useState({ start: "", end: "" });
   const [customError, setCustomError] = useState(false);
@@ -113,16 +114,18 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
 
   const current = periodState?.key === key ? periodState?.result : undefined;
   const useLegacy = current?.kind === "legacy";
-  const utcDay = dashboard?.generatedAt.slice(0, 10);
-  const legacyPeriod = useLegacy && utcDay && today && period ?
-    (selected === "custom" ? period : periodFor(selected, utcDay)) : null;
-  const safeLegacyPeriod = legacyPeriod && utcDay &&
-    legacyPeriod.start >= periodFor("year", utcDay).start && legacyPeriod.end <= utcDay ? legacyPeriod : null;
-  const chart = current?.kind === "ok" && current.data.revenueHistory && period
-    ? chartFor(current.data.revenueHistory, period)
-    : dashboard?.revenueHistory && safeLegacyPeriod ? chartFor(dashboard.revenueHistory, safeLegacyPeriod) : null;
+  const displayRange = useLegacy
+    ? legacyUtcRange(dashboard?.generatedAt, selected, custom)
+    : current?.kind === "ok" ? current.data.period : null;
+  const legacyHistory = useLegacy && displayRange && legacyHistoryCovers(dashboard?.generatedAt, displayRange)
+    ? dashboard?.revenueHistory : undefined;
+  const history = current?.kind === "ok" ? current.data.revenueHistory : legacyHistory;
+  const chart = history && displayRange ? chartFor(history, displayRange) : null;
   const revenue = current?.kind === "ok" ? current.data.summary.grossRevenue :
-    useLegacy && chart ? chart.reduce((sum, value) => sum + value, 0) : undefined;
+    useLegacy && chart ? chart.reduce((sum, value) => sum + Math.round(value * 100), 0) / 100 : undefined;
+  const rangeCaption = displayRange
+    ? `Intervalo: ${dateLabel(displayRange.start)} a ${dateLabel(displayRange.end)} · ${useLegacy ? "UTC" : "Brasília"}`
+    : null;
   const summary = current?.kind === "ok" ? current.data.summary : useLegacy ? dashboard?.summary : null;
   const t = usePremiumTheme();
 
@@ -151,11 +154,11 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
                   current?.kind === "error" ? "Não foi possível carregar o período." :
                   current?.kind === "legacy" ? "Histórico indisponível para este período." :
                   !current ? "Carregando período…" : "Evolução não disponível para este período."}</Text>}
-              {useLegacy && chart && <Text style={styles.ticketMuted}>Histórico por datas em UTC.</Text>}
-              {current?.kind === "ok" && <Text style={styles.ticketMuted}>Datas de Brasília.</Text>}
+              {rangeCaption && <Text style={styles.ticketMuted}>{rangeCaption}</Text>}
+              {useLegacy && <Text style={styles.ticketMuted}>Na versão anterior, os filtros de receita usam os dias UTC do servidor.</Text>}
               {current?.kind === "error" && <PremiumButton title="Tentar carregar período novamente" onPress={() => setPeriodRetry((value) => value + 1)} />}
               <View style={styles.ticketRule} />
-              {useLegacy && <Text style={styles.ticketMuted}>Totais abaixo abrangem todo o histórico.</Text>}
+              {useLegacy && <Text style={styles.ticketMuted}>Títulos, participantes e ticket médio abrangem todo o histórico, não o período.</Text>}
               <View style={styles.ticketMetrics}>
                 <TicketMetric label="Títulos" value={summary ? count.format(summary.soldTickets) : "—"} />
                 <TicketMetric label="Participantes" value={summary ? count.format(summary.participants) : "—"} />

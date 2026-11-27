@@ -136,7 +136,10 @@ export class OrganizerPlatformService {
 
   async dashboardPeriod(user: AuthenticatedUser, query: DashboardPeriodQuery) {
     this.organizer(user);
-    const period = validateDashboardPeriod(query);
+    // Keep the civil-day validation and the last eligible confirmation
+    // aligned even if the request spans midnight in São Paulo.
+    const now = new Date();
+    const period = validateDashboardPeriod(query, now);
     type PeriodMetrics = {
       summary: {
         grossRevenue: number;
@@ -163,6 +166,7 @@ export class OrganizerPlatformService {
             ((${period.start}::date::timestamp AT TIME ZONE ${period.timeZone}) AT TIME ZONE 'UTC')
           AND p."confirmedAt" <
             (((${period.end}::date + 1)::timestamp AT TIME ZONE ${period.timeZone}) AT TIME ZONE 'UTC')
+          AND p."confirmedAt" <= (${now.toISOString()}::timestamptz AT TIME ZONE 'UTC')
       ),
       daily AS (
         SELECT day, SUM(total) AS revenue

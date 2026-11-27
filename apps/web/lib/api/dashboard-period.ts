@@ -10,6 +10,7 @@ const formatter = new Intl.DateTimeFormat("sv-SE", {
 
 export type PeriodRange = { start: string; end: string };
 export type PeriodPreset = "today" | "week" | "month" | "year";
+export const DEFAULT_DASHBOARD_PERIOD = "month" satisfies PeriodPreset;
 export type RevenuePoint = { date: string; revenue: number };
 type PeriodSummary = {
   grossRevenue: number;
@@ -161,7 +162,7 @@ export function parseLegacyPeriodMetrics(summary: unknown) {
   if (
     !validCount(raw.soldTickets) ||
     !validCount(raw.participants) ||
-    !validAmount(raw.averageTicket)
+    (raw.averageTicket !== undefined && !validAmount(raw.averageTicket))
   )
     return null;
   return {
@@ -171,15 +172,30 @@ export function parseLegacyPeriodMetrics(summary: unknown) {
   };
 }
 
-export function legacyHistoryCovers(generatedAt: unknown, period: PeriodRange) {
-  if (typeof generatedAt !== "string") return false;
+/** Old /dashboard rows were grouped by UTC, not Brasilia. Use its own clock. */
+export function legacyUtcRange(
+  generatedAt: unknown,
+  preset: PeriodPreset | "custom",
+  custom: PeriodRange | null,
+): PeriodRange | null {
+  if (typeof generatedAt !== "string") return null;
   const generated = new Date(generatedAt);
-  if (!Number.isFinite(generated.getTime())) return false;
-  const end = isoDay(generated);
-  const coverage = new Date(
-    Date.UTC(generated.getUTCFullYear(), generated.getUTCMonth() - 11, 1),
-  );
-  return period.start >= isoDay(coverage) && period.end <= end;
+  if (
+    !Number.isFinite(generated.getTime()) ||
+    generated.toISOString() !== generatedAt
+  )
+    return null;
+  const utcToday = isoDay(generated);
+  return preset === "custom"
+    ? validatePeriod(custom?.start, custom?.end, utcToday)
+    : presetPeriod(preset, utcToday);
+}
+
+export function legacyHistoryCovers(generatedAt: unknown, period: PeriodRange) {
+  const supported = legacyUtcRange(generatedAt, "year", null);
+  return !!supported &&
+    !!validatePeriod(period.start, period.end, supported.end) &&
+    period.start >= supported.start;
 }
 
 export function salesChart(history: RevenuePoint[], period: PeriodRange) {
@@ -199,7 +215,8 @@ export function salesChart(history: RevenuePoint[], period: PeriodRange) {
     const bucket = Math.floor(
       (((stamp(row.date) - start) / DAY_MS) * count) / days,
     );
-    buckets[bucket].cents += Math.round(row.revenue * 100);
+    const target = buckets[bucket];
+    if (target) target.cents += Math.round(row.revenue * 100);
   }
   return buckets.map(({ first, last, cents }) => ({
     first,

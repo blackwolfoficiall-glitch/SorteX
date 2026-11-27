@@ -477,4 +477,132 @@ isolated('Organizer dashboard snapshots with isolated PostgreSQL', () => {
     }
     expect(await prisma!.payment.count()).toBe(0);
   });
+
+  it('uses the same observation instant for the São Paulo day and the confirmation cutoff', async () => {
+    const now = new Date('2026-11-27T01:30:00.000Z');
+    // Freeze only Date while keeping the request, sockets, and timeouts real.
+    jest.useFakeTimers({
+      now,
+      doNotFake: [
+        'setTimeout',
+        'clearTimeout',
+        'setInterval',
+        'clearInterval',
+        'setImmediate',
+        'clearImmediate',
+        'nextTick',
+        'queueMicrotask',
+        'performance',
+        'hrtime',
+      ],
+    });
+    try {
+      const [owner, buyer, futureBuyer] = await Promise.all([
+        account(UserRole.ORGANIZER),
+        account(UserRole.BUYER),
+        account(UserRole.BUYER),
+      ]);
+      const campaign = await prisma!.campaign.create({
+        data: {
+          organizerId: owner.id,
+          title: 'Synthetic as-of cutoff',
+          slug: `synthetic-as-of-${randomUUID()}`,
+        },
+      });
+      await prisma!.purchase.createMany({
+        data: [
+          {
+            buyerId: buyer.id,
+            confirmedAt: '2026-11-26T23:30:00.000Z',
+            total: '11.01',
+            quantity: 1,
+          },
+          {
+            buyerId: buyer.id,
+            confirmedAt: '2026-11-27T00:30:00.000Z',
+            total: '20.00',
+            quantity: 2,
+          },
+          {
+            buyerId: buyer.id,
+            confirmedAt: now.toISOString(),
+            total: '33.04',
+            quantity: 3,
+          },
+          {
+            buyerId: futureBuyer.id,
+            confirmedAt: '2026-11-27T01:30:00.001Z',
+            total: '900.00',
+            quantity: 400,
+          },
+        ].map(({ buyerId, confirmedAt, total, quantity }) => ({
+          campaignId: campaign.id,
+          buyerId,
+          confirmedAt: new Date(confirmedAt),
+          total,
+          subtotal: total,
+          quantity,
+          unitPrice: '1.00',
+          status: PurchaseStatus.PAID,
+          selectionMode: 'RANDOM',
+          expiresAt: new Date('2026-11-28T00:00:00.000Z'),
+        })),
+      });
+      const ownerLogin = await fetch(base + '/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: owner.email, password }),
+      });
+      expect(ownerLogin.status).toBe(201);
+      const { accessToken } = (await ownerLogin.json()) as {
+        accessToken: string;
+      };
+      const headers = { Authorization: `Bearer ${accessToken}` };
+      const path = base + '/dashboard/period';
+      const report = await fetch(path + '?start=2026-11-26&end=2026-11-26', {
+        headers,
+      });
+      expect(report.status).toBe(200);
+      expect(await report.json()).toMatchObject({
+        period: {
+          start: '2026-11-26',
+          end: '2026-11-26',
+          timeZone: 'America/Sao_Paulo',
+        },
+        summary: {
+          grossRevenue: 64.05,
+          paidOrders: 3,
+          participants: 1,
+          averageTicket: 21.35,
+          soldTickets: 6,
+        },
+        revenueHistory: [{ date: '2026-11-26', revenue: 64.05 }],
+      });
+      // The same owner and database snapshot must agree with Ads, which
+      // applies its own confirmed-purchase query.
+      const ads = await fetch(base + '/sortex-ads/confirmed-sales?period=TODAY', {
+        headers,
+      });
+      expect(ads.status).toBe(200);
+      expect(await ads.json()).toMatchObject({
+        period: { fromDate: '2026-11-26', toDateExclusive: '2026-11-27' },
+        totals: {
+          paidOrderValue: '64.05',
+          confirmedOrders: 3,
+          buyers: 1,
+          averageOrderValue: '21.35',
+          titlesSold: 6,
+        },
+        daily: [{ date: '2026-11-26', paidOrderValue: '64.05' }],
+      });
+      const tomorrowInSaoPaulo = await fetch(
+        path + '?start=2026-11-27&end=2026-11-27',
+        { headers },
+      );
+      expect(tomorrowInSaoPaulo.status).toBe(400);
+      expect(await prisma!.payment.count()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });

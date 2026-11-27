@@ -89,9 +89,11 @@ a aparência anterior. O fluxo do comprador permanece disponível sem mudança
 de navegação.
 
 Os filtros consultam `GET /dashboard/period?start=AAAA-MM-DD&end=AAAA-MM-DD`
-e a evolução usa as mesmas datas civis de Brasília do resultado. Sem essa
-rota (HTTP 404), o app mostra só a série UTC disponível no `/dashboard`
-anterior, com os contadores explicitamente de todo o histórico; a rota antiga
+e a evolução usa as mesmas datas civis de Brasília do resultado. O padrão no
+site e no app é 30 dias. Sem essa rota (HTTP 404), os filtros automáticos usam
+a data UTC de `dashboard.generatedAt`, não o relógio do aparelho. O período
+personalizado conserva as datas escolhidas. A interface mostra as datas e
+o fuso, com os contadores explicitamente de todo o histórico; a rota antiga
 não é usada para ocultar erros de autorização ou dados inválidos. Esses
 valores não representam repasses nem saldo disponível.
 

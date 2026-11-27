@@ -4,6 +4,7 @@ import { organizerDashboardSession, type DashboardClient, type DashboardSession 
 export type DayRevenue = { date: string; revenue: number };
 export type Period = { start: string; end: string };
 export type PeriodKey = "today" | "week" | "month" | "year" | "custom";
+export const DEFAULT_DASHBOARD_PERIOD = "month" satisfies PeriodKey;
 export type PeriodDashboard = {
   period: Period;
   summary: { grossRevenue: number; soldTickets: number; participants: number; averageTicket: number; paidOrders: number };
@@ -42,9 +43,28 @@ export function parseCustomPeriod(from: string, to: string, today: string): Peri
     const parts = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(input.trim());
     return parts ? `${parts[3]}-${parts[2]}-${parts[1]}` : "";
   };
-  const [start, end] = [convert(from), convert(to)];
+  return validateRange(convert(from), convert(to), today);
+}
+
+function validateRange(start: unknown, end: unknown, today: string): Period | null {
   return validDay(start) && validDay(end) && start >= "2000-01-01" && start <= end && end <= today &&
     stamp(end) - stamp(start) <= 366 * DAY_MS ? { start, end } : null;
+}
+
+/** Old /dashboard rows were grouped by UTC, not Brasília. Use its own clock. */
+export function legacyUtcRange(generatedAt: unknown, preset: PeriodKey, custom: Period | null): Period | null {
+  if (typeof generatedAt !== "string") return null;
+  const generated = Date.parse(generatedAt);
+  if (!Number.isFinite(generated) || new Date(generated).toISOString() !== generatedAt) return null;
+  const utcToday = isoDay(generated);
+  return preset === "custom" ? validateRange(custom?.start, custom?.end, utcToday) : periodFor(preset, utcToday);
+}
+
+export function legacyHistoryCovers(generatedAt: unknown, period: Period) {
+  const supported = legacyUtcRange(generatedAt, "year", null);
+  return !!supported &&
+    !!validateRange(period.start, period.end, supported.end) &&
+    period.start >= supported.start;
 }
 
 export function parseRevenueHistory(payload: unknown, period?: Period): DayRevenue[] {
@@ -98,13 +118,14 @@ export async function loadDashboardPeriod(client: DashboardClient, session: Dash
 
 export function chartFor(history: DayRevenue[], period: Period): number[] {
   const days = (stamp(period.end) - stamp(period.start)) / DAY_MS + 1;
+  if (!Number.isInteger(days) || days < 1 || days > 367) return [];
   const buckets = days > 45 ? 12 : days > 14 ? 10 : days;
   const amounts = Array<number>(buckets).fill(0);
   for (const row of history) {
     if (row.date >= period.start && row.date <= period.end) {
       const day = (stamp(row.date) - stamp(period.start)) / DAY_MS;
-      amounts[Math.floor(day * buckets / days)]! += row.revenue;
+      amounts[Math.floor(day * buckets / days)]! += Math.round(row.revenue * 100);
     }
   }
-  return amounts;
+  return amounts.map((cents) => cents / 100);
 }

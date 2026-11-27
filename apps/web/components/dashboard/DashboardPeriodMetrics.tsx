@@ -2,10 +2,12 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import {
+  DEFAULT_DASHBOARD_PERIOD,
   type DashboardPeriod,
   type PeriodPreset,
   type PeriodRange,
   legacyHistoryCovers,
+  legacyUtcRange,
   parseDashboardPeriod,
   parseLegacyPeriodMetrics,
   parseRevenueHistory,
@@ -42,9 +44,9 @@ export default function DashboardPeriodMetrics({
   renderedAt: number;
 }) {
   const today = todayInSaoPaulo(new Date(renderedAt));
-  const [choice, choose] = useState<Choice>("month");
+  const [choice, choose] = useState<Choice>(DEFAULT_DASHBOARD_PERIOD);
   const [start, changeStart] = useState(
-    () => presetPeriod("month", today).start,
+    () => presetPeriod(DEFAULT_DASHBOARD_PERIOD, today).start,
   );
   const [end, changeEnd] = useState(today);
   const [custom, setCustom] = useState<PeriodRange | null>(null);
@@ -116,12 +118,15 @@ export default function DashboardPeriodMetrics({
   const confirmed = legacy
     ? parseLegacyPeriodMetrics(snapshot?.summary)
     : data?.summary;
+  const displayRange = legacy
+    ? legacyUtcRange(snapshot?.generatedAt, choice, custom)
+    : data?.period ?? null;
   let history = data?.revenueHistory;
   if (
     legacy &&
     snapshot &&
-    period &&
-    legacyHistoryCovers(snapshot.generatedAt, period)
+    displayRange &&
+    legacyHistoryCovers(snapshot.generatedAt, displayRange)
   ) {
     try {
       history = parseRevenueHistory(snapshot.revenueHistory);
@@ -129,7 +134,7 @@ export default function DashboardPeriodMetrics({
       /* Unsupported or malformed legacy history is not a zero. */
     }
   }
-  const chart = history && period ? salesChart(history, period) : [];
+  const chart = history && displayRange ? salesChart(history, displayRange) : [];
   const chartMax = Math.max(1, ...chart.map((item) => item.revenue));
   const relevantSales =
     data?.summary.grossRevenue ??
@@ -140,13 +145,16 @@ export default function DashboardPeriodMetrics({
         ) / 100
       : null);
   const metricScope = legacy ? "histórico total" : "no período";
+  const rangeCaption = displayRange
+    ? `Intervalo: ${dateLabel(displayRange.start)} a ${dateLabel(displayRange.end)} · ${legacy ? "UTC" : "Brasília"}`
+    : null;
 
   return (
     <div className="min-w-0 rounded-3xl border bg-white p-4 shadow-sm sm:p-6">
       <h2 className="text-xl font-black">Desempenho de vendas</h2>
       <p className="mt-1 text-sm text-zinc-500">
         {legacy
-          ? "Histórico de vendas confirmadas (UTC) da versão anterior."
+          ? "Histórico de vendas confirmadas por dias UTC da versão anterior."
           : "Vendas confirmadas por período (horário de Brasília)."}
       </p>
       <div aria-label="Período de vendas" className="mt-3 flex flex-wrap gap-2">
@@ -232,10 +240,12 @@ export default function DashboardPeriodMetrics({
         <>
           {legacy && (
             <p role="status" className="mt-4 text-sm text-amber-800">
-              A API atual ainda não fornece os indicadores desse intervalo. Os
-              indicadores abaixo são do histórico total, não do período.
+              Na versão anterior, os filtros de receita usam os dias UTC do
+              servidor. Títulos, participantes e ticket médio, quando disponíveis,
+              são do histórico total, não do período.
             </p>
           )}
+          {rangeCaption && <p className="mt-3 text-xs text-zinc-600">{rangeCaption}</p>}
           {relevantSales === null ? (
             <p className="mt-4 text-sm text-zinc-500">
               Histórico de receita indisponível para esse intervalo.
@@ -243,10 +253,6 @@ export default function DashboardPeriodMetrics({
           ) : (
             <>
               <p className="mt-4 text-xl font-black">{money(relevantSales)}</p>
-              <p className="text-xs text-zinc-600">
-                {dateLabel(period.start)} a {dateLabel(period.end)}
-                {legacy ? " · UTC" : " · Brasília"}
-              </p>
               {chart.some((point) => point.revenue > 0) ? (
                 <div
                   role="img"
@@ -281,7 +287,7 @@ export default function DashboardPeriodMetrics({
               ],
               [
                 "Ticket médio",
-                confirmed ? money(confirmed.averageTicket) : "—",
+                confirmed?.averageTicket === undefined ? "—" : money(confirmed.averageTicket),
               ],
               [
                 "Pedidos pagos",

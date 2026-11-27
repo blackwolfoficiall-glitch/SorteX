@@ -161,8 +161,11 @@ test("old organizer response is discarded after logout even after signing in as 
 });
 
 import {
+  DEFAULT_DASHBOARD_PERIOD,
   chartFor,
   dayInSaoPaulo,
+  legacyHistoryCovers,
+  legacyUtcRange,
   loadDashboardPeriod,
   parseCustomPeriod,
   parsePeriodDashboard,
@@ -245,5 +248,47 @@ test("Mais catalog retains all requested modules and distinguish real native rou
   assert.deepEqual(organizerGroups.map((group) => group.entries.length), [6, 6, 4]);
   for (const { entries } of organizerGroups) for (const item of entries) {
     assert.ok("route" in item ? !("unavailable" in item) : !!item.unavailable);
+  }
+});
+
+test("Web and native use the same server UTC fallback at 01:30Z, without shifting custom dates", async () => {
+  const web = await import("../../web/lib/api/dashboard-period");
+  const generatedAt = "2026-11-27T01:30:00.000Z";
+  assert.equal(dayInSaoPaulo(generatedAt), "2026-11-26");
+  assert.equal(web.todayInSaoPaulo(new Date(generatedAt)), "2026-11-26");
+  assert.equal(DEFAULT_DASHBOARD_PERIOD, "month");
+  assert.equal(web.DEFAULT_DASHBOARD_PERIOD, DEFAULT_DASHBOARD_PERIOD);
+  const ranges = [
+    ["today", "2026-11-27"],
+    ["week", "2026-11-21"],
+    ["month", "2026-10-29"],
+    ["year", "2025-12-01"],
+  ] as const;
+  const history = [
+    { date: "2025-11-30", revenue: 1000 },
+    { date: "2026-11-24", revenue: 10.01 },
+    { date: "2026-11-25", revenue: 10.02 },
+    { date: "2026-11-26", revenue: 70.03 },
+    { date: "2026-11-27", revenue: 0.17 },
+    { date: "2026-11-28", revenue: 1000 },
+  ];
+  for (const [preset, start] of ranges) {
+    const expected = { start, end: "2026-11-27" };
+    assert.deepEqual(legacyUtcRange(generatedAt, preset, null), expected);
+    assert.deepEqual(web.legacyUtcRange(generatedAt, preset, null), expected);
+    assert.deepEqual(chartFor(history, expected), web.salesChart(history, expected).map((row) => row.revenue));
+  }
+  assert.deepEqual(chartFor(history, legacyUtcRange(generatedAt, "today", null)!), [0.17]);
+  assert.deepEqual(chartFor(history, periodFor("today", dayInSaoPaulo(generatedAt))), [70.03]);
+
+  const custom = { start: "2026-11-23", end: "2026-11-26" };
+  assert.deepEqual(legacyUtcRange(generatedAt, "custom", custom), custom);
+  assert.deepEqual(web.legacyUtcRange(generatedAt, "custom", custom), custom);
+  const unsupported = { start: "2025-11-30", end: "2026-01-01" };
+  assert.equal(legacyHistoryCovers(generatedAt, unsupported), false);
+  assert.equal(web.legacyHistoryCovers(generatedAt, unsupported), false);
+  for (const invalidClock of [null, "2026-11-27", "2026-11-26T22:30:00.000-03:00", "invalid"]) {
+    assert.equal(legacyUtcRange(invalidClock, "today", null), null);
+    assert.equal(web.legacyUtcRange(invalidClock, "today", null), null);
   }
 });

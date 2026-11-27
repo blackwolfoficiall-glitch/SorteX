@@ -18,7 +18,7 @@ let next, upstream, upstreamMode, web;
 let output = "";
 const dates = "start=2026-01-15&end=2026-01-16";
 const snapshot = {
-  generatedAt: new Date().toISOString(),
+  generatedAt: "2026-11-27T01:30:00.000Z",
   summary: {
     grossRevenue: 435,
     revenueToday: 0,
@@ -29,7 +29,10 @@ const snapshot = {
     averageTicket: 30,
   },
   campaigns: [],
-  revenueHistory: [],
+  revenueHistory: [
+    { date: "2026-11-26", revenue: 70.03 },
+    { date: "2026-11-27", revenue: 0.17 },
+  ],
 };
 
 async function listen(server) {
@@ -212,6 +215,9 @@ test(
         { name: "sortex_access_token", value: organizer, url: web },
       ]);
       const page = await context.newPage();
+      // Brasília is 26/11 while the API snapshot UTC day is 27/11.
+      // The 404 compatibility mode must not re-label a Brasília total as UTC.
+      await page.clock.setFixedTime(new Date("2026-11-27T01:30:00.000Z"));
       await page.goto(web + "/dashboard");
       await page
         .getByText("Vendas confirmadas por período (horário de Brasília).")
@@ -221,7 +227,7 @@ test(
       await page.getByLabel("Início").fill("2026-01-15");
       await page.getByLabel("Fim").fill("2026-01-16");
       await page.getByRole("button", { name: "Aplicar" }).click();
-      await page.getByText("15/01/2026 a 16/01/2026 · Brasília").waitFor();
+      await page.getByText("Intervalo: 15/01/2026 a 16/01/2026 · Brasília").waitFor();
       assert.equal(calls.at(-1), dates);
       assert.equal(
         await page.evaluate(
@@ -230,16 +236,24 @@ test(
         true,
       );
       upstreamMode = "legacy";
-      await page.getByRole("button", { name: "7 dias" }).click();
+      await page.getByRole("button", { name: "30 dias" }).click();
       await page
-        .getByText("Histórico de vendas confirmadas (UTC) da versão anterior.")
+        .getByText("Histórico de vendas confirmadas por dias UTC da versão anterior.")
         .waitFor();
+      await page.getByText("Intervalo: 29/10/2026 a 27/11/2026 · UTC").waitFor();
       assert.equal(await page.getByText("192", { exact: true }).count(), 2);
       await page
-        .getByText("Os indicadores abaixo são do histórico total", {
-          exact: false,
-        })
+        .getByText("são do histórico total, não do período", { exact: false })
         .waitFor();
+      await page.getByRole("button", { name: "Hoje" }).click();
+      await page.getByText("Intervalo: 27/11/2026 a 27/11/2026 · UTC").waitFor();
+      await page.getByText("R$ 0,17", { exact: true }).waitFor();
+      await page.getByRole("button", { name: "Personalizado" }).click();
+      await page.getByLabel("Início").fill("2026-11-26");
+      await page.getByLabel("Fim").fill("2026-11-26");
+      await page.getByRole("button", { name: "Aplicar" }).click();
+      await page.getByText("Intervalo: 26/11/2026 a 26/11/2026 · UTC").waitFor();
+      await page.getByText("R$ 70,03", { exact: true }).waitFor();
     } finally {
       upstreamMode = undefined;
       await browser.close();
