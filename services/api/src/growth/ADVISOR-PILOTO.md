@@ -1,23 +1,19 @@
 # SorteX Advisor: piloto de modelo externo
 
-O endpoint existente `POST /ai-sortex/advisor/chat` continua protegido pelo papel Organizador e mantém a resposta de regras locais (`mode: DETERMINISTIC`) quando o piloto estiver desativado, não autorizado, não se aplicar à pergunta ou tiver erro. As demais operações do módulo continuam internas e não chamam o provedor. A aplicação não interpreta nem executa ações sugeridas pelo modelo. Links e evidências já existentes são produzidos localmente.
+`POST /ai-sortex/advisor/chat` é restrito ao papel Organizador. Sem elegibilidade, autorização por requisição, assunto reconhecido ou resposta externa válida, mantém o motor local com `mode: DETERMINISTIC`. Somente respostas válidas do provedor configurado recebem `mode: GEMINI` ou `mode: OPENAI`. O Advisor não executa campanhas, orçamento, cobrança, anúncios, mensagens nem outra alteração na conta.
 
-## Escopo e ativação
+## Origem de dados e consentimento
 
-O adaptador OpenAI usa a [Responses API oficial](https://developers.openai.com/api/reference/resources/responses/methods/create). Uma chamada pode ocorrer somente se todos os requisitos forem atendidos:
+- As permissões exigem homologação explícita em sandbox, sem pagamentos reais e um organizador de teste ativo e precisamente identificado. A credencial fica somente no backend. As exigências comuns e específicas de Gemini estão descritas em [ADVISOR-GEMINI-TRANSPORT.md](./ADVISOR-GEMINI-TRANSPORT.md).
+- O provedor recebe somente um assunto fixo reconhecido e agregados do lote sintético `sortex-review-v1`. Não recebe a pergunta digitada, nomes, e-mails, documentos, IDs, contatos, títulos, URLs ou dados operacionais. Se forem incluídas outras palavras na pergunta, não há envio.
+- Confirmar o organizador não comprova que todo seu banco é fictício. O resolvedor exige o registro de auditoria autêntico do lote para esse organizador, três campanhas exatas não públicas com as marcações da avaliação e pedidos históricos sem relação de pagamento. Pedidos e promoções de aparência semelhante, linhas arbitrárias do mesmo organizador e registros de outras contas ficam fora. Divergência nas marcações ou nos pedidos exatos bloqueia o envio.
+- Financeiro, CRM e atribuição de Ads ficam explicitamente indisponíveis no contexto externo porque o lote não traz fontes validadas desses módulos. Indisponível não é zero. O Advisor determinístico e as áreas internas continuam utilizando os dados autorizados da própria conta.
+- A chamada autenticada precisa enviar `allowAi: true` em cada pedido. Habilitar as chaves no backend não concede consentimento em nome de um usuário.
 
-- `APP_ENV=staging`, `INTEGRATIONS_MODE=sandbox` e `FEATURE_REAL_PAYMENTS=false`.
-- `SORTEX_ADVISOR_PROVIDER=openai`, `SORTEX_ADVISOR_PILOT_BUDGET=approved` e `SORTEX_ADVISOR_PILOT_ORGANIZER_ID` identificando um organizador ativo e fictício (`@example.test`).
-- `OPENAI_API_KEY` via cofre do backend, não via cliente ou Git, e `OPENAI_MODEL` apontando para um modelo validado para Structured Outputs, sem valor padrão.
-- Consentimento para esta ação via `allowAi: true` (booleano) na requisição autenticada. O frontend atual não envia esse campo; uma chamada normal não consome créditos.
-- Uma pergunta de resumo, recuperação de reservas ou promoções dentre as frases reconhecidas. O texto digitado nunca é enviado: apenas um código de assunto e oito métricas numéricas da conta autenticada. Não há nome, e-mail, documento, identificador de usuário/campanha, URL, lista de contatos, histórico ou dados de clientes no corpo externo.
+## Consumo, privacidade e validação
 
-O transporte não segue redirecionamentos, não habilita ferramentas, não repete solicitações e usa `store: false`, que não equivale a retenção zero. Não se devolve erro bruto nem se registra texto do provedor. Há timeout, teto de saída de 512 tokens e limite por instância de uma chamada concorrente e dez tentativas. Esse limite reinicia com o processo e não substitui orçamento ou cota durável para infraestrutura distribuída.
+A API prepara corpo JSON limitado e reserva consumo de forma atômica no PostgreSQL por data UTC, tanto para o organizador quanto para a operação inteira. Uma reserva já efetuada não é devolvida por indisponibilidade externa. Se a reserva falhar, não há chamado ao provedor. A quota usa unidades conservadoras e não representa uma medição de cobrança. Tornar a tabela disponível é pré-requisito de implantação.
 
-## O que ainda não está liberado
+Conferir no console o projeto isolado, plano, créditos autorizados, política de retenção e restrições da chave antes de habilitar. Não assumir custo zero por haver assinatura ChatGPT, Gemini ou Claude. Defesa de transporte, autenticação, origem e quota são verificáveis localmente com PostgreSQL descartável e apenas o transporte substituído, sem comprovar acesso ao provedor, faturamento ou resposta de modelo real.
 
-Não assuma custo zero por haver assinatura ChatGPT ou chave API. Antes de habilitar, comprovem um projeto dedicado com saldo/cota autorizados, verifiquem a política de retenção do plano e bloqueiem gasto além da autorização no provedor. O piloto atual foi testado apenas com transporte de teste e não foi publicado nem chamou modelo externo. Provedores novos devem implementar o contrato do adaptador; Gemini e Claude não estão configurados.
-
-A [Gemini Developer API](https://ai.google.dev/gemini-api/docs/pricing) lista modelos e cotas gratuitas, mas informa uso distinto de dados no nível gratuito; avaliar somente com conteúdo sintético. [Claude](https://platform.claude.com/docs/en/about-claude/pricing) publica preços por tokens e deve ser considerado somente com créditos ou orçamento expressamente aprovados. Para [OpenAI](https://developers.openai.com/api/docs/pricing), conferir preço do modelo e créditos do projeto antes de escolher.
-
-Pendente: fluxo transparente de opt-in no app/site, histórico com isolamento e política de exclusão, limites e auditoria persistentes, integração real encaixada no orçamento, análise de período/tendência e acesso aos módulos via agregações explicitamente autorizadas. Nenhuma configuração altera campanhas ou orçamentos nem permite envio de mensagens. Qualquer expansão do piloto exige revisão de proteção de dados.
+Permanecem pendentes a chamada real de homologação, histórico com isolamento e política de exclusão, períodos/tendências e expansão para quaisquer fontes reais. O plano gratuito do Gemini não é destinado a dados sensíveis, pessoais ou confidenciais.

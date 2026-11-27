@@ -18,20 +18,6 @@ type AdvisorAggregates = {
   abandonedReservations: number;
   pendingPayments: number;
   promotions: number;
-  contacts?: number;
-  automations?: number;
-};
-type FinanceTotals = {
-  availableBalance: string;
-  pendingBalance: string;
-};
-type AdsTotals = {
-  affiliateOrders: number;
-  unknownOriginOrders: number;
-};
-export type AdvisorDetails = {
-  finance?: FinanceTotals | null;
-  ads?: AdsTotals | null;
 };
 
 export function advisorIntent(question: string): AdvisorIntent | null {
@@ -69,7 +55,6 @@ export class AdvisorModelService {
     user: AuthenticatedUser,
     intent: AdvisorIntent | null,
     summary: AdvisorAggregates,
-    readDetails?: () => Promise<AdvisorDetails>,
   ) {
     const provider = createAdvisorProvider(process.env, user);
     if (!provider || !intent) return null;
@@ -90,54 +75,13 @@ export class AdvisorModelService {
     const scopes: Record<string, unknown> = {};
     let request: ReturnType<typeof provider.prepare>;
     try {
-      if (intent === 'CRM' || intent === 'RECOVERY') {
-        scopes.crm =
-          Number.isSafeInteger(summary.contacts) &&
-          Number(summary.contacts) >= 0 &&
-          Number.isSafeInteger(summary.automations) &&
-          Number(summary.automations) >= 0
-            ? {
-                contactCount: summary.contacts,
-                activeAutomationCount: summary.automations,
-              }
-            : null;
-      }
-      if (intent === 'FINANCE' || intent === 'ADS') {
-        const data = await readDetails?.();
-        if (intent === 'FINANCE') {
-          const totals = data?.finance;
-          const money = (v: unknown): v is string =>
-            typeof v === 'string' && /^-?\d{1,12}\.\d{2}$/.test(v);
-          scopes.finance =
-            totals &&
-            money(totals.availableBalance) &&
-            money(totals.pendingBalance)
-              ? {
-                  currency: 'BRL',
-                  internalAvailable: totals.availableBalance,
-                  internalPending: totals.pendingBalance,
-                  payoutsVerified: false,
-                }
-              : null;
-        } else {
-          const totals = data?.ads;
-          scopes.ads =
-            totals &&
-            Number.isSafeInteger(totals.affiliateOrders) &&
-            totals.affiliateOrders >= 0 &&
-            Number.isSafeInteger(totals.unknownOriginOrders) &&
-            totals.unknownOriginOrders >= 0
-              ? {
-                  periodDays: 30,
-                  affiliateOrders: totals.affiliateOrders,
-                  unknownOriginOrders: totals.unknownOriginOrders,
-                  paidMediaMetricsAvailable: false,
-                }
-              : null;
-        }
-      }
+      // These modules have no rows in the audited fixture. Distinguish
+      // unavailable source data from a verified zero without reading them.
+      if (intent === 'CRM' || intent === 'RECOVERY') scopes.crm = null;
+      if (intent === 'FINANCE') scopes.finance = null;
+      if (intent === 'ADS') scopes.ads = null;
       request = provider.prepare(
-        { intent, aggregates, ...scopes },
+        { source: 'SYNTHETIC_REVIEW_V1', intent, aggregates, ...scopes },
         ADVISOR_MAX_OUTPUT_TOKENS,
       );
     } catch {

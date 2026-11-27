@@ -146,6 +146,7 @@ describe('Advisor model pilot boundary without external calls', () => {
       max_output_tokens: 512,
     });
     expect(JSON.parse(payload.input)).toEqual({
+      source: 'SYNTHETIC_REVIEW_V1',
       intent: 'OVERVIEW',
       aggregates: {
         campaigns: 1,
@@ -225,62 +226,43 @@ describe('Advisor model pilot boundary without external calls', () => {
     );
   });
 
-  it('resolves only allowlisted module aggregates, with explicit no-media and no-payout semantics', async () => {
+  it('never forwards unseeded module data and reports the scope unavailable', async () => {
     const spy = jest.spyOn(global, 'fetch').mockResolvedValue(response());
     const { service } = quota();
-    const finance = jest.fn(async () => ({
-      finance: {
-        availableBalance: '12.34',
-        pendingBalance: '4.56',
-        id: 'private-fixture-id',
-      },
-    }));
-    await service.analyze(organizer, 'FINANCE', mockSummary, finance);
-    await service.analyze(organizer, 'ADS', mockSummary, async () => ({
-      ads: {
-        affiliateOrders: 0,
-        unknownOriginOrders: 2,
-        sourceId: 'private-fixture-id',
-      },
-    }));
-    await service.analyze(
-      organizer,
-      'CRM',
-      { ...mockSummary, contacts: 3, automations: 4 },
-      finance,
-    );
-    expect(finance).toHaveBeenCalledTimes(1);
+    const injected = {
+      ...mockSummary,
+      contacts: 95,
+      automations: 81,
+      finance: { internalAvailable: '12.34' },
+      ads: { affiliateOrders: 9 },
+    };
+    await service.analyze(organizer, 'FINANCE', injected);
+    await service.analyze(organizer, 'ADS', injected);
+    await service.analyze(organizer, 'CRM', injected);
     const inputs = spy.mock.calls.map(([, options]) =>
       JSON.parse(JSON.parse(String(options?.body)).input),
     );
-    expect(inputs[0].finance).toEqual({
-      currency: 'BRL',
-      internalAvailable: '12.34',
-      internalPending: '4.56',
-      payoutsVerified: false,
-    });
-    expect(inputs[1].ads).toEqual({
-      periodDays: 30,
-      affiliateOrders: 0,
-      unknownOriginOrders: 2,
-      paidMediaMetricsAvailable: false,
-    });
-    expect(inputs[2].crm).toEqual({
-      contactCount: 3,
-      activeAutomationCount: 4,
-    });
-    expect(JSON.stringify(inputs)).not.toContain('private-fixture-id');
+    expect(inputs[0].finance).toBeNull();
+    expect(inputs[1].ads).toBeNull();
+    expect(inputs[2].crm).toBeNull();
+    expect(JSON.stringify(inputs)).not.toMatch(
+      /12\.34|contacts|automations|affiliateOrders/,
+    );
   });
 });
 
 describe('Existing Advisor chat', () => {
-  it('retains typed organizer snapshot scope, requires opt-in and exposes no outbound text from local rules', async () => {
+  it('retains typed organizer snapshot scope, requires opt-in and stays local when the fixture source cannot be verified', async () => {
     const findMany = jest.fn().mockResolvedValue([]);
     const count = jest.fn().mockResolvedValue(0);
     const aggregate = jest
       .fn()
       .mockResolvedValue({ _count: { _all: 0 }, _sum: {} });
+    const transaction = jest
+      .fn()
+      .mockRejectedValue(new Error('source unavailable'));
     const prisma = {
+      $transaction: transaction,
       campaign: { findMany },
       purchase: { count, aggregate },
       crmContact: { count },
@@ -306,8 +288,7 @@ describe('Existing Advisor chat', () => {
     await expect(
       service.chat(organizer, 'Como estão minhas vendas?', true),
     ).resolves.toMatchObject({
-      mode: 'OPENAI',
-      answer: 'Analise os seus dados.',
+      mode: 'DETERMINISTIC',
       evidence: [
         '0 vendas aprovadas',
         '0 reservas abandonadas',
@@ -318,6 +299,7 @@ describe('Existing Advisor chat', () => {
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { organizerId: organizer.id } }),
     );
-    expect(spy).toHaveBeenCalledTimes(1);
+    expect(transaction).toHaveBeenCalledTimes(1);
+    expect(spy).not.toHaveBeenCalled();
   });
 });

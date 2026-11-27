@@ -9,7 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { AdvisorMessageDto, AdvisorSimulationDto } from './dto/growth.dto';
 import { AdvisorModelService, advisorIntent } from './advisor-model.service';
-import { readAdsConfirmedSales } from './ads-confirmed-sales';
+import { readAdvisorSyntheticSummary } from './advisor-synthetic-source';
 
 type AdvisorAction = { label: string; url: string; confirmation: string };
 type AdvisorAlert = {
@@ -28,7 +28,7 @@ export class AiAdvisorService {
     private readonly models: AdvisorModelService,
   ) {}
 
-  async snapshot(user: AuthenticatedUser) {
+  async snapshot(user: AuthenticatedUser, includePilotStatus = true) {
     const campaigns = await this.prisma.campaign.findMany({
       where: { organizerId: user.id },
       orderBy: { updatedAt: 'desc' },
@@ -194,7 +194,14 @@ export class AiAdvisorService {
     };
     return {
       organizerName: user.name.split(' ')[0],
-      aiPilotAvailable: this.models.canAnalyze(user),
+      aiPilotAvailable:
+        includePilotStatus &&
+        this.models.canAnalyze(user) &&
+        Boolean(
+          await readAdvisorSyntheticSummary(this.prisma, user.id).catch(
+            () => null,
+          ),
+        ),
       generatedAt: new Date().toISOString(),
       summary,
       campaigns: campaigns.map((c) => ({
@@ -219,57 +226,22 @@ export class AiAdvisorService {
   }
 
   async chat(user: AuthenticatedUser, question: string, allowAi = false) {
-    const context = await this.snapshot(user);
+    const context = await this.snapshot(user, false);
     const fallback = this.deterministicAnswer(question, context);
-    if (allowAi) {
-      const intent = advisorIntent(question);
-      const generated = await this.models.analyze(
-        user,
-        intent,
-        context.summary,
-        async () => {
-          if (intent === 'FINANCE') {
-            const account = await this.prisma.financialAccount.findUnique({
-              where: {
-                ownerType_ownerId_currency: {
-                  ownerType: 'ORGANIZER',
-                  ownerId: user.id,
-                  currency: 'BRL',
-                },
-              },
-              select: { availableBalance: true, pendingBalance: true },
-            });
-            return {
-              finance: account
-                ? {
-                    availableBalance: account.availableBalance.toFixed(2),
-                    pendingBalance: account.pendingBalance.toFixed(2),
-                  }
-                : null,
-            };
-          }
-          if (intent === 'ADS') {
-            const result = await readAdsConfirmedSales(this.prisma, user.id, {
-              period: '30D',
-            });
-            return {
-              ads: {
-                affiliateOrders:
-                  result.attribution.channels.find(
-                    (x) => x.origin === 'AFFILIATE',
-                  )?.confirmedOrders ?? 0,
-                unknownOriginOrders:
-                  result.attribution.channels.find(
-                    (x) => x.origin === 'UNKNOWN',
-                  )?.confirmedOrders ?? 0,
-              },
-            };
-          }
-          return {};
-        },
-      );
-      if (generated) {
-        return { ...fallback, ...generated };
+    const intent = allowAi ? advisorIntent(question) : null;
+    if (intent && this.models.canAnalyze(user)) {
+      const synthetic = await readAdvisorSyntheticSummary(
+        this.prisma,
+        user.id,
+      ).catch(() => null);
+      if (synthetic) {
+        // The reviewed fixture did not create CRM contacts, a financial
+        // account, or Ads attribution. Never derive their external context
+        // from the potentially mixed tenant dataset. Model marks them null.
+        const generated = await this.models.analyze(user, intent, synthetic);
+        if (generated) {
+          return { ...fallback, ...generated };
+        }
       }
     }
     return { ...fallback, mode: 'DETERMINISTIC' as const };
