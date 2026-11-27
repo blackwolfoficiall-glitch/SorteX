@@ -6,6 +6,7 @@ const {
 } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
+const { maestroStatus, apiStatus } = require('./login-failure-status.cjs');
 
 const source = (file) => readFileSync(resolve(__dirname, file), 'utf8');
 const credential = 'd'.repeat(48);
@@ -41,6 +42,8 @@ test('the strict split flows retain every interaction and explicit process relau
     assert.doesNotMatch(flow, /optional:|point:|clear(?:State|Keychain):/);
   });
   files.slice(1).forEach((flow) => assert.doesNotMatch(flow, /inputText|BUYER_PASSWORD/));
+  assert.doesNotMatch(files[0], /launchApp|stopApp/);
+  assert.match(files[0], /sortex-login-email[\s\S]*sortex-login-password[\s\S]*BUYER_PASSWORD[\s\S]*sortex-login-submit[\s\S]*Olá, CompradorIOS/);
   assert.match(files[1], /stopApp: false[\s\S]*Campanhas[\s\S]*Campanha sintetica iOS[\s\S]*Ver campanha[\s\S]*Prêmio: Premio sintetico iOS[\s\S]*Regulamento sintetico da campanha iOS/);
   assert.match(files[2], /stopApp: br\.com\.sortex\.development\n- launchApp\n[\s\S]*Olá, CompradorIOS[\s\S]*assertNotVisible:[\s\S]*sortex-login-email/);
   assert.match(files[3], /stopApp: false[\s\S]*Perfil[\s\S]*tapOn: "Sair da conta"\n[\s\S]*sortex-login-email/);
@@ -80,7 +83,7 @@ exit "$MAESTRO_EXIT"
           MAESTRO_CLOUD_API_KEY: otherSecrets, EXPECTED_CREDENTIAL: credential,
           MAESTRO_API_URL: 'https://should-not-reach.invalid',
           EXPECTED_DATA: otherSecrets, EXPECTED_PHASE: phase, EXPECTED_FILE: filename,
-          MAESTRO_EXIT: String(maestroExit), BASH_ENV: '',
+          MAESTRO_EXIT: String(maestroExit), BASH_ENV: '', SORTEX_IOS_UI_CHECKPOINTS: '0',
         }, encoding: 'utf8',
       });
       assert.ifError(r.error);
@@ -116,6 +119,66 @@ test('immutable failure summary works even before checkout and ignores unknown v
     assert.equal(result.stdout, expected);
     assert.equal(readFileSync(join(dir, 'sortex-native-ui-failure.txt'), 'utf8'), expected);
   }
+});
+
+test('login diagnostics retain no raw local API or Maestro data and preserve failure status', (t) => {
+  const dir = tmp(t);
+  const api = join(dir, 'private-api.log');
+  const maestro = join(dir, 'maestro');
+  writeFileSync(api, [
+    JSON.stringify({ method: 'GET', path: '/auth/login', status: 418 }),
+    JSON.stringify({ method: 'POST', path: '/auth/login/other', status: 429 }),
+    JSON.stringify({ method: 'POST', path: '/auth/login', status: 201, password: credential }),
+  ].join('\n'));
+  writeFileSync(maestro, `#!/bin/bash
+set -eu
+printf '%s\n' "$EXPECTED_CREDENTIAL" > "$6/private-screen.png"
+printf 'tapOn sortex-login-email passed\nAssertion is false: Olá, CompradorIOS\n%s\n' "$EXPECTED_CREDENTIAL" >&2
+exit 25
+`, { mode: 0o700 });
+  const result = spawnSync('bash', [resolve(__dirname, 'run-buyer-phase.sh'), 'login'], {
+    env: {
+      ...process.env, RUNNER_TEMP: dir, MAESTRO_BIN: maestro, BASH_ENV: '',
+      SORTEX_SIMULATOR_ID: '00000000-0000-0000-0000-000000000001',
+      SORTEX_IOS_UI_CHECKPOINTS: '1', SORTEX_IOS_UI_BUYER_PASSWORD: credential,
+      SORTEX_IOS_UI_API_LOG: api, EXPECTED_CREDENTIAL: credential,
+    }, encoding: 'utf8',
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 25);
+  assert.equal(result.stdout + result.stderr, '');
+  assert.deepEqual(readdirSync(dir), ['maestro', 'private-api.log', 'sortex-native-ui-login-diagnostic']);
+  assert.equal(readFileSync(join(dir, 'sortex-native-ui-login-diagnostic'), 'utf8'), 'login_cli=signed-in-view\nlogin_api=2xx\n');
+});
+
+test('login diagnostic parser keeps exact route, fixed categories, and latest status class', () => {
+  assert.equal(maestroStatus("Couldn't hide the keyboard.\n" + otherSecrets), 'keyboard-dismiss-failed');
+  assert.equal(maestroStatus('iOS driver not ready in time'), 'driver');
+  assert.equal(maestroStatus('Element not found: id: sortex-login-password'), 'password-control');
+  assert.equal(maestroStatus('sortex-login-email passed\n' + otherSecrets), 'unclassified');
+  assert.equal(apiStatus(null), 'unknown');
+  assert.equal(apiStatus('{"method":"POST","path":"/auth/login?other","status":201}'), 'not-seen');
+  assert.equal(apiStatus('{"method":"POST","path":"/auth/login","status":201}\n{"method":"POST","path":"/auth/login","status":401}'), '4xx');
+  assert.equal(apiStatus('{"method":"POST","path":"/auth/login","status":503}'), '5xx');
+  assert.equal(apiStatus('{"method":"POST","path":"/auth/login","status":"401"}'), 'unknown');
+});
+
+test('the published phase report revalidates login categories and never forwards extra lines', (t) => {
+  const dir = tmp(t);
+  const run = (value) => {
+    writeFileSync(join(dir, checkpointFile), 'startup-controls-verified\n');
+    writeFileSync(join(dir, 'sortex-native-ui-login-diagnostic'), value);
+    const result = spawnSync('bash', ['-c', report], {
+      env: { ...process.env, ...workflowOutcomes, SCENARIO_OUTCOME: 'failure', RUNNER_TEMP: dir, GITHUB_SHA: sha, BASH_ENV: '' },
+      encoding: 'utf8', cwd: dir,
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout;
+  };
+  const base = `sha=${sha}\nfailed_step=scenario\nlast_completed=startup-controls-verified\n`;
+  assert.equal(run(`login_cli=keyboard-dismiss-failed\nlogin_api=not-seen\n${otherSecrets}\n`), base + 'login_cli=keyboard-dismiss-failed\nlogin_api=not-seen\n');
+  assert.equal(run(`login_cli=${otherSecrets}\nlogin_api=${credential}\n`), base);
 });
 
 test('early fixture error emits a checkpoint before requiring PostgreSQL', (t) => {

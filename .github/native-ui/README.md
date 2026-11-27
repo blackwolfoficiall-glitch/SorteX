@@ -51,10 +51,15 @@ falha de seletor, driver ou configuração. O resumo não inclui texto bruto.
 `not-observed` não comprova que o Keychain funcionou.
 
 Quando uma etapa falha, o artefato `sortex-ios-phase-diagnostic-<sha>` contém
-somente o SHA, a etapa GitHub que falhou e a última fase confirmada. O
-resumo funciona também antes de iniciar o cenário, inclusive se o checkout
-falhar. Depois da prontidão, o CLI usa scratch local efêmero: seu stdout
-e stderr são descartados e a pasta é removida ao encerrar cada fase.
+o SHA, a etapa GitHub que falhou e a última fase confirmada. Se o login
+falhar após a prontidão, acrescenta apenas duas categorias fixas: resultado
+do CLI e classe da última resposta registrada pelo Nest para `POST /auth/login`.
+`not-seen` indica que não há registro correspondente, não prova que o
+app não enviou a solicitação. O login usa o app já aberto e verificado, sem
+pedir novo lançamento ao Maestro. O resumo também funciona antes de iniciar
+o cenário, inclusive se o checkout falhar. A saída bruta do CLI fica em
+scratch privado somente quando necessária à classificação e não é publicada.
+A pasta privada é removida ao encerrar cada fase.
 A saída após o login nunca inclui screenshots intermediários, transcrições
 ou hierarquia; a única captura após o login é a evidência de reabertura
 sem sessão, publicada somente se o servidor também confirmar a revogação.

@@ -161,8 +161,25 @@ jobs:
                 last="$value" ;;
             esac
           fi
-          printf 'sha=%s\nfailed_step=%s\nlast_completed=%s\n' \
-            "$GITHUB_SHA" "$failed" "$last" | tee "$RUNNER_TEMP/sortex-native-ui-failure.txt"
+          {
+            printf 'sha=%s\nfailed_step=%s\nlast_completed=%s\n' "$GITHUB_SHA" "$failed" "$last"
+            diagnostic="$RUNNER_TEMP/sortex-native-ui-login-diagnostic"
+            if [[ "$failed" == scenario && "$last" == startup-controls-verified && -f "$diagnostic" ]]; then
+              {
+                IFS= read -r cli || cli=
+                IFS= read -r api || api=
+              } < "$diagnostic"
+              case "$cli" in
+                login_cli=keyboard-dismiss-failed|login_cli=email-control|login_cli=password-control|\
+                login_cli=submit-control|login_cli=signed-in-view|login_cli=driver|login_cli=unclassified)
+                  printf '%s\n' "$cli" ;;
+              esac
+              case "$api" in
+                login_api=2xx|login_api=4xx|login_api=5xx|login_api=not-seen|login_api=unknown)
+                  printf '%s\n' "$api" ;;
+              esac
+            fi
+          } | tee "$RUNNER_TEMP/sortex-native-ui-failure.txt"
       - name: Publicar diagnóstico de etapa sem transcrições
         if: ${{ failure() && !cancelled() }}
         uses: actions/upload-artifact@v4

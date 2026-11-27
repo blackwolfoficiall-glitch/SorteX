@@ -1,8 +1,6 @@
 appId: br.com.sortex.development
 name: Login nativo (PostgreSQL local)
 ---
-- launchApp:
-    stopApp: false
 - extendedWaitUntil:
     visible:
       id: sortex-login-email
