@@ -313,4 +313,22 @@ export const pageEvidence = [
     source: "apps/web/e2e/admin-gateways-premium.spec.ts",
     revision: "6567895",
   },
+  {
+    path: "/contato",
+    detail: "contato público, perguntas frequentes e links; canal sinalizado como não disponível, sem envio",
+    source: "apps/web/e2e-local/run-public-contact-premium.mjs",
+    revision: "fb4aa25",
+  },
+  {
+    path: "/dashboard/configuracoes/juridico",
+    detail: "lista, metadados e acesso à Central Jurídica; não abriu, baixou ou aceitou documento",
+    source: "apps/web/e2e/organizer-legal-premium.spec.ts",
+    revision: "bca7d63",
+  },
+  {
+    path: "/admin/equipe",
+    detail: "diretório, busca, estados e perfis com permissões distintas; nenhum convite, perfil ou ação executado",
+    source: "apps/web/e2e/admin-team-premium.spec.ts",
+    revision: "fed855f",
+  },
 ];

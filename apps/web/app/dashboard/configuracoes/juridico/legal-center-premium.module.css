@@ -1,0 +1,146 @@
+.scope {
+  --legal-attention: #805208;
+  width: 100%;
+  min-width: 0;
+  border-radius: 1.5rem;
+}
+@media (prefers-color-scheme: dark) {
+  .scope {
+    --legal-attention: #ffcf85;
+  }
+}
+.content {
+  width: min(100%, 74rem);
+  min-width: 0;
+  margin-inline: auto;
+  padding: clamp(0.65rem, 2vw, 1.35rem);
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  overflow-wrap: anywhere;
+}
+/* The shared legal view drives its existing controls and document content.
+   These direct selectors project only its dashboard overview, not the reader. */
+.content > main {
+  min-width: 0;
+  max-width: none;
+}
+.content > main > :is(p:first-child, h1, p:nth-child(3)) {
+  margin: 0;
+  padding-inline: clamp(1rem, 3vw, 1.65rem);
+  border-inline: 1px solid var(--sxp-line);
+  background: var(--sxp-surface);
+}
+.content > main > p:first-child {
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--sxp-line);
+  border-radius: 1.25rem 1.25rem 0 0;
+  color: var(--sxp-accent);
+  letter-spacing: 0.09em;
+}
+.content > main > h1 {
+  padding-block: 0.2rem;
+  color: var(--sxp-text);
+  font-family: var(--sxp-font-heading);
+  font-size: var(--sxp-title-size);
+}
+.content > main > p:nth-child(3) {
+  padding-bottom: 1.15rem;
+  border-bottom: 1px solid var(--sxp-line);
+  border-radius: 0 0 1.25rem 1.25rem;
+}
+.content > main > p:nth-child(3),
+.content > main > section article p,
+.content > main > section:not(:first-of-type) p,
+.content > main > section:not(:first-of-type) span > span {
+  color: var(--sxp-muted);
+}
+.content > main > p[aria-live] {
+  color: var(--sxp-accent);
+}
+.content > main > div > input {
+  min-width: 0;
+  border-color: var(--sxp-line);
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+  font-size: 1rem;
+}
+.content > main > div:has(> input) svg {
+  color: var(--sxp-accent);
+}
+.content > main > div > input::placeholder {
+  color: var(--sxp-muted);
+}
+.content > main > section:first-of-type {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 48rem) {
+  .content > main > section:first-of-type {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.content > main > section:first-of-type article,
+.content > main > section:not(:first-of-type) {
+  min-width: 0;
+  padding: clamp(0.85rem, 2.6vw, 1.45rem);
+  border: 1px solid var(--sxp-line);
+  border-radius: 1.25rem;
+  box-shadow: var(--sxp-shadow);
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+}
+.content > main > section:first-of-type > div,
+.content > main > section:last-of-type > div > div {
+  background: var(--sxp-tint);
+}
+.content > main > section article > div:first-child {
+  flex-wrap: wrap;
+}
+.content > main > section article > div:first-child > span {
+  color: var(--legal-attention);
+  background: var(--sxp-tint);
+}
+.content
+  > main
+  > section
+  article
+  > div:first-child
+  > span:global(.bg-emerald-50) {
+  color: var(--sxp-success);
+}
+.content > main > section article > div:first-child > svg {
+  color: var(--sxp-accent);
+}
+.content > main > section article > div:last-child {
+  flex-wrap: wrap;
+}
+.content > main > section button {
+  min-height: 2.75rem;
+  border-color: var(--sxp-line);
+  max-width: 100%;
+  color: var(--sxp-text);
+  background: var(--sxp-surface);
+}
+.content > main > section article button:first-child {
+  min-width: max-content;
+  color: var(--sxp-white);
+  background: var(--sxp-gradient);
+}
+.content > main > section button svg {
+  width: 1.1rem;
+  color: var(--sxp-accent);
+}
+.content > main > section button:hover {
+  border-color: var(--sxp-focus);
+}
+.content > main :is(input, button):focus-visible {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 2px;
+}
+.content > main > section:last-of-type > div > div > svg {
+  flex: none;
+  color: var(--sxp-success);
+}
+@media (prefers-reduced-motion: reduce) {
+  .content > main > section:first-of-type > div {
+    animation: none;
+  }
+}
