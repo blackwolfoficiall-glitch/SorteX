@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Crown, LoaderCircle } from "lucide-react";
+import PremiumScope from "@/components/premium/PremiumScope";
+import styles from "./plan-selector-premium.module.css";
 import {
   cancelPlan,
   getCurrentPlan,
@@ -21,10 +23,12 @@ const money = new Intl.NumberFormat("pt-BR", {
 export function PlanSelector({
   onboarding = false,
   embedded = false,
+  premium = false,
   onCurrentChange,
 }: {
   onboarding?: boolean;
   embedded?: boolean;
+  premium?: boolean;
   onCurrentChange?: (current: CurrentPlan) => void;
 }) {
   const router = useRouter();
@@ -113,31 +117,61 @@ export function PlanSelector({
       setBusy("");
     }
   }
+  const theme = (content: ReactNode) =>
+    premium ? (
+      <PremiumScope className={styles.scope}>{content}</PremiumScope>
+    ) : (
+      content
+    );
   if (!plans.length && !error)
-    return (
+    return theme(
       <div className="grid min-h-64 place-items-center">
-        <LoaderCircle className="animate-spin text-violet-600" />
-      </div>
+        {premium ? (
+          <p role="status" className={styles.loading}>
+            Carregando planos…
+          </p>
+        ) : (
+          <LoaderCircle className="animate-spin text-violet-600" />
+        )}
+      </div>,
     );
   const activeId =
     current?.subscription?.status === "ACTIVE" ? current.plan?.id : null;
-  return (
-    <div>
-      <div className="flex flex-wrap items-end justify-between gap-4">
+  return theme(
+    <div
+      data-plan-view={premium ? "" : undefined}
+      role={premium ? "region" : undefined}
+      aria-labelledby={premium ? "organizer-plan-title" : undefined}
+    >
+      <div
+        data-plan-header
+        className="flex flex-wrap items-end justify-between gap-4"
+      >
         <div>
-          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">
+          <p
+            data-plan-eyebrow
+            className="text-xs font-black uppercase tracking-[.2em] text-violet-600"
+          >
             SorteX Business
           </p>
           {!embedded && (
-            <h1 className="mt-2 text-3xl font-black">
+            <h1
+              id={premium ? "organizer-plan-title" : undefined}
+              className={
+                premium ? "sx-premium-title mt-2" : "mt-2 text-3xl font-black"
+              }
+            >
               {onboarding ? "Escolha seu plano" : "Meu plano"}
             </h1>
           )}
-          <p className="mt-2 text-zinc-500">
+          <p data-plan-muted className="mt-2 text-zinc-500">
             Recursos e limites vêm da configuração central da plataforma.
           </p>
         </div>
-        <label className="rounded-xl border bg-white px-4 py-3 text-sm font-bold">
+        <label
+          data-plan-cycle
+          className="rounded-xl border bg-white px-4 py-3 text-sm font-bold"
+        >
           Periodicidade{" "}
           <select
             value={cycle}
@@ -151,26 +185,50 @@ export function PlanSelector({
         </label>
       </div>
       {message && (
-        <p className="mt-5 rounded-2xl bg-green-50 p-4 text-sm font-semibold text-green-800">
+        <p
+          data-plan-notice="success"
+          role={premium ? "status" : undefined}
+          className="mt-5 rounded-2xl bg-green-50 p-4 text-sm font-semibold text-green-800"
+        >
           {message}
         </p>
       )}
       {error && (
-        <p className="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-700">
+        <p
+          data-plan-notice="error"
+          role={premium ? "alert" : undefined}
+          className="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-700"
+        >
           {error}
         </p>
       )}
       {current?.plan && !onboarding && (
-        <section className="mt-6 rounded-3xl bg-gradient-to-r from-violet-700 to-indigo-700 p-6 text-white">
+        <section
+          data-plan-current
+          aria-labelledby={premium ? "current-organizer-plan" : undefined}
+          className="mt-6 rounded-3xl bg-gradient-to-r from-violet-700 to-indigo-700 p-6 text-white"
+        >
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-sm text-violet-100">Plano atual</p>
-              <h2 className="mt-1 text-3xl font-black">{current.plan.name}</h2>
-              <p className="mt-2 text-sm text-violet-100">
+              <p data-plan-muted className="text-sm text-violet-100">
+                Plano atual
+              </p>
+              {premium && current.sandbox && (
+                <span className={styles.badge}>Ambiente de teste</span>
+              )}
+              <h2
+                id={premium ? "current-organizer-plan" : undefined}
+                className="mt-1 text-3xl font-black"
+              >
+                {current.plan.name}
+              </h2>
+              <p data-plan-muted className="mt-2 text-sm text-violet-100">
                 Status:{" "}
-                {current.subscription?.status === "ACTIVE"
-                  ? "Ativo"
-                  : "Cancelado"}{" "}
+                {premium
+                  ? statusLabel(current.subscription?.status)
+                  : current.subscription?.status === "ACTIVE"
+                    ? "Ativo"
+                    : "Cancelado"}{" "}
                 · Início:{" "}
                 {current.subscription?.startedAt
                   ? new Date(current.subscription.startedAt).toLocaleDateString(
@@ -178,7 +236,7 @@ export function PlanSelector({
                     )
                   : "—"}
               </p>
-              <p className="text-sm text-violet-100">
+              <p data-plan-muted className="text-sm text-violet-100">
                 Próxima renovação:{" "}
                 {current.subscription?.nextRenewalAt
                   ? new Date(
@@ -187,7 +245,10 @@ export function PlanSelector({
                   : "Sem renovação agendada"}
               </p>
             </div>
-            <div className="rounded-2xl bg-white/10 p-4 text-right">
+            <div
+              data-plan-consumption
+              className="rounded-2xl bg-white/10 p-4 text-right"
+            >
               <p className="text-sm">Consumo atual</p>
               <strong className="text-2xl">
                 {current.consumption.campaigns} campanhas
@@ -210,34 +271,55 @@ export function PlanSelector({
           </button>
         </section>
       )}
-      <div className="mt-7 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+      <div
+        data-plan-grid
+        className="mt-7 grid gap-5 md:grid-cols-2 xl:grid-cols-4"
+      >
         {plans.map((plan, index) => (
           <article
             key={plan.id}
+            data-plan-card={activeId === plan.id ? "active" : "standard"}
             className={`relative flex flex-col rounded-3xl border bg-white p-6 shadow-sm ${activeId === plan.id ? "border-violet-600 ring-2 ring-violet-100" : "border-zinc-200"}`}
           >
-            {index === 1 && (
+            {premium && activeId === plan.id && (
+              <span className={styles.badge}>Plano ativo</span>
+            )}
+            {!premium && index === 1 && (
               <span className="absolute -top-3 left-5 rounded-full bg-violet-600 px-3 py-1 text-xs font-black text-white">
                 Mais escolhido
               </span>
             )}
-            <Crown className="text-violet-600" />
+            <Crown
+              aria-hidden="true"
+              data-plan-icon
+              className="text-violet-600"
+            />
             <h2 className="mt-4 text-2xl font-black">{plan.name}</h2>
-            <p className="mt-2 min-h-12 text-sm text-zinc-500">
+            <p data-plan-muted className="mt-2 min-h-12 text-sm text-zinc-500">
               {plan.description}
             </p>
             <p className="mt-5 text-3xl font-black">
               {money.format(Number(plan.monthlyPrice))}
-              <span className="text-sm font-medium text-zinc-500">/mês</span>
+              <span
+                data-plan-muted
+                className="text-sm font-medium text-zinc-500"
+              >
+                /mês
+              </span>
             </p>
-            <p className="mt-1 text-xs text-zinc-500">
+            <p data-plan-muted className="mt-1 text-xs text-zinc-500">
               Taxa SorteX:{" "}
               {Number(plan.platformFeeRate).toLocaleString("pt-BR")}%
             </p>
             <div className="mt-5 flex-1 space-y-2">
               {plan.features.map((feature) => (
                 <p key={feature.id} className="flex gap-2 text-sm">
-                  <Check size={16} className="mt-0.5 shrink-0 text-green-600" />
+                  <Check
+                    aria-hidden="true"
+                    data-plan-feature
+                    size={16}
+                    className="mt-0.5 shrink-0 text-green-600"
+                  />
                   <span>
                     {feature.name}: <b>{formatFeature(feature.value)}</b>
                   </span>
@@ -258,8 +340,19 @@ export function PlanSelector({
           </article>
         ))}
       </div>
-    </div>
+    </div>,
   );
+}
+function statusLabel(status?: string) {
+  const labels: Record<string, string> = {
+    ACTIVE: "Ativo",
+    TRIAL: "Em teste",
+    PAST_DUE: "Pagamento pendente",
+    CANCELLED: "Cancelado",
+    SUSPENDED: "Suspenso",
+  };
+  if (!status) return "Sem assinatura registrada";
+  return Object.hasOwn(labels, status) ? labels[status] : "Não informado";
 }
 function formatFeature(value: Plan["features"][number]["value"]) {
   if (value === true) return "Incluído";

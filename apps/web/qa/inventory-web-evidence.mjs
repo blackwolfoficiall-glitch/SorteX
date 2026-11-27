@@ -295,4 +295,22 @@ export const pageEvidence = [
     source: "apps/web/e2e/admin-plans-premium.spec.ts",
     revision: "50f0fcf",
   },
+  {
+    path: "/suporte",
+    detail: "suporte público, tema e links originais; sem enviar mensagem, área do comprador independente",
+    source: "apps/web/e2e-local/run-public-support-premium.mjs",
+    revision: "61fd435",
+  },
+  {
+    path: "/dashboard/configuracoes/plano",
+    detail: "plano atual, teste, ofertas, estados e permissões; sem assinar, mudar plano ou cobrar",
+    source: "apps/web/e2e/organizer-plan-premium.spec.ts",
+    revision: "4884bbf",
+  },
+  {
+    path: "/admin/gateways",
+    detail: "lista, configurações registradas e permissão de leitura; sem conexão, edição ou credenciais",
+    source: "apps/web/e2e/admin-gateways-premium.spec.ts",
+    revision: "6567895",
+  },
 ];
