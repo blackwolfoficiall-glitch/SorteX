@@ -168,15 +168,22 @@ jobs:
               {
                 IFS= read -r cli || cli=
                 IFS= read -r api || api=
+                IFS= read -r input || input=
               } < "$diagnostic"
               case "$cli" in
-                login_cli=keyboard-dismiss-failed|login_cli=email-control|login_cli=password-control|\
+                login_cli=keyboard-dismiss-failed|login_cli=email-control|login_cli=email-value|login_cli=password-control|\
                 login_cli=submit-control|login_cli=signed-in-view|login_cli=driver|login_cli=unclassified)
                   printf '%s\n' "$cli" ;;
               esac
               case "$api" in
-                login_api=2xx|login_api=4xx|login_api=5xx|login_api=not-seen|login_api=unknown)
+                login_api=2xx|login_api=400-validation|login_api=401-unauthorized|login_api=403-forbidden|\
+                login_api=429-rate-limited|login_api=4xx-other|login_api=5xx|login_api=not-seen|login_api=unknown)
                   printf '%s\n' "$api" ;;
+              esac
+              case "$input" in
+                login_input=matches|login_input=email-mismatch|login_input=password-mismatch|\
+                login_input=both-mismatch|login_input=missing-field|login_input=not-seen|login_input=unknown)
+                  printf '%s\n' "$input" ;;
               esac
             fi
           } | tee "$RUNNER_TEMP/sortex-native-ui-failure.txt"

@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { createRequire } = require('node:module');
 const { resolve } = require('node:path');
 const { readFileSync } = require('node:fs');
+const { observeLogin } = require('./login-input.cjs');
 
 const database = new URL(process.env.DATABASE_URL || 'postgresql://invalid');
 const email = 'sortex-ios-ui@example.test';
@@ -26,6 +27,9 @@ function fixtureGuard() {
 async function serve() {
   const { createApplication } = require('../../services/api/dist/src/application.js');
   const app = await createApplication();
+  const password = process.env.SORTEX_IOS_UI_BUYER_PASSWORD;
+  assert.match(password, /^[0-9a-f]{48}$/);
+  app.use(observeLogin(password, (event) => console.log(JSON.stringify(event))));
   app.enableShutdownHooks();
   await app.listen(3338, '127.0.0.1');
 }

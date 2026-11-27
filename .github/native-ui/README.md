@@ -52,10 +52,14 @@ falha de seletor, driver ou configuração. O resumo não inclui texto bruto.
 
 Quando uma etapa falha, o artefato `sortex-ios-phase-diagnostic-<sha>` contém
 o SHA, a etapa GitHub que falhou e a última fase confirmada. Se o login
-falhar após a prontidão, acrescenta apenas duas categorias fixas: resultado
-do CLI e classe da última resposta registrada pelo Nest para `POST /auth/login`.
-`not-seen` indica que não há registro correspondente, não prova que o
-app não enviou a solicitação. O login usa o app já aberto e verificado, sem
+falhar após a prontidão, acrescenta somente categorias fixas: resultado
+do CLI, classe HTTP da última resposta para `POST /auth/login` e se os
+campos do pedido conferem com a fixture. O observador só existe na API
+descartável, não muda a requisição nem a autenticação e nunca registra
+valores, tamanhos, hashes ou identificadores dos campos. A interface
+confirma o valor do e-mail sintético antes de preencher a senha, sem ler
+o campo seguro. `not-seen` indica que não há registro correspondente, não
+prova que o app não enviou a solicitação. O login usa o app já aberto e verificado, sem
 pedir novo lançamento ao Maestro. O resumo também funciona antes de iniciar
 o cenário, inclusive se o checkout falhar. A saída bruta do CLI fica em
 scratch privado somente quando necessária à classificação e não é publicada.

@@ -6,7 +6,9 @@ const {
 } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
-const { maestroStatus, apiStatus } = require('./login-failure-status.cjs');
+const { maestroStatus, apiObservation } = require('./login-failure-status.cjs');
+const { observeLogin } = require('./login-input.cjs');
+const { EventEmitter } = require('node:events');
 
 const source = (file) => readFileSync(resolve(__dirname, file), 'utf8');
 const credential = 'd'.repeat(48);
@@ -129,6 +131,7 @@ test('login diagnostics retain no raw local API or Maestro data and preserve fai
     JSON.stringify({ method: 'GET', path: '/auth/login', status: 418 }),
     JSON.stringify({ method: 'POST', path: '/auth/login/other', status: 429 }),
     JSON.stringify({ method: 'POST', path: '/auth/login', status: 201, password: credential }),
+    JSON.stringify({ event: 'sortex-ios-fixture-login-shape', input: 'matches', status: 201, password: credential }),
   ].join('\n'));
   writeFileSync(maestro, `#!/bin/bash
 set -eu
@@ -148,19 +151,56 @@ exit 25
   assert.equal(result.status, 25);
   assert.equal(result.stdout + result.stderr, '');
   assert.deepEqual(readdirSync(dir), ['maestro', 'private-api.log', 'sortex-native-ui-login-diagnostic']);
-  assert.equal(readFileSync(join(dir, 'sortex-native-ui-login-diagnostic'), 'utf8'), 'login_cli=signed-in-view\nlogin_api=2xx\n');
+  assert.equal(readFileSync(join(dir, 'sortex-native-ui-login-diagnostic'), 'utf8'), 'login_cli=signed-in-view\nlogin_api=2xx\nlogin_input=matches\n');
 });
 
-test('login diagnostic parser keeps exact route, fixed categories, and latest status class', () => {
+test('login diagnostic reports only exact route, input category and status class', () => {
   assert.equal(maestroStatus("Couldn't hide the keyboard.\n" + otherSecrets), 'keyboard-dismiss-failed');
   assert.equal(maestroStatus('iOS driver not ready in time'), 'driver');
+  assert.equal(maestroStatus('Assertion is false: id sortex-login-email and text "^sortex-ios-ui@example.test$"'), 'email-value');
   assert.equal(maestroStatus('Element not found: id: sortex-login-password'), 'password-control');
   assert.equal(maestroStatus('sortex-login-email passed\n' + otherSecrets), 'unclassified');
-  assert.equal(apiStatus(null), 'unknown');
-  assert.equal(apiStatus('{"method":"POST","path":"/auth/login?other","status":201}'), 'not-seen');
-  assert.equal(apiStatus('{"method":"POST","path":"/auth/login","status":201}\n{"method":"POST","path":"/auth/login","status":401}'), '4xx');
-  assert.equal(apiStatus('{"method":"POST","path":"/auth/login","status":503}'), '5xx');
-  assert.equal(apiStatus('{"method":"POST","path":"/auth/login","status":"401"}'), 'unknown');
+  assert.deepEqual(apiObservation(null), { status: 'unknown', input: 'unknown' });
+  assert.deepEqual(apiObservation('{"method":"POST","path":"/auth/login?other","status":201}'), { status: 'not-seen', input: 'not-seen' });
+  for (const [status, label] of [[400, '400-validation'], [401, '401-unauthorized'], [403, '403-forbidden'], [429, '429-rate-limited'], [418, '4xx-other'], [503, '5xx'], ['401', 'unknown']]) {
+    const log = [
+      { method: 'POST', path: '/auth/login', status: 201 },
+      { method: 'POST', path: '/auth/login', status },
+    ].map(JSON.stringify).join('\n');
+    assert.deepEqual(apiObservation(log), { status: label, input: 'unknown' });
+  }
+  const log = JSON.stringify({ event: 'sortex-ios-fixture-login-shape', input: otherSecrets, status: 401 });
+  assert.deepEqual(apiObservation(log), { status: '401-unauthorized', input: 'unknown' });
+});
+
+test('disposable login observer preserves request, only handles exact route, and records no field values', () => {
+  const email = 'sortex-ios-ui@example.test';
+  const records = [];
+  const middleware = observeLogin(credential, (record) => records.push(record));
+  for (const [body, input, status] of [
+    [{ email, password: credential }, 'matches', 201],
+    [{ email: otherSecrets, password: credential }, 'email-mismatch', 401],
+    [{ email, password: otherSecrets }, 'password-mismatch', 401],
+    [{ email: otherSecrets, password: otherSecrets }, 'both-mismatch', 401],
+    [{ email, password: '' }, 'missing-field', 400],
+  ]) {
+    const req = Object.freeze({ method: 'POST', originalUrl: '/auth/login', body: Object.freeze(body) });
+    const res = new EventEmitter();
+    let turns = 0;
+    middleware(req, res, () => { turns++; });
+    assert.equal(turns, 1);
+    res.statusCode = status;
+    res.emit('finish');
+    assert.deepEqual(records.pop(), { event: 'sortex-ios-fixture-login-shape', input, status });
+  }
+  for (const [method, originalUrl] of [['POST', '/auth/login?other'], ['POST', '/auth/admin-login'], ['GET', '/auth/login']]) {
+    const res = new EventEmitter();
+    let turns = 0;
+    middleware({ method, originalUrl }, res, () => { turns++; });
+    res.emit('finish');
+    assert.equal(turns, 1);
+    assert.equal(records.length, 0);
+  }
 });
 
 test('the published phase report revalidates login categories and never forwards extra lines', (t) => {
@@ -177,7 +217,7 @@ test('the published phase report revalidates login categories and never forwards
     return result.stdout;
   };
   const base = `sha=${sha}\nfailed_step=scenario\nlast_completed=startup-controls-verified\n`;
-  assert.equal(run(`login_cli=keyboard-dismiss-failed\nlogin_api=not-seen\n${otherSecrets}\n`), base + 'login_cli=keyboard-dismiss-failed\nlogin_api=not-seen\n');
+  assert.equal(run(`login_cli=keyboard-dismiss-failed\nlogin_api=not-seen\nlogin_input=not-seen\n${otherSecrets}\n`), base + 'login_cli=keyboard-dismiss-failed\nlogin_api=not-seen\nlogin_input=not-seen\n');
   assert.equal(run(`login_cli=${otherSecrets}\nlogin_api=${credential}\n`), base);
 });
 
