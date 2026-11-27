@@ -116,6 +116,43 @@ jobs:
           docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_milestone_test_ci
           DATABASE_URL="$SORTEX_MILESTONE_DRAW_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
           npm run test:e2e -- --runInBand --runTestsByPath test/milestone-extraction-postgres.e2e-spec.ts
+      - name: Conferir atribuição privada de pedidos pagos no Ads (PostgreSQL descartável)
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_ADS_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_ads_ci
+          PRISMA_USE_PG_ADAPTER: "true"
+          INTEGRATIONS_MODE: sandbox
+          FEATURE_REAL_PAYMENTS: "false"
+          FEATURE_PAYOUTS: "false"
+          FEATURE_EXTERNAL_CRM: "false"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${POSTGRES_CONTAINER:-}" || "${SORTEX_ADS_E2E_DATABASE_URL:-}" != 'postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_ads_ci' ]]; then
+            echo 'O cenário de atribuição do Ads exige o banco descartável local do job.' >&2
+            exit 64
+          fi
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_ads_ci
+          DATABASE_URL="$SORTEX_ADS_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          result_file="$(mktemp "$RUNNER_TEMP/sortex-ads-attribution.XXXXXX")"
+          trap 'rm -f -- "$result_file"' EXIT
+          npm run test:e2e -- --runInBand --runTestsByPath test/ads-confirmed-sales-postgres.e2e-spec.ts --json --outputFile="$result_file"
+          node - "$result_file" <<'JS'
+          const { readFileSync } = require('node:fs');
+          const { resolve } = require('node:path');
+          const result = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          const suite = result.testResults.find((row) =>
+            row.name === resolve('test/ads-confirmed-sales-postgres.e2e-spec.ts'),
+          );
+          const attribution = suite?.assertionResults.find((row) =>
+            row.fullName === 'Ads confirmed sales with HTTP and disposable PostgreSQL counts only scoped PAID purchases once; ignores client sales and preserves unknown origin',
+          );
+          if (!result.success || result.numPendingTests !== 0 || attribution?.status !== 'passed') {
+            console.error('O cenário autenticado de atribuição do Ads não passou ou foi ignorado.');
+            process.exitCode = 1;
+          }
+          JS
       - name: Conferir saldo e extrato somente para o próprio organizador (PostgreSQL descartável)
         working-directory: services/api
         env:

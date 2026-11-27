@@ -333,8 +333,10 @@ isolated('Ads confirmed sales with HTTP and disposable PostgreSQL', () => {
         status: 'UNAVAILABLE',
         spend: null,
         attributedRevenue: null,
+        platformReportedConversions: null,
         roas: null,
         roi: null,
+        cpa: null,
         reportingProviders: [
           {
             provider: 'META_ADS',
