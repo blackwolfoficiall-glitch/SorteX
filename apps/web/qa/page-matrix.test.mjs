@@ -43,11 +43,11 @@ test("imports exactly the recorded local recortes without promoting them to inte
 test("does not propagate the private release to links or extract native parity from Web proof", () => {
   const result = render(input);
   assert.deepEqual(Object.keys(publication.directScopes), ["/", "/contato", "/dashboard", "/dashboard/configuracoes", "/suporte"]);
-  assert.equal(matrixRows(result).filter((line) => line.includes("| Prévia privada v6 ·")).length, 5);
-  assert.match(lineFor(result, "/"), /Prévia privada v6.*abertura da página inicial/);
-  assert.match(lineFor(result, "/dashboard"), /Prévia privada v6.*6bb28fe.*painel do organizador/);
-  assert.match(lineFor(result, "/dashboard/configuracoes"), /Prévia privada v6.*visão geral de configurações/);
-  assert.match(lineFor(result, "/dashboard/campanhas"), /Não atestada na prévia v6.*não foi percorrida no simulador/);
+  assert.equal(matrixRows(result).filter((line) => line.includes("| Prévia privada v7 ·")).length, 5);
+  assert.match(lineFor(result, "/"), /Prévia privada v7.*abertura da página inicial/);
+  assert.match(lineFor(result, "/dashboard"), /Prévia privada v7.*7387a1a.*painel do organizador/);
+  assert.match(lineFor(result, "/dashboard/configuracoes"), /Prévia privada v7.*visão geral de configurações/);
+  assert.match(lineFor(result, "/dashboard/campanhas"), /Não atestada na prévia v7.*não foi percorrida no simulador/);
   assert.deepEqual(Object.keys(simulator.partialPaths).sort(), ["/comprador", "/login"]);
   assert.match(lineFor(result, "/comprador"), /Início do comprador parcial no simulador/);
   assert.doesNotMatch(lineFor(result, "/dashboard"), /parcial no simulador/);
