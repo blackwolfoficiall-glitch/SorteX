@@ -56,11 +56,34 @@ final class BuyerJourneys: XCTestCase {
             XCTAssertFalse(email.exists, "Login remained visible after sign-in")
         }
 
-        let campaignTab = app.buttons["sortex-buyer-campaigns-tab"]
-        let fixtureCampaign = app.buttons["sortex-buyer-campaign-open-campanha-sintetica-ios"]
-        XCTContext.runActivity(named: "sortex-campaign-tab") { _ in
-            XCTAssertTrue(campaignTab.waitForExistence(timeout: 30), "Buyer campaign tab is absent")
-            XCTAssertTrue(campaignTab.isHittable, "Buyer campaign tab is not actionable")
+        // React Navigation passes a native accessibility identifier, but
+        // XCTest's element kind can differ between iOS versions and renderers.
+        // Match that exact identifier across kinds, not a label or a position.
+        let campaignTabQuery = identified("sortex-buyer-campaigns-tab", in: app)
+        let campaignTab = campaignTabQuery.firstMatch
+        let fixtureCampaignQuery = identified("sortex-buyer-campaign-open-campanha-sintetica-ios", in: app)
+        let fixtureCampaign = fixtureCampaignQuery.firstMatch
+
+        XCTContext.runActivity(named: "sortex-campaign-home-ready") { _ in
+            XCTAssertTrue(hello.exists, "Signed-in buyer home was not observed before navigation")
+            // Do not send any key/coordinate gesture here. The login screen
+            // has left; wait for the keyboard to clear or a real tab hit point.
+            XCTAssertTrue(waitUntil(timeout: 8) {
+                !app.keyboards.firstMatch.exists || (campaignTab.exists && campaignTab.isHittable)
+            }, "The keyboard still obstructs buyer navigation")
+        }
+
+        XCTContext.runActivity(named: "sortex-campaign-tab-discover") { _ in
+            XCTAssertTrue(campaignTab.waitForExistence(timeout: 30), "Buyer campaign tab identifier is absent")
+            XCTAssertEqual(campaignTabQuery.count, 1, "Buyer campaign tab identifier must be unique")
+        }
+
+        XCTContext.runActivity(named: "sortex-campaign-tab-actionable") { _ in
+            XCTAssertTrue(waitUntil(timeout: 10) { campaignTab.isEnabled && campaignTab.isHittable },
+                          "Buyer campaign tab never became actionable")
+        }
+
+        XCTContext.runActivity(named: "sortex-campaign-tab-tap") { _ in
             campaignTab.tap()
         }
 
@@ -68,6 +91,7 @@ final class BuyerJourneys: XCTestCase {
             // The featured Home card shares the title and CTA label. Only the
             // list reached by the native tab exposes this campaign-specific ID.
             XCTAssertTrue(fixtureCampaign.waitForExistence(timeout: 30), "Fixture campaign is absent from buyer list")
+            XCTAssertEqual(fixtureCampaignQuery.count, 1, "Fixture campaign identifier must be unique")
             XCTAssertTrue(app.staticTexts["Campanha sintetica iOS"].firstMatch.waitForExistence(timeout: 30))
         }
 
@@ -118,6 +142,21 @@ final class BuyerJourneys: XCTestCase {
             if element.isHittable { return }
         }
         throw ElementNotActionable()
+    }
+
+    @MainActor
+    private func identified(_ identifier: String, in app: XCUIApplication) -> XCUIElementQuery {
+        app.descendants(matching: .any).matching(NSPredicate(format: "identifier == %@", identifier))
+    }
+
+    @MainActor
+    private func waitUntil(timeout: TimeInterval, _ condition: () -> Bool) -> Bool {
+        let deadline = ProcessInfo.processInfo.systemUptime + timeout
+        repeat {
+            if condition() { return true }
+            RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.2))
+        } while ProcessInfo.processInfo.systemUptime < deadline
+        return condition()
     }
 
     @MainActor

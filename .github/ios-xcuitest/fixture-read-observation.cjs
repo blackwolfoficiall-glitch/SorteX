@@ -4,12 +4,13 @@ const { readFileSync, lstatSync } = require("node:fs");
 const { apiObservation } = require("../native-ui/login-failure-status.cjs");
 
 const routes = [
+  "/buyer/home",
   "/buyer/campaigns",
   "/public/campaigns/campanha-sintetica-ios",
 ];
 
-function campaignReads(log) {
-  if (log === null) return ["unknown", "unknown"];
+function buyerReads(log) {
+  if (log === null) return routes.map(() => "unknown");
   const buckets = routes.map(() => new Set());
   for (const line of log.split("\n")) {
     let row;
@@ -34,6 +35,6 @@ if (require.main === module) {
     if (stat.isFile() && stat.size <= 1024 * 1024) log = readFileSync(path, "utf8");
   } catch {}
   const login = apiObservation(log);
-  const [list, detail] = campaignReads(log);
-  process.stdout.write(JSON.stringify({ ...login, list, detail }));
+  const [home, list, detail] = buyerReads(log);
+  process.stdout.write(JSON.stringify({ ...login, home, list, detail }));
 }

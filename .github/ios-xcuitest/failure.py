@@ -12,7 +12,8 @@ from evidence import TEST
 
 PHASES = (
     "startup", "email", "password", "login", "campaign", "campaign-tab",
-    "campaign-list", "campaign-open", "campaign-detail", "campaign-prize",
+    "campaign-home-ready", "campaign-tab-discover", "campaign-tab-actionable",
+    "campaign-tab-tap", "campaign-list", "campaign-open", "campaign-detail", "campaign-prize",
     "campaign-regulation", "signed-in-relaunch", "logout", "signed-out-relaunch",
 )
 CASES = {"Failed": "failed", "Passed": "passed", "Skipped": "skipped",
@@ -21,7 +22,7 @@ HTTP_STATUS = set("unknown not-seen 2xx 400-validation 401-unauthorized 403-forb
                   "429-rate-limited 4xx-other 5xx".split())
 HTTP_INPUT = set("unknown not-seen matches email-mismatch password-mismatch both-mismatch "
                  "missing-email missing-password missing-both".split())
-CAMPAIGN_READ = {"unknown", "not-seen", "2xx", "non-2xx", "mixed"}
+BUYER_READ = {"unknown", "not-seen", "2xx", "non-2xx", "mixed"}
 PRELAUNCH_HINTS = (
     ("invalid-destination", r"unable to find a destination matching|ineligible destinations for|no devices matched"),
     ("runner-launch-failed", r"failed to launch (?:the )?test runner|test runner failed to (?:initialize|launch)|"
@@ -152,7 +153,7 @@ def api_observation(log):
         return value if isinstance(value, str) and value in accepted else "unknown"
 
     return (safe("status", HTTP_STATUS), safe("input", HTTP_INPUT),
-            safe("list", CAMPAIGN_READ), safe("detail", CAMPAIGN_READ))
+            safe("home", BUYER_READ), safe("list", BUYER_READ), safe("detail", BUYER_READ))
 
 
 def diagnose(bundle, console, api_log):
@@ -168,9 +169,10 @@ def diagnose(bundle, console, api_log):
                                        "--test-id", TEST, "--compact"])
             phase = observed_phase(activities)
     hint = startup_hint(console) if phase not in PHASES else "not-applicable"
-    status, shape, campaign_list, campaign_detail = api_observation(api_log)
+    status, shape, home, campaign_list, campaign_detail = api_observation(api_log)
     return {"xcui-outcome": outcome, "xcui-last-phase": phase, "xcui-launch-hint": hint,
-            "login-api": status, "login-input": shape, "campaign-list-api": campaign_list,
+            "login-api": status, "login-input": shape, "buyer-home-api": home,
+            "campaign-list-api": campaign_list,
             "campaign-detail-api": campaign_detail}
 
 

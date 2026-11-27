@@ -77,6 +77,13 @@ class FailureDiagnostic(unittest.TestCase):
         self.assertEqual(observed_phase({"activities": [{"name": "sortex-login"}]}), "login")
         self.assertEqual(observed_phase({"activities": [{"title": "sortex-email: " + PRIVATE}]}), "not-observed")
         self.assertEqual(observed_phase({"testRuns": []}), "not-observed")
+        for phase in ("campaign-home-ready", "campaign-tab-discover",
+                      "campaign-tab-actionable", "campaign-tab-tap"):
+            with self.subTest(phase=phase):
+                self.assertEqual(observed_phase({"activities": [
+                    {"title": "sortex-" + phase}, {"title": "sortex-campaign-tab"},
+                    {"title": "sortex-" + phase + " " + PRIVATE},
+                ]}), phase)
         self.assertEqual(observed_phase({"testRuns": [{}, {}]}), "activities-unreadable")
         self.assertEqual(observed_phase(None), "activities-unreadable")
 
@@ -155,16 +162,18 @@ esac
                "ignored-unknown-field": PRIVATE})
         self.assertEqual(report, "sha=" + "a" * 40 + "\nxcui-outcome=failed\nxcui-last-phase=login\n"
                          "xcui-launch-hint=not-applicable\nlogin-api=2xx\nlogin-input=matches\n"
-                         "campaign-list-api=not-seen\ncampaign-detail-api=not-seen\n")
+                         "buyer-home-api=not-seen\ncampaign-list-api=not-seen\ncampaign-detail-api=not-seen\n")
         self.assertTrue((self.base / "queried").exists())
 
-    def test_native_campaign_substage_and_only_two_fixed_read_routes(self):
+    def test_native_campaign_substage_and_only_fixed_read_routes(self):
         activity = {"testRuns": [{"activities": [
             {"title": "sortex-campaign-tab"}, {"title": "sortex-campaign-list"},
             {"title": "sortex-campaign-open"}, {"title": "sortex-campaign-detail"},
             {"title": "sortex-campaign-prize", "failure": PRIVATE},
         ]}]}
         report = self.run_fake(cases(expected_case()), activity, [
+            {"method": "GET", "path": "/buyer/home?untrusted=" + PRIVATE, "status": 200},
+            {"method": "GET", "path": "/buyer/home/wrong", "status": 401},
             {"method": "GET", "path": "/buyer/campaigns?page=1&limit=15&private=" + PRIVATE, "status": 200},
             {"method": "GET", "path": "/buyer/campaigns/other", "status": 500},
             {"method": "GET", "path": "/public/campaigns/campanha-sintetica-ios", "status": 404},
@@ -172,6 +181,7 @@ esac
             {"method": "POST", "path": "/buyer/campaigns", "status": 404},
         ])
         self.assertIn("xcui-last-phase=campaign-prize\n", report)
+        self.assertIn("buyer-home-api=2xx\n", report)
         self.assertIn("campaign-list-api=2xx\n", report)
         self.assertIn("campaign-detail-api=mixed\n", report)
 

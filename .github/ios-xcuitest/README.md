@@ -55,8 +55,10 @@ O diagnóstico não confirma que a última atividade tenha terminado, não
 configura uma nova tentativa e não substitui a evidência de sucesso. O log
 local, os dados JSON brutos e o bundle de resultados não são publicados.
 
-A tela Campanhas tem marcos separados para aba, lista, abertura, detalhe,
-prêmio e regulamento. Quando o caso falha, os dois GETs da campanha
-sintética recebem classificações independentes (sem URL, parâmetros,
-contagem, corpo ou status exato). O diagnóstico nunca altera a validação
-do cenário completo nem substitui a consulta no aplicativo.
+Campanhas separa a confirmação da tela inicial e do teclado, a localização
+da aba pelo identificador nativo (independente da classe reportada pelo
+iOS), sua disponibilidade para toque, o toque, a lista, a abertura, o
+detalhe, o prêmio e o regulamento. Quando o caso falha, as leituras da tela
+inicial e da campanha sintética recebem classificações independentes (sem
+URL, parâmetros, contagem, corpo ou status exato). O diagnóstico nunca
+altera a validação do cenário completo nem substitui a consulta no aplicativo.

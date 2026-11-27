@@ -248,8 +248,9 @@ esac
             self.assertIn(ref.get("BlueprintIdentifier"), pbx)
         self.assertIn("com.apple.product-type.bundle.ui-testing", pbx)
         swift = (ROOT / "BuyerJourneys.swift").read_text()
-        for stage in ("startup", "email", "password", "login", "campaign-tab", "campaign-list",
-                      "campaign-open", "campaign-detail", "campaign-prize", "campaign-regulation",
+        for stage in ("startup", "email", "password", "login", "campaign-home-ready",
+                      "campaign-tab-discover", "campaign-tab-actionable", "campaign-tab-tap",
+                      "campaign-list", "campaign-open", "campaign-detail", "campaign-prize", "campaign-regulation",
                       "signed-in-relaunch", "logout", "signed-out-relaunch"):
             self.assertIn('"sortex-' + stage + '"', swift)
         self.assertIn('secureTextFields["sortex-login-password"]', swift)
@@ -259,8 +260,15 @@ esac
         app = (ROOT.parent.parent / "apps/mobile/App.tsx").read_text()
         self.assertIn('tabBarButtonTestID: "sortex-buyer-campaigns-tab"', app)
         self.assertIn('detailsTestID={!organizer ? `sortex-buyer-campaign-open-${item.slug}` : undefined}', app)
-        self.assertIn('app.buttons["sortex-buyer-campaigns-tab"]', swift)
-        self.assertIn('app.buttons["sortex-buyer-campaign-open-campanha-sintetica-ios"]', swift)
+        self.assertIn('identified("sortex-buyer-campaigns-tab", in: app)', swift)
+        self.assertIn('identified("sortex-buyer-campaign-open-campanha-sintetica-ios", in: app)', swift)
+        self.assertIn('descendants(matching: .any).matching(NSPredicate(format: "identifier == %@", identifier))', swift)
+        self.assertIn('campaignTab.isEnabled && campaignTab.isHittable', swift)
+        self.assertIn('campaignTabQuery.count, 1', swift)
+        self.assertIn('fixtureCampaignQuery.count, 1', swift)
+        campaign_stage = swift.split('let campaignTabQuery', 1)[1].split('sortex-signed-in-relaunch', 1)[0]
+        self.assertEqual(campaign_stage.count('campaignTab.tap()'), 1)
+        self.assertNotIn('coordinate', campaign_stage.split('campaign-tab-tap', 1)[1])
         self.assertNotIn('app.buttons["Ver campanha"]', swift)
         self.assertIn('app.staticTexts["Regulamento sintetico da campanha iOS."]', swift)
         workflow = (ROOT.parent / "workflows/mobile-native-xcuitest.yml").read_text()
