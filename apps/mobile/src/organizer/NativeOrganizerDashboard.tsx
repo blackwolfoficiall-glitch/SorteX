@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
-import Svg, { Defs, Line, LinearGradient, Path, Polyline, Stop } from "react-native-svg";
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Polyline, Stop } from "react-native-svg";
 import { client } from "../auth/runtime";
 import { money } from "../components/ui";
 import {
@@ -13,8 +13,8 @@ import {
 } from "./dashboard";
 import { OrganizerIcon, type OrganizerIconName } from "./OrganizerIcons";
 import { organizerChartBounds, organizerRevenueGeometry } from "./premium-chart";
-import { DEFAULT_DASHBOARD_PERIOD, chartFor, dayInSaoPaulo, legacyHistoryCovers, legacyUtcRange, loadDashboardPeriod, parseCustomPeriod, periodFor,
-  type Period, type PeriodDashboard, type PeriodKey } from "./dashboard-period";
+import { DEFAULT_DASHBOARD_PERIOD, chartBucketsFor, dayInSaoPaulo, legacyHistoryCovers, legacyUtcRange, loadDashboardPeriod, parseCustomPeriod, periodFor,
+  type Period, type PeriodDashboard, type PeriodKey, type RevenueBucket } from "./dashboard-period";
 
 type Actions = {
   onCampaigns: () => void;
@@ -124,7 +124,8 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
   const legacyHistory = useLegacy && displayRange && legacyHistoryCovers(dashboard?.generatedAt, displayRange)
     ? dashboard?.revenueHistory : undefined;
   const history = current?.kind === "ok" ? current.data.revenueHistory : legacyHistory;
-  const chart = history && displayRange ? chartFor(history, displayRange) : null;
+  const buckets = chartBucketsFor(history, displayRange);
+  const chart = buckets.length ? buckets.map(({ revenue }) => revenue) : null;
   const revenue = current?.kind === "ok" ? current.data.summary.grossRevenue :
     useLegacy && chart ? chart.reduce((sum, value) => sum + Math.round(value * 100), 0) / 100 : undefined;
   const rangeCaption = displayRange
@@ -218,6 +219,10 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
             </View>
           </View>
           <Text style={[premiumTypography.body, { color: t.muted }]}>Valor bruto de pedidos pagos. Não representa saldo disponível ou repasse.</Text>
+          {chart && displayRange && (
+            <RevenueChartValues key={`${displayRange.start}:${displayRange.end}:${useLegacy}`}
+              buckets={buckets} zone={useLegacy ? "UTC" : "Brasília"} />
+          )}
         </>
       )}
       <View style={[styles.quickSection, { backgroundColor: t.surface, borderColor: t.line }]}>
@@ -272,8 +277,10 @@ function RevenueChart({ values }: { values: number[] }) {
   if (!geometry) return null;
   const { width, height, floor } = organizerChartBounds;
   return (
-    <View accessible accessibilityRole="image" accessibilityLabel={`Evolução das vendas em ${values.length} pontos. Maior valor: ${money(geometry.maximum)}.`}>
-      <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" accessible={false}>
+    <View accessible accessibilityRole="image" accessibilityLabel={values.length === 1
+        ? `Vendas confirmadas em um dia: ${money(geometry.maximum)}.`
+        : `Evolução das vendas em ${values.length} pontos. Maior valor: ${money(geometry.maximum)}.`}>
+      <Svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" accessible={false} aria-hidden={true}>
         <Defs>
           <LinearGradient id={areaID} x1="0%" y1="0%" x2="0%" y2="100%">
             <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.25} />
@@ -282,9 +289,48 @@ function RevenueChart({ values }: { values: number[] }) {
         </Defs>
         {[17, 38, floor].map((y) => <Line key={y} x1={0} x2={width} y1={y} y2={y}
           stroke="#FFFFFF" strokeOpacity={y === floor ? 0.38 : 0.15} strokeDasharray={y === floor ? "4 5" : undefined} />)}
-        <Path d={geometry.area} fill={`url(#${areaID})`} />
-        <Polyline points={geometry.points} fill="none" stroke="#FFFFFF" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+        {geometry.vertex ? (
+          <Circle cx={geometry.vertex[0]} cy={geometry.vertex[1]} r={4} fill="#FFFFFF" />
+        ) : (
+          <>
+            <Path d={geometry.area} fill={`url(#${areaID})`} />
+            <Polyline points={geometry.points} fill="none" stroke="#FFFFFF" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" />
+          </>
+        )}
       </Svg>
+    </View>
+  );
+}
+
+function RevenueChartValues({ buckets, zone }: { buckets: RevenueBucket[]; zone: "UTC" | "Brasília" }) {
+  const [expanded, setExpanded] = useState(false);
+  const t = usePremiumTheme();
+  const listID = useId();
+  return (
+    <View style={[styles.chartValues, { backgroundColor: t.surface, borderColor: t.line }]}>
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded }} aria-expanded={expanded}
+        aria-controls={expanded ? listID : undefined}
+        onPress={() => setExpanded((value) => !value)}
+        style={({ pressed }) => [styles.chartValuesToggle, { opacity: pressed ? 0.7 : 1 }]}>
+        <Text style={[premiumTypography.label, { color: t.accent, flex: 1 }]}>
+          {expanded ? "Ocultar valores do gráfico" : "Ver valores do gráfico"}
+        </Text>
+        <Text accessibilityElementsHidden importantForAccessibility="no" aria-hidden
+          style={[premiumTypography.section, { color: t.accent }]}>{expanded ? "−" : "+"}</Text>
+      </Pressable>
+      {expanded && (
+        <View nativeID={listID} style={styles.chartValuesList}>
+          <Text style={[premiumTypography.body, { color: t.muted }]}>Fuso das datas: {zone}</Text>
+          {buckets.map(({ first, last, revenue }) => {
+            const label = first === last ? dateLabel(first) : `${dateLabel(first)} a ${dateLabel(last)}`;
+            return (
+              <Text key={first} style={[premiumTypography.body, styles.chartValueRow, { borderColor: t.line, color: t.text }]}>
+                {label}: <Text style={{ fontWeight: "700" }}>{money(revenue)}</Text>
+              </Text>
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }
@@ -344,6 +390,10 @@ const styles = StyleSheet.create({
   ticketCaption: { flex: 1, color: "#FFFFFF", fontSize: 14, fontWeight: "700" },
   ticketValue: { color: "#FFFFFF", fontSize: 34, fontWeight: "900", letterSpacing: -1.1 },
   ticketMuted: { color: "#F2EEFF", fontSize: 13, lineHeight: 18 },
+  chartValues: { borderWidth: 1, borderRadius: 16 },
+  chartValuesToggle: { minHeight: 48, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 7 },
+  chartValuesList: { paddingHorizontal: 14, paddingBottom: 9, gap: 3 },
+  chartValueRow: { borderTopWidth: 1, paddingVertical: 6 },
   ticketRule: { borderBottomWidth: 1, borderStyle: "dashed", borderColor: "#FFFFFF80" },
   ticketMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   metric: { gap: 2, flexBasis: "45%", flexGrow: 1, minWidth: 0, borderRadius: 10, padding: 7, backgroundColor: "#FFFFFF20" },

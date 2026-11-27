@@ -164,6 +164,7 @@ test("old organizer response is discarded after logout even after signing in as 
 
 import {
   DEFAULT_DASHBOARD_PERIOD,
+  chartBucketsFor,
   chartFor,
   dayInSaoPaulo,
   legacyHistoryCovers,
@@ -278,7 +279,7 @@ test("Web and native use the same server UTC fallback at 01:30Z, without shiftin
     const expected = { start, end: "2026-11-27" };
     assert.deepEqual(legacyUtcRange(generatedAt, preset, null), expected);
     assert.deepEqual(web.legacyUtcRange(generatedAt, preset, null), expected);
-    assert.deepEqual(chartFor(history, expected), web.salesChart(history, expected).map((row) => row.revenue));
+    assert.deepEqual(chartBucketsFor(history, expected), web.salesChart(history, expected));
   }
   assert.deepEqual(chartFor(history, legacyUtcRange(generatedAt, "today", null)!), [0.17]);
   assert.deepEqual(chartFor(history, periodFor("today", dayInSaoPaulo(generatedAt))), [70.03]);
@@ -302,10 +303,37 @@ test("sales ticket geometry renders real increases in order without fabricating 
   assert.equal(shape?.area, "M2 59 L2 59 L150 32.5 L298 6 L298 59 Z");
 });
 
-test("sales ticket keeps a true zero as a flat line and does not invent missing values", () => {
-  assert.equal(organizerRevenueGeometry([0])?.points, "2,59 298,59");
-  assert.equal(organizerRevenueGeometry([25])?.points, "2,6 298,6");
+test("a one-day sales ticket draws one point, whether nonzero or zero, and no trend line", () => {
+  assert.deepEqual(organizerRevenueGeometry([0]), { maximum: 0, vertex: [150, 59], points: null, area: null });
+  assert.deepEqual(organizerRevenueGeometry([25]), { maximum: 25, vertex: [150, 6], points: null, area: null });
   assert.equal(organizerRevenueGeometry([]), null);
   assert.equal(organizerRevenueGeometry([0, NaN]), null);
   assert.equal(organizerRevenueGeometry([0, -1]), null);
+});
+
+test("the chart distinguishes an available day with zero recorded revenue from missing history", () => {
+  const day = periodFor("today", "2026-11-26");
+  assert.deepEqual(chartBucketsFor([], day), [{ first: day.start, last: day.end, revenue: 0 }]);
+  assert.deepEqual(chartBucketsFor([{ date: day.start, revenue: 0.21 }], day),
+    [{ first: day.start, last: day.end, revenue: 0.21 }]);
+  assert.deepEqual(chartBucketsFor(undefined, day), []);
+  assert.deepEqual(chartBucketsFor([], null), []);
+});
+
+test("30-day chart dates match the existing unrounded bucket boundary and preserve cents", () => {
+  const month = periodFor("month", "2026-11-26");
+  const history = [
+    { date: "2026-10-28", revenue: 0.10 },
+    { date: "2026-10-30", revenue: 0.20 },
+    { date: "2026-10-31", revenue: 20.01 },
+    { date: "2026-11-26", revenue: 0.02 },
+  ];
+  const buckets = chartBucketsFor(history, month);
+  assert.equal(buckets.length, 10);
+  assert.deepEqual(buckets.slice(0, 2), [
+    { first: "2026-10-28", last: "2026-10-30", revenue: 0.30 },
+    { first: "2026-10-31", last: "2026-11-02", revenue: 20.01 },
+  ]);
+  assert.deepEqual(buckets[2], { first: "2026-11-03", last: "2026-11-05", revenue: 0 });
+  assert.deepEqual(buckets.at(-1), { first: "2026-11-24", last: "2026-11-26", revenue: 0.02 });
 });

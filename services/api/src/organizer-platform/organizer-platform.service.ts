@@ -35,6 +35,11 @@ import {
   SocialLinkDto,
   UpdateBrandDto,
 } from './dto/organizer-platform.dto';
+import {
+  projectPublicMiniCampaign,
+  publicMiniCampaignSelect,
+  publicMiniCampaignWhere,
+} from './public-mini-campaign';
 
 const planEnumByCode: Record<string, OrganizerPlan> = {
   INITIAL: OrganizerPlan.BASIC,
@@ -1015,52 +1020,16 @@ export class OrganizerPlatformService {
 
   async publicMiniCampaign(slug: string) {
     const item = await this.prisma.miniCampaign.findFirst({
-      where: { slug, status: MiniCampaignStatus.PUBLISHED, deletedAt: null },
-      include: {
-        mainCampaign: { select: { id: true, title: true, slug: true } },
-        organizer: {
-          select: {
-            organizerBrandProfile: {
-              select: {
-                publicName: true,
-                primaryLogoUrl: true,
-                primaryColor: true,
-              },
-            },
-          },
-        },
-        result: {
-          include: {
-            winner: { select: { name: true, city: true, state: true } },
-          },
-        },
-      },
+      where: publicMiniCampaignWhere(slug),
+      select: publicMiniCampaignSelect,
     });
-    if (!item)
+    // Each relation has its own foreign key; inconsistent imported rows must
+    // not use a public campaign from another organizer as their public parent.
+    if (!item || item.organizerId !== item.mainCampaign.organizerId)
       throw new NotFoundException(
         'Mini Campanha não encontrada ou indisponível.',
       );
-    return {
-      id: item.id,
-      name: item.name,
-      slug: item.slug,
-      description: item.description,
-      imageUrl: item.imageUrl,
-      prizeType: item.prizeType,
-      prizeDescription: item.prizeDescription,
-      maxTickets: item.maxTickets,
-      soldTickets: item.soldTickets,
-      availableTickets: Math.max(0, item.maxTickets - item.soldTickets),
-      ticketPrice: Number(item.ticketPrice),
-      purchaseLimitPerBuyer: item.purchaseLimitPerBuyer,
-      startsAt: item.startsAt,
-      endsAt: item.endsAt,
-      drawAt: item.drawAt,
-      rules: item.rules,
-      mainCampaign: item.mainCampaign,
-      organizer: item.organizer.organizerBrandProfile,
-      result: item.result,
-    };
+    return projectPublicMiniCampaign(item);
   }
 
   async reserveMiniCampaign(

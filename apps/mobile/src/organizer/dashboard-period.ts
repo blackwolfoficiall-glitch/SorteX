@@ -116,16 +116,29 @@ export async function loadDashboardPeriod(client: DashboardClient, session: Dash
   }
 }
 
-export function chartFor(history: DayRevenue[], period: Period): number[] {
-  const days = (stamp(period.end) - stamp(period.start)) / DAY_MS + 1;
+export type RevenueBucket = { first: string; last: string; revenue: number };
+
+export function chartBucketsFor(history: DayRevenue[] | undefined, period: Period | null): RevenueBucket[] {
+  if (!history || !period) return [];
+  const start = stamp(period.start);
+  const days = (stamp(period.end) - start) / DAY_MS + 1;
   if (!Number.isInteger(days) || days < 1 || days > 367) return [];
-  const buckets = days > 45 ? 12 : days > 14 ? 10 : days;
-  const amounts = Array<number>(buckets).fill(0);
+  const count = days > 45 ? 12 : days > 14 ? 10 : days;
+  // The date labels invert the existing day → bucket mapping, exactly as the Web chart does.
+  const buckets = Array.from({ length: count }, (_, index) => ({
+    first: isoDay(start + Math.ceil(index * days / count) * DAY_MS),
+    last: isoDay(start + (Math.ceil((index + 1) * days / count) - 1) * DAY_MS),
+    cents: 0,
+  }));
   for (const row of history) {
     if (row.date >= period.start && row.date <= period.end) {
-      const day = (stamp(row.date) - stamp(period.start)) / DAY_MS;
-      amounts[Math.floor(day * buckets / days)]! += Math.round(row.revenue * 100);
+      const day = (stamp(row.date) - start) / DAY_MS;
+      buckets[Math.floor(day * count / days)]!.cents += Math.round(row.revenue * 100);
     }
   }
-  return amounts.map((cents) => cents / 100);
+  return buckets.map(({ first, last, cents }) => ({ first, last, revenue: cents / 100 }));
+}
+
+export function chartFor(history: DayRevenue[], period: Period): number[] {
+  return chartBucketsFor(history, period).map(({ revenue }) => revenue);
 }
