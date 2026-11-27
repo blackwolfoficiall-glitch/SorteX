@@ -5,25 +5,27 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   PremiumButton, PremiumGradient, PremiumPage, premiumShadow, premiumTypography, usePremiumTheme,
 } from "../theme/premium";
+import { OrganizerIcon } from "./OrganizerIcons";
 import { organizerGroups } from "./premium-navigation";
 import { NativeOrganizerAdvisor } from "./NativeOrganizerAdvisor";
 
 const tabItems = {
-  Home: ["⌂", "Início"],
-  Campaigns: ["🎟️", "Campanhas"],
-  Copilot: ["✦", "Copilot"],
-  More: ["▦", "Mais"],
+  Home: ["home", "Início"],
+  Campaigns: ["ticket", "Campanhas"],
+  Copilot: ["copilot", "Copilot"],
+  More: ["more", "Mais"],
 } as const;
 
 export function OrganizerTabBar({ state, navigation }: BottomTabBarProps) {
   const t = usePremiumTheme();
   const insets = useSafeAreaInsets();
-  const { width, fontScale } = useWindowDimensions();
-  const compact = width < 350 || fontScale > 1.35;
+  const { width } = useWindowDimensions();
+  const compact = width - insets.left - insets.right < 350;
+  const labelStyle = [styles.tabLabel, compact && styles.tabLabelCompact];
   return (
     <View style={{ backgroundColor: t.bg, paddingBottom: Math.max(6, insets.bottom),
       paddingHorizontal: Math.max(8, insets.left, insets.right) }}>
-      <View style={[styles.bar, premiumShadow, { backgroundColor: t.surface, borderColor: t.line }]}>
+      <View style={[styles.bar, premiumShadow, { backgroundColor: t.surface, borderColor: t.line }]} testID="sortex-organizer-dock">
         {state.routes.map((route, index) => {
           const meta = tabItems[route.name as keyof typeof tabItems];
           if (!meta) return null;
@@ -34,25 +36,31 @@ export function OrganizerTabBar({ state, navigation }: BottomTabBarProps) {
               <Pressable accessibilityRole="button" accessibilityLabel="Criar campanha"
                 testID="sortex-organizer-create"
                 onPress={() => navigation.navigate("OrganizerDraft")}
-                style={({ pressed }) => [styles.create, { backgroundColor: t.purple,
-                  opacity: pressed ? 0.8 : 1 }]}>
-                <PremiumGradient />
-                <Text allowFontScaling={false} accessible={false} style={styles.createLabel}>+</Text>
+                style={({ pressed }) => [styles.create, pressed && { opacity: 0.8 }]}>
+                <View style={[styles.createTile, compact && styles.createTileCompact, { backgroundColor: t.purple }]}>
+                  <PremiumGradient />
+                  <View style={styles.createSymbol}><OrganizerIcon name="plus" color={t.white} size={25} /></View>
+                </View>
+                <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={[...labelStyle, { color: t.muted }]}>Criar</Text>
               </Pressable>
             )}
             <Pressable
-              accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected }}
+              accessibilityRole="tab" accessibilityLabel={label} accessibilityState={{ selected }} aria-selected={selected}
               testID={`sortex-organizer-tab-${route.name.toLowerCase()}`}
               onPress={() => {
                 const result = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
                 if (!selected && !result.defaultPrevented) navigation.navigate(route.name, route.params);
               }}
               onLongPress={() => navigation.emit({ type: "tabLongPress", target: route.key })}
-              style={({ pressed }) => [styles.tab, selected && { backgroundColor: t.tint }, pressed && { opacity: 0.75 }]}
+              style={({ pressed }) => [
+                styles.tab,
+                compact && route.name === "Campaigns" && styles.campaignTabCompact,
+                selected && { backgroundColor: t.tint },
+                pressed && { opacity: 0.75 },
+              ]}
             >
-              <Text accessible={false} allowFontScaling={false} style={[styles.tabIcon, { color: selected ? t.accent : t.muted }]}>{icon}</Text>
-              {!compact && <Text numberOfLines={1} maxFontSizeMultiplier={1.15}
-                style={[styles.tabLabel, { color: selected ? t.accent : t.muted }]}>{label}</Text>}
+              <OrganizerIcon name={icon} color={selected ? t.accent : t.muted} size={compact ? 19 : 22} />
+              <Text numberOfLines={2} maxFontSizeMultiplier={1.3} style={[...labelStyle, { color: selected ? t.accent : t.muted }]}>{label}</Text>
             </Pressable>
           </React.Fragment>;
         })}
@@ -120,12 +128,19 @@ export function OrganizerModuleStatus({ route, navigation }: { route: any; navig
 
 const styles = StyleSheet.create({
   bar: { borderWidth: 1, borderRadius: 24, paddingHorizontal: 4, paddingVertical: 4,
-    flexDirection: "row", gap: 2, alignItems: "center", width: "100%", maxWidth: 700, alignSelf: "center", minHeight: 62 },
-  tab: { flex: 1, minWidth: 0, minHeight: 48, justifyContent: "center", alignItems: "center", borderRadius: 15, paddingHorizontal: 1 },
-  tabIcon: { fontSize: 21, lineHeight: 24, fontWeight: "700" },
-  tabLabel: { marginTop: 2, fontSize: 10, fontWeight: "700" },
-  create: { width: 48, height: 49, marginHorizontal: 3, borderRadius: 18, overflow: "hidden", alignItems: "center", justifyContent: "center" },
-  createLabel: { fontSize: 28, color: "#FFF", fontWeight: "600", lineHeight: 31 },
+    flexDirection: "row", gap: 2, alignItems: "stretch", width: "100%", maxWidth: 700,
+    alignSelf: "center", minHeight: 60, marginTop: 7 },
+  tab: { flex: 1, minWidth: 44, minHeight: 48, justifyContent: "center", alignItems: "center",
+    borderRadius: 16, paddingHorizontal: 1, paddingVertical: 4, gap: 3 },
+  campaignTabCompact: { minWidth: 61 },
+  tabLabel: { fontSize: 11, fontWeight: "700", textAlign: "center", width: "100%" },
+  tabLabelCompact: { fontSize: 10 },
+  create: { flex: 1, minWidth: 44, minHeight: 48, alignItems: "center", justifyContent: "flex-start",
+    paddingHorizontal: 1, paddingBottom: 3, gap: 2 },
+  createTile: { width: 45, height: 45, marginTop: -11, borderRadius: 16, overflow: "hidden",
+    alignItems: "center", justifyContent: "center" },
+  createTileCompact: { width: 44, height: 44 },
+  createSymbol: { position: "relative", zIndex: 1 },
   grid: { flexDirection: "row", justifyContent: "space-between", flexWrap: "wrap", rowGap: 8 },
   menuCard: { minHeight: 68, borderRadius: 18, borderWidth: 1, padding: 12, flexDirection: "row", alignItems: "center", gap: 8 },
   info: { gap: 12, borderWidth: 1, borderRadius: 20, padding: 16 },

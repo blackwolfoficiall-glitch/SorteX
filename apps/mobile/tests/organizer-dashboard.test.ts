@@ -7,6 +7,8 @@ import {
   parseOrganizerDashboard,
 } from "../src/organizer/dashboard";
 
+import { organizerRevenueGeometry } from "../src/organizer/premium-chart";
+
 const organizer = {
   id: "synthetic-organizer",
   role: "ORGANIZER" as const,
@@ -291,4 +293,19 @@ test("Web and native use the same server UTC fallback at 01:30Z, without shiftin
     assert.equal(legacyUtcRange(invalidClock, "today", null), null);
     assert.equal(web.legacyUtcRange(invalidClock, "today", null), null);
   }
+});
+
+test("sales ticket geometry renders real increases in order without fabricating a value", () => {
+  const shape = organizerRevenueGeometry([0, 13, 26]);
+  assert.equal(shape?.maximum, 26);
+  assert.equal(shape?.points, "2,59 150,32.5 298,6");
+  assert.equal(shape?.area, "M2 59 L2 59 L150 32.5 L298 6 L298 59 Z");
+});
+
+test("sales ticket keeps a true zero as a flat line and does not invent missing values", () => {
+  assert.equal(organizerRevenueGeometry([0])?.points, "2,59 298,59");
+  assert.equal(organizerRevenueGeometry([25])?.points, "2,6 298,6");
+  assert.equal(organizerRevenueGeometry([]), null);
+  assert.equal(organizerRevenueGeometry([0, NaN]), null);
+  assert.equal(organizerRevenueGeometry([0, -1]), null);
 });
