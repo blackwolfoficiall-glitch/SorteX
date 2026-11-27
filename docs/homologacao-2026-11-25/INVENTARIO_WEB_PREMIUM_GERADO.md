@@ -2,7 +2,7 @@
 
 Gerado por `node apps/web/qa/inventory-web.mjs`. Verificação com `--check`. O relatório orienta a rodada visual, não comprova execução.
 
-**109 páginas, 90 handlers (88 em /api), 8 layouts, 210 arquivos de componentes.**
+**109 páginas, 90 handlers (88 em /api), 8 layouts, 211 arquivos de componentes.**
 Padrões parametrizados: 17 páginas, 50 handlers; destes, 16 catch-all. Grupos reais no inventário: 0.
 Páginas por área: Acesso 13; Admin 26; Afiliado 3; Campanha e prova pública 4; Comprador 13; Conta 2; Diagnóstico 1; Equipe · entrada 2; Institucional/público a revisar 5; Organizador 39; Prévia 1.
 
@@ -490,6 +490,7 @@ O grafo segue imports estáticos de valor e reexports locais de App Router e com
 | [components/payments/MercadoPagoCardBrick.tsx](../../apps/web/components/payments/MercadoPagoCardBrick.tsx) | sim | — | — | — | — |
 | [components/payments/OrganizerPaymentStats.tsx](../../apps/web/components/payments/OrganizerPaymentStats.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/payments/PixPaymentView.tsx](../../apps/web/components/payments/PixPaymentView.tsx) | sim | — | — | — | `Button`, `a` |
+| [components/premium/PremiumScope.tsx](../../apps/web/components/premium/PremiumScope.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/prizes/PrizeTicketsCenter.tsx](../../apps/web/components/prizes/PrizeTicketsCenter.tsx) | sim | — | — | `Drawer`, `MaterialDrawer`, `aside`, `section` | `Link`, `Select`, `button`, `input`, `select`, `textarea` |
 | [components/public/InstitutionalBackButton.tsx](../../apps/web/components/public/InstitutionalBackButton.tsx) | sim | — | — | — | `button` |
 | [components/public/OrganizerPublicHub.tsx](../../apps/web/components/public/OrganizerPublicHub.tsx) | sim | — | — | — | `Link`, `a`, `button`, `input`, `select` |
@@ -530,6 +531,7 @@ Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pel
 - [tests/auth-refresh-http.test.mjs](../../apps/web/tests/auth-refresh-http.test.mjs)
 - [tests/dashboard-period-http.test.mjs](../../apps/web/tests/dashboard-period-http.test.mjs)
 - [tests/dashboard-period.test.mjs](../../apps/web/tests/dashboard-period.test.mjs)
+- [tests/premium-foundation.test.mjs](../../apps/web/tests/premium-foundation.test.mjs)
 - [e2e/admin-authorization.spec.ts](../../apps/web/e2e/admin-authorization.spec.ts)
 - [e2e/admin-critical-resources.spec.ts](../../apps/web/e2e/admin-critical-resources.spec.ts)
 - [e2e/admin-finance.spec.ts](../../apps/web/e2e/admin-finance.spec.ts)

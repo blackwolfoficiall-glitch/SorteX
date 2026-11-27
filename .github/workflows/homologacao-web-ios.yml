@@ -11,6 +11,7 @@ on:
       - apps/web/**
       - apps/mobile/**
       - packages/contracts/**
+      - packages/design-tokens/**
       - services/api/**
 
 permissions:

@@ -35,6 +35,10 @@ jobs:
         working-directory: services/api
       - run: npm ci
         working-directory: apps/web
+      - name: Verify the Web route inventory and shared design tokens
+        run: |
+          node apps/web/qa/inventory-web.mjs --check
+          node --test apps/web/qa/inventory-web.test.mjs apps/web/tests/premium-foundation.test.mjs
       - run: npm run lint
         working-directory: apps/web
       - run: npx tsc --noEmit

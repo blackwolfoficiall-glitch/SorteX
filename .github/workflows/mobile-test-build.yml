@@ -2,7 +2,7 @@ name: Mobile isolated test builds
 on:
   push:
     branches: [feat/mobile-expo, homologacao/web-ios-integrada]
-    paths: ['apps/mobile/**', 'packages/contracts/**', '.github/mobile/**', '.github/workflows/mobile-test-build.yml']
+    paths: ['apps/mobile/**', 'packages/contracts/**', 'packages/design-tokens/**', '.github/mobile/**', '.github/workflows/mobile-test-build.yml']
   workflow_dispatch:
 permissions:
   contents: read
