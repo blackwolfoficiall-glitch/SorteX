@@ -25,7 +25,9 @@ describe('HealthController readiness', () => {
       expect(db.campaign.findFirst).toHaveBeenCalledWith({
         select: { id: true, drawTimeZone: true },
       });
-      expect(db.payment.findFirst).toHaveBeenCalledWith({ select: { id: true } });
+      expect(db.payment.findFirst).toHaveBeenCalledWith({
+        select: { id: true },
+      });
       expect(db.$transaction).toHaveBeenCalledTimes(1);
     } finally {
       if (previous === undefined) delete process.env.UPLOADS_DISABLED;
