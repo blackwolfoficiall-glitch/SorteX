@@ -222,6 +222,12 @@ export class DrawsController {
   ) {
     return this.draws.listMyWinners(user);
   }
+  @Get('buyer/results/my')
+  @Header('Cache-Control', 'private, no-store')
+  @Roles(UserRole.BUYER)
+  myDrawResults(@CurrentUser() user: AuthenticatedUser) {
+    return this.draws.listBuyerDrawResults(user);
+  }
   @Post('winners/:id/confirm-receipt') @Roles(UserRole.BUYER) confirmReceipt(
     @Param('id') id: string,
     @CurrentUser() user: AuthenticatedUser,

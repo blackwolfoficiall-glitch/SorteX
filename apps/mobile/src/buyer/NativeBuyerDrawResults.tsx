@@ -74,9 +74,12 @@ export function NativeBuyerDrawResults({
       {result.items.map((campaign) => (
         <View key={campaign.id} style={s.card}>
           <Text style={s.title}>{campaign.title}</Text>
+          {campaign.synthetic && (
+            <Notice message="Resultado fictício de avaliação. Não houve sorteio nem premiação real." />
+          )}
           {campaign.draws.map((draw, index) => (
             <Text key={index} style={s.text}>
-              Número apurado: {draw.winningNumber}
+              {campaign.synthetic ? "Número simulado" : "Número apurado"}: {draw.winningNumber}
             </Text>
           ))}
           {campaign.winners.map((winner) => (

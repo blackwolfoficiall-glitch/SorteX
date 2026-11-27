@@ -1,20 +1,14 @@
 import { ApiError, type SortexClient } from "../api/client";
-
-export type BuyerDrawResult = {
-  id: string;
-  title: string;
-  draws: { winningNumber: string }[];
-  winners: {
-    id: string;
-    prizeName: string;
-    publicDisplayName: string | null;
-  }[];
-};
+import {
+  parseBuyerDrawResults,
+  type BuyerDrawResult,
+} from "../../../../packages/contracts/src/buyer-draw-results";
+export type { BuyerDrawResult } from "../../../../packages/contracts/src/buyer-draw-results";
 
 type DrawResultsClient = Pick<
   SortexClient,
   "snapshot" | "request" | "publicRequest"
->;
+> & Partial<Pick<SortexClient, "activeSessionRevision">>;
 type Row = Record<string, unknown>;
 const row = (value: unknown): Row =>
   value && typeof value === "object" && !Array.isArray(value)
@@ -25,12 +19,18 @@ const text = (value: unknown): string | null =>
 const rows = (value: unknown): Row[] =>
   Array.isArray(value) ? value.map(row) : [];
 
-function assertBuyer(client: DrawResultsClient, accountId: string) {
+function assertBuyer(
+  client: DrawResultsClient,
+  accountId: string,
+  revision: number | null | undefined,
+) {
   const session = client.snapshot();
   if (
     session.status !== "signedIn" ||
     session.user?.role !== "BUYER" ||
-    session.user.id !== accountId
+    session.user.id !== accountId ||
+    (client.activeSessionRevision &&
+      (revision == null || client.activeSessionRevision() !== revision))
   )
     throw new ApiError("A conta mudou durante a consulta de resultados.", 401);
 }
@@ -39,9 +39,20 @@ export async function loadBuyerDrawResults(
   client: DrawResultsClient,
   accountId: string,
 ): Promise<BuyerDrawResult[]> {
-  assertBuyer(client, accountId);
+  const revision = client.activeSessionRevision?.();
+  assertBuyer(client, accountId, revision);
+  try {
+    const response = await client.request<unknown>("/buyer/results/my");
+    assertBuyer(client, accountId, revision);
+    return parseBuyerDrawResults(response);
+  } catch (cause) {
+    // An older QA binary has no private route. Keep only the existing
+    // published-results fallback; never reinterpret unsaved simulations.
+    if (!(cause instanceof ApiError) || cause.status !== 404) throw cause;
+  }
+  assertBuyer(client, accountId, revision);
   const purchases = await client.request<unknown>("/purchases/my");
-  assertBuyer(client, accountId);
+  assertBuyer(client, accountId, revision);
   if (!Array.isArray(purchases))
     throw new ApiError("Lista de pedidos inválida.");
 
@@ -49,11 +60,17 @@ export async function loadBuyerDrawResults(
   // organizer/campaign pairs present in this authenticated buyer's orders.
   const owned = new Map<string, Set<string>>();
   for (const purchase of rows(purchases)) {
-    if (purchase.buyerId !== accountId) continue;
+    if (purchase.buyerId !== accountId || purchase.status !== "PAID") continue;
     const campaign = row(purchase.campaign);
     const organizerId = text(campaign.organizerId);
     const campaignId = text(campaign.id);
-    if (!organizerId || !campaignId) continue;
+    if (!organizerId || !campaignId ||
+        !rows(purchase.tickets).some(
+          (ticket) => ticket.buyerId === accountId &&
+            ticket.campaignId === campaignId &&
+            ticket.purchaseId === purchase.id &&
+            ticket.status === "SOLD",
+        )) continue;
     const campaigns = owned.get(organizerId) ?? new Set<string>();
     campaigns.add(campaignId);
     owned.set(organizerId, campaigns);
@@ -76,7 +93,7 @@ export async function loadBuyerDrawResults(
       return { campaigns, published: rows(profile.campaigns) };
     }),
   );
-  assertBuyer(client, accountId);
+  assertBuyer(client, accountId, revision);
 
   const confirmed = new Map<string, BuyerDrawResult>();
   for (const { campaigns, published } of profiles) {

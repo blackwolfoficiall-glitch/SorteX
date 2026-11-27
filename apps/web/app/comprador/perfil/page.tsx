@@ -98,6 +98,7 @@ export default function Perfil() {
       </form>
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <Item href="/comprador/meus-premios" icon={<Trophy />} label="Meus prêmios" />
+        <Item href="/comprador/resultados" icon={<Trophy />} label="Resultados" />
         <Item href="/comprador/favoritos" icon={<Heart />} label="Favoritos" />
         <Item
           href="/comprador/notificacoes"

@@ -6,9 +6,10 @@ import { loadBuyerDrawResults } from "../src/buyer/draw-results";
 const organizer = "organizer-a";
 const first = "buyer-a";
 const second = "buyer-b";
-const purchase = (buyerId: string, id: string) => ({
-  buyerId,
+const purchase = (buyerId: string, id: string, status = "PAID") => ({
+  id: `order-${id}`, buyerId, status,
   campaign: { id, organizerId: organizer },
+  tickets: [{ campaignId: id, purchaseId: `order-${id}`, buyerId, status: "SOLD" }],
 });
 const campaign = (id: string, winningNumber: string, status = "CONFIRMED") => ({
   id,
@@ -48,12 +49,14 @@ function mockClient() {
     },
     snapshot: () => session(account),
     request: async <T>(path: string) => {
+      if (path === "/buyer/results/my") throw new ApiError("not found", 404);
       assert.equal(path, "/purchases/my");
       return [
         purchase(first, "campaign-a"),
         purchase(first, "campaign-a"), // Multiple orders remain one result.
         purchase(first, "pending"),
         purchase(first, "invalidated"),
+        purchase(first, "campaign-b", "REFUNDED"),
         purchase(second, "campaign-b"), // Defensively discard other buyer's row.
       ] as T;
     },
@@ -155,10 +158,60 @@ test("empty buyer orders do not request unrelated public profiles", async () => 
   const result = await loadBuyerDrawResults(
     {
       ...client,
-      request: async <T>() => [] as T,
+      request: async <T>(path: string) => {
+        assert.equal(path, "/buyer/results/my");
+        return [] as T;
+      },
     },
     first,
   );
   assert.deepEqual(result, []);
+  assert.deepEqual(client.requested, []);
+});
+
+test("private results preserve zero padding and discard fields outside the contract", async () => {
+  const client = mockClient();
+  const items = [{ id: "test-fixture", title: "[FICTÍCIO] Teste",
+    synthetic: true, draws: [{ winningNumber: "00042", hidden: true }],
+    winners: [], buyerId: "not-rendered" }];
+  const result = await loadBuyerDrawResults({
+    ...client,
+    request: async <T>(path: string) => {
+      assert.equal(path, "/buyer/results/my");
+      return items as T;
+    },
+  }, first);
+  assert.deepEqual(result, [{ id: "test-fixture", title: "[FICTÍCIO] Teste",
+    synthetic: true, draws: [{ winningNumber: "00042" }], winners: [] }]);
+  assert.deepEqual(client.requested, []);
+});
+
+test("same-account signed-in revision change discards an in-flight private response", async () => {
+  const client = mockClient();
+  let revision = 10;
+  let release!: (value: unknown) => void;
+  const pending = new Promise((resolve) => { release = resolve; });
+  const result = loadBuyerDrawResults({
+    ...client,
+    activeSessionRevision: () => revision,
+    request: async <T>() => (await pending) as T,
+  }, first);
+  revision++;
+  release([]);
+  await assert.rejects(result, /conta mudou/);
+  assert.deepEqual(client.requested, []);
+});
+
+test("malformed synthetic results and auth failures never trigger the legacy fallback", async () => {
+  const client = mockClient();
+  await assert.rejects(loadBuyerDrawResults({
+    ...client,
+    request: async <T>() => [{ id: "x", title: "Sem marca", synthetic: true,
+      winners: [], draws: [{ winningNumber: "00042" }] }] as T,
+  }, first), /inválido/);
+  await assert.rejects(loadBuyerDrawResults({
+    ...client,
+    request: async <T>() => { throw new ApiError("expirada", 401); },
+  }, first), /expirada/);
   assert.deepEqual(client.requested, []);
 });

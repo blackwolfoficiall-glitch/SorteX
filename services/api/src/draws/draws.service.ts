@@ -12,6 +12,7 @@ import {
   LotteryDrawStatus,
   LotterySourceType,
   Prisma,
+  PurchaseStatus,
   TicketStatus,
   UserRole,
   WinnerStatus,
@@ -628,6 +629,118 @@ export class DrawsService {
       where: { buyerId: user.id },
       include: { campaign: true, ticket: true },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+  async listBuyerDrawResults(user: AuthenticatedUser) {
+    if (user.role !== UserRole.BUYER) throw new ForbiddenException();
+    // Use existing isolated QA flags: no new production feature toggle or
+    // write path. The exact marked fixture is never a confirmed result.
+    const syntheticEnabled =
+      process.env.APP_ENV === 'staging' &&
+      process.env.PAYMENT_ENV === 'sandbox' &&
+      process.env.INTEGRATIONS_MODE === 'sandbox' &&
+      process.env.FEATURE_REAL_PAYMENTS === 'false' &&
+      process.env.FEATURE_REAL_DRAWS === 'false';
+    const paidTicket: Prisma.TicketWhereInput = {
+      buyerId: user.id,
+      status: TicketStatus.SOLD,
+    };
+    const paidPurchase: Prisma.PurchaseWhereInput = {
+      buyerId: user.id,
+      status: PurchaseStatus.PAID,
+      tickets: { some: paidTicket },
+    };
+    const campaigns = await this.prisma.campaign.findMany({
+      where: {
+        purchases: { some: paidPurchase },
+        OR: [
+          {
+            status: {
+              in: [
+                CampaignStatus.PUBLISHED,
+                CampaignStatus.SOLD_OUT,
+                CampaignStatus.DRAWN,
+                CampaignStatus.FINISHED,
+              ],
+            },
+            draws: { some: { status: CampaignDrawStatus.CONFIRMED } },
+          },
+          ...(syntheticEnabled
+            ? [
+                {
+                  id: 'sortex-review-v1-c3',
+                  status: CampaignStatus.CANCELLED,
+                  title: { startsWith: '[FICTÍCIO] ' },
+                  publishedAt: null,
+                  purchasesBlocked: true,
+                  draws: {
+                    some: {
+                      status: CampaignDrawStatus.SIMULATED,
+                      lotteryDrawId: null,
+                      confirmedAt: null,
+                      confirmedByUserId: null,
+                      ruleSnapshot: { path: ['syntheticReview'], equals: true },
+                      resultSnapshot: {
+                        path: ['syntheticReview'],
+                        equals: true,
+                      },
+                    },
+                  },
+                },
+              ]
+            : []),
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        purchases: {
+          where: paidPurchase,
+          select: {
+            tickets: {
+              where: paidTicket,
+              distinct: ['campaignId'],
+              select: { campaignId: true },
+            },
+          },
+        },
+        draws: { select: { status: true, winningNumber: true } },
+        winners: {
+          where: { buyerId: user.id, publicDisclosureAuthorized: true },
+          select: { id: true, prizeName: true, publicDisplayName: true },
+        },
+      },
+      orderBy: [{ drawDate: 'desc' }, { id: 'asc' }],
+    });
+    return campaigns.flatMap((campaign) => {
+      if (
+        !campaign.purchases.some(({ tickets }) =>
+          tickets.some(({ campaignId }) => campaignId === campaign.id),
+        )
+      )
+        return [];
+      const isSynthetic = campaign.status === CampaignStatus.CANCELLED;
+      const draw = campaign.draws.find(
+        (item) =>
+          item.status ===
+            (isSynthetic
+              ? CampaignDrawStatus.SIMULATED
+              : CampaignDrawStatus.CONFIRMED) &&
+          /^\d{1,12}$/.test(item.winningNumber) &&
+          !/[^0-9]/.test(item.winningNumber),
+      );
+      return draw
+        ? [
+            {
+              id: campaign.id,
+              title: campaign.title,
+              ...(isSynthetic ? { synthetic: true } : {}),
+              draws: [{ winningNumber: draw.winningNumber }],
+              winners: isSynthetic ? [] : campaign.winners,
+            },
+          ]
+        : [];
     });
   }
   async updateWinner(

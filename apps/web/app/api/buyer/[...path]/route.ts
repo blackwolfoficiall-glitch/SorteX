@@ -12,7 +12,7 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
   return jsonFromUpstream(
     await readJson(response),
     response.status,
-    path[0] === 'notifications' || path[0] === 'favorites'
+    path[0] === 'notifications' || path[0] === 'favorites' || path[0] === 'results'
       ? { 'Cache-Control': 'private, no-store' } : undefined,
   );
 }
