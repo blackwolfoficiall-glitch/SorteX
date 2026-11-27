@@ -343,3 +343,58 @@
   .dashboard *::before,
   .dashboard *::after { animation-duration: 0s; transition-duration: 0s; }
 }
+
+/* Keep the desktop ticket composition within the first mobile viewport. The
+   navigation and its safe-area spacing are owned by the organizer shell. */
+@media (max-width: 37.49rem) {
+  .dashboard { gap: .68rem; padding: .56rem; }
+  .topGrid { gap: .7rem; }
+
+  .hero { display: grid; gap: .48rem; padding: .14rem .05rem .07rem; }
+  .heroIdentity { gap: .54rem; align-items: center; }
+  .avatar { inline-size: 2.35rem; block-size: 2.35rem; border-radius: .76rem; font-size: .86rem; }
+  .hero .eyebrow, .report .eyebrow { margin-block-end: .12rem; font-size: .61rem; }
+  .hero .title { font-size: clamp(1.21rem, 4.6vw, 1.47rem); line-height: 1.12; }
+  .hero .muted, .report .muted { margin-block-start: .19rem; font-size: .73rem; line-height: 1.33; }
+  .hero .primary { justify-self: start; gap: .36rem; padding: .32rem .58rem; font-size: .74rem; }
+  .hero .primary svg { inline-size: 1rem; block-size: 1rem; flex: none; }
+
+  .report { gap: .51rem; padding: .64rem; }
+  .report .panelHeading { gap: .42rem; }
+  .report .panelHeading h2 { font-size: clamp(1rem, 3.9vw, 1.25rem); line-height: 1.12; }
+  .report .panelIcon { inline-size: 1.9rem; block-size: 1.9rem; border-radius: .68rem; }
+  .report .panelIcon svg { inline-size: 1.05rem; block-size: 1.05rem; }
+  .report .filters { gap: .3rem; }
+  .report .filter { gap: .2rem; min-inline-size: 0; padding: .3rem .4rem; font-size: .72rem; white-space: nowrap; }
+  .report .dates { gap: .43rem; }
+  .report .dateLabel { flex: 1 1 6.6rem; }
+  .report .dateInput { inline-size: 100%; min-inline-size: 0; }
+
+  .report .ticket { padding: .72rem; }
+  .report .ticketTitle { gap: .16rem .55rem; }
+  .report .ticketTitle > span { gap: .35rem; font-size: .77rem; line-height: 1.32; }
+  .report .ticketTitle p { font-size: .67rem; line-height: 1.32; }
+  .report .ticketAmount { margin-block: .26rem .4rem; font-size: clamp(1.92rem, 7.8vw, 2.62rem); line-height: 1.08; }
+  .report .chart { block-size: 5.4rem; }
+  .report .periodStats { gap: .37rem; }
+  .report .smallMetric { padding: .42rem; }
+  .report .smallMetric dt { font-size: .7rem; }
+  .report .smallMetric dd { margin-block-start: .1rem; font-size: .96rem; }
+}
+
+@media (min-width: 23.75rem) and (max-width: 37.49rem) {
+  .hero { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .hero .primary { justify-self: end; }
+  .report .filters {
+    display: grid;
+    grid-template-columns: minmax(2.05rem, .65fr) minmax(2.5rem, .89fr)
+      minmax(2.85rem, .95fr) minmax(3.4rem, 1.15fr) minmax(4.85rem, 1.57fr);
+  }
+  .report .filter { padding-inline: .2rem; }
+}
+
+@media (max-width: 22.49rem) {
+  .report .filters { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .report .filter { grid-column: span 2; }
+  .report .filter:nth-last-child(-n + 2) { grid-column: span 3; }
+}
