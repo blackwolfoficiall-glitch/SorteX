@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
-import { createAdvisorProvider, GEMINI_FREE_MODEL } from './advisor-provider';
+import {
+  AdvisorProviderRateLimitError,
+  createAdvisorProvider,
+  GEMINI_FREE_MODEL,
+} from './advisor-provider';
 
 const mockKey = 'AQ.example-not-a-real-key';
 const utc = '2026-11-27T04:00:00.000Z';
@@ -230,18 +234,55 @@ describe('Gemini free-only provider registry (all transport substituted)', () =>
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('handles quota and network errors without retries, provider payloads, or switching to OpenAI', async () => {
-    const spy = jest.spyOn(globalThis, 'fetch');
-    spy.mockResolvedValueOnce(
-      Response.json({ detail: 'do not expose credential' }, { status: 429 }),
-    );
-    await expect(getRequest().generate()).rejects.toThrow(
-      /^Advisor provider unavailable$/,
-    );
-    spy.mockRejectedValueOnce(new Error('secret response body'));
-    await expect(getRequest().generate()).rejects.toThrow(
-      /^Advisor provider unavailable$/,
-    );
+  it.each([
+    [
+      'gemini',
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent',
+    ],
+    ['openai', 'https://api.openai.com/v1/responses'],
+  ])(
+    'classifies %s HTTP 429 without consuming raw error content or retrying',
+    async (selected, expectedUrl) => {
+      const response = Response.json(
+        { detail: 'sensitive backend error body' },
+        {
+          status: 429,
+          statusText: 'sensitive upstream status text',
+          headers: { 'Retry-After': '7331' },
+        },
+      );
+      const parseSpy = jest.spyOn(response, 'json');
+      const textSpy = jest.spyOn(response, 'text');
+      const spy = jest.spyOn(globalThis, 'fetch').mockResolvedValue(response);
+      const result = getRequest({
+        ...approved,
+        SORTEX_ADVISOR_PROVIDER: selected,
+      }).generate();
+      await expect(result).rejects.toBeInstanceOf(
+        AdvisorProviderRateLimitError,
+      );
+      await expect(result).rejects.toThrow(
+        /^Advisor provider temporarily rate limited$/,
+      );
+      expect(parseSpy).not.toHaveBeenCalled();
+      expect(textSpy).not.toHaveBeenCalled();
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0][0]).toBe(expectedUrl);
+    },
+  );
+
+  it('does not infer quota from errors or anything outside HTTP 429', async () => {
+    const spy = jest
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(new Error('429 secret response body'))
+      .mockResolvedValueOnce(Response.json({ error: '429' }, { status: 403 }));
+    for (let i = 0; i < 2; i++) {
+      const failed = getRequest().generate();
+      await expect(failed).rejects.not.toBeInstanceOf(
+        AdvisorProviderRateLimitError,
+      );
+      await expect(failed).rejects.toThrow(/^Advisor provider unavailable$/);
+    }
     expect(spy).toHaveBeenCalledTimes(2);
     expect(
       spy.mock.calls

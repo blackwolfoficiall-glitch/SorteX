@@ -327,6 +327,12 @@ function Chat({ pilotAvailable }: { pilotAvailable: boolean }) {
                         ? "Resposta gerada pela OpenAI"
                         : "Resposta de regras locais, sem IA externa"}
                   </p>
+                  {m.answer.mode === "DETERMINISTIC" &&
+                    m.answer.fallbackReason === "PROVIDER_RATE_LIMIT" && (
+                      <p className="mt-2 text-sm text-zinc-600" role="status">
+                        O provedor externo atingiu um limite de uso. Esta resposta foi gerada apenas pelas regras locais.
+                      </p>
+                    )}
                 </>
               )}
             </div>

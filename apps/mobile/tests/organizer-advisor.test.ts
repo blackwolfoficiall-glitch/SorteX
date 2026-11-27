@@ -26,3 +26,18 @@ test("does not advertise an unconfigured or malformed API as AI", async () => {
   assert.equal(await organizerAdvisorAvailable(client), false);
   await assert.rejects(askOrganizerAdvisor(client, advisorPrompts[0][1], false), /indisponível/);
 });
+
+
+test("labels only the fixed upstream quota fallback when the answer is local", async () => {
+  const responses = [
+    { mode: "DETERMINISTIC", fallbackReason: "PROVIDER_RATE_LIMIT" },
+    { mode: "OPENAI", fallbackReason: "PROVIDER_RATE_LIMIT" },
+    { mode: "DETERMINISTIC", fallbackReason: "Private upstream text" },
+  ];
+  for (const [index, response] of responses.entries()) {
+    const client = { async request<T>() { return { answer: "Consulta de teste", ...response } as T; } };
+    const answer = await askOrganizerAdvisor(client, advisorPrompts[0][1], true);
+    assert.equal(answer.providerLimited, index === 0);
+    assert.equal(JSON.stringify(answer).includes("Private upstream text"), false);
+  }
+});

@@ -298,6 +298,7 @@ export type AdvisorAnswer = {
   suggestedQuestions: string[];
   actions: AdvisorAction[];
   mode: "OPENAI" | "GEMINI" | "DETERMINISTIC";
+  fallbackReason?: "PROVIDER_RATE_LIMIT";
 };
 export const getAdvisor = () =>
   authRequest<AdvisorSnapshot>("/api/platform/ai-sortex/advisor", {

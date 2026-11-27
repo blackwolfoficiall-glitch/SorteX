@@ -3,6 +3,7 @@ import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import {
   createAdvisorProvider,
   ADVISOR_MAX_OUTPUT_TOKENS,
+  AdvisorProviderRateLimitError,
 } from './advisor-provider';
 import { AiUsageQuotaService } from './ai-usage-quota.service';
 
@@ -97,8 +98,14 @@ export class AdvisorModelService {
     try {
       const result = await request.generate();
       return { answer: result.answer, mode: provider.mode };
-    } catch {
-      // Preserve local-only mode on upstream failure, not AI success.
+    } catch (error) {
+      // Quota reservation above is intentionally not rolled back. Do not
+      // retry, select a different provider or reveal upstream error details.
+      if (error instanceof AdvisorProviderRateLimitError)
+        return {
+          mode: 'DETERMINISTIC' as const,
+          fallbackReason: 'PROVIDER_RATE_LIMIT' as const,
+        };
       return null;
     }
   }

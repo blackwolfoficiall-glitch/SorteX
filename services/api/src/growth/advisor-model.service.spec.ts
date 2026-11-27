@@ -187,7 +187,7 @@ describe('Advisor model pilot boundary without external calls', () => {
             ],
           }),
         ),
-      () => Promise.resolve(new Response('external response', { status: 429 })),
+      () => Promise.resolve(new Response('external response', { status: 503 })),
       () => Promise.resolve(new Response('not JSON')),
       () => Promise.reject(new Error('timeout')),
     ];
@@ -198,6 +198,26 @@ describe('Advisor model pilot boundary without external calls', () => {
       ).resolves.toBeNull();
     }
     expect(spy).toHaveBeenCalledTimes(sample.length);
+  });
+
+  it('returns only a fixed local reason on provider rate limiting, with no reservation refund or retry', async () => {
+    const spy = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(
+        Response.json({ detail: 'do not reveal details' }, { status: 429 }),
+      );
+    const { reserve, service } = quota();
+    await expect(
+      service.analyze(organizer, 'OVERVIEW', mockSummary),
+    ).resolves.toEqual({
+      mode: 'DETERMINISTIC',
+      fallbackReason: 'PROVIDER_RATE_LIMIT',
+    });
+    expect(reserve).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(reserve.mock.invocationCallOrder[0]).toBeLessThan(
+      spy.mock.invocationCallOrder[0],
+    );
   });
 
   it('never reaches a provider before the cross-worker reservation; stops on quota failure', async () => {

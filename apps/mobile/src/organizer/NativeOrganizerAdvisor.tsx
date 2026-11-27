@@ -82,6 +82,11 @@ export function NativeOrganizerAdvisor() {
         <View style={{ gap: 8, borderWidth: 1, borderColor: theme.line, borderRadius: 20, padding: 16, backgroundColor: theme.surface }}>
           <Text accessibilityRole="header" style={[premiumTypography.label, { color: theme.accent }]}>{answer.source}</Text>
           <Text style={[premiumTypography.body, { color: theme.text }]}>{answer.answer}</Text>
+          {answer.providerLimited && (
+            <Text accessibilityLiveRegion="polite" style={[premiumTypography.body, { color: theme.muted }]}>
+              O provedor externo atingiu um limite de uso. Esta resposta usou apenas regras locais.
+            </Text>
+          )}
         </View>
       )}
     </PremiumPage>

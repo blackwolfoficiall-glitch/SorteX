@@ -26,7 +26,12 @@ type Outbound = {
   owner: string;
   beforeResponse: Quota[];
 };
-type ChatBody = { mode?: string; answer?: string; code?: string };
+type ChatBody = {
+  mode?: string;
+  answer?: string;
+  code?: string;
+  fallbackReason?: string;
+};
 type Scope = { id: string; email: string; token: string };
 
 function chatBody(response: HttpResponse): ChatBody {
@@ -112,7 +117,7 @@ isolated(
         if (responseStatus !== 200)
           return Response.json(
             { detail: 'sensitive provider failure detail' },
-            { status: responseStatus },
+            { status: responseStatus, headers: { 'Retry-After': '7331' } },
           );
         return Response.json({
           candidates: [
@@ -410,16 +415,24 @@ isolated(
       });
     }
 
-    function expectDeterministic(reply: HttpResponse) {
+    function expectDeterministic(
+      reply: HttpResponse,
+      reason?: 'PROVIDER_RATE_LIMIT',
+    ) {
       expect(reply.status).toBe(201);
-      expect(chatBody(reply).mode).toBe('DETERMINISTIC');
+      expect(chatBody(reply)).toMatchObject({ mode: 'DETERMINISTIC' });
+      expect(chatBody(reply).fallbackReason).toBe(reason);
+      expect(chatBody(reply).code).toBeUndefined();
       expect(reply.text).not.toContain('sensitive provider failure detail');
+      expect(reply.text).not.toContain(fixtureKey);
+      expect(reply.headers['retry-after']).toBeUndefined();
     }
 
     function expectQuota(reply: HttpResponse) {
       expect(reply.status).toBe(429);
       expect(chatBody(reply).code).toBe('AI_QUOTA_LIMIT');
       expect(chatBody(reply).mode).toBeUndefined();
+      expect(chatBody(reply).fallbackReason).toBeUndefined();
     }
 
     it('authenticates, isolates tenants, validates opt-in and never sends arbitrary questions; commits quota before egress', async () => {
@@ -527,6 +540,7 @@ isolated(
       responseStatus = 429;
       expectDeterministic(
         await chat(first.token).send({ question, allowAi: true }),
+        'PROVIDER_RATE_LIMIT',
       );
       responseStatus = 200;
       expect(exchanges).toHaveLength(5);

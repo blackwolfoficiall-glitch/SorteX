@@ -12,7 +12,7 @@
 
 ## Consumo, privacidade e validação
 
-A API prepara corpo JSON limitado e reserva consumo de forma atômica no PostgreSQL por data UTC, tanto para o organizador quanto para a operação inteira. Uma reserva já efetuada não é devolvida por indisponibilidade externa. Se a reserva falhar, não há chamado ao provedor. A quota usa unidades conservadoras e não representa uma medição de cobrança. Tornar a tabela disponível é pré-requisito de implantação.
+A API prepara corpo JSON limitado e reserva consumo de forma atômica no PostgreSQL por data UTC, tanto para o organizador quanto para a operação inteira. Uma reserva já efetuada não é devolvida por indisponibilidade externa. Se a reserva falhar, não há chamado ao provedor. A quota usa unidades conservadoras e não representa uma medição de cobrança. Tornar a tabela disponível é pré-requisito de implantação. Ao atingir o limite local, a API retorna HTTP 429 com código `AI_QUOTA_LIMIT` e a consulta não chega ao provedor. Se o provedor selecionado retornar HTTP 429 após a reserva, a API entrega o motor local explicitamente marcado `mode: DETERMINISTIC` com `fallbackReason: PROVIDER_RATE_LIMIT`, sem repassar detalhes ou prazo informado pelo provedor. Não há reembolso de reserva, repetição automática nem troca de provedor.
 
 Conferir no console o projeto isolado, plano, créditos autorizados, política de retenção e restrições da chave antes de habilitar. Não assumir custo zero por haver assinatura ChatGPT, Gemini ou Claude. Defesa de transporte, autenticação, origem e quota são verificáveis localmente com PostgreSQL descartável e apenas o transporte substituído, sem comprovar acesso ao provedor, faturamento ou resposta de modelo real.
 

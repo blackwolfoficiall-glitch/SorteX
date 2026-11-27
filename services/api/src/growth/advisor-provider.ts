@@ -20,6 +20,13 @@ const ANSWER_SCHEMA = {
   required: ['answer'],
 };
 
+/** Internal classification for the selected provider's actual HTTP 429 only. */
+export class AdvisorProviderRateLimitError extends Error {
+  constructor() {
+    super('Advisor provider temporarily rate limited');
+  }
+}
+
 type Usage = { inputTokens: number; outputTokens: number };
 type GeneratedAdvice = { answer: string; usage: Usage | null };
 export type PreparedAdvisorRequest = {
@@ -172,7 +179,13 @@ function prepare(
           headers: { ...headers, 'Content-Type': 'application/json' },
           body,
         });
-        if (!response.ok) throw new Error('provider rejected request');
+        if (!response.ok) {
+          // Do not parse error bodies or copy Retry-After, even on 429.
+          void response.body?.cancel().catch(() => undefined);
+          if (response.status === 429)
+            throw new AdvisorProviderRateLimitError();
+          throw new Error('provider rejected request');
+        }
         const raw = (await response.json()) as unknown;
         const { answer, usage } = decode(raw);
         if (
@@ -181,7 +194,8 @@ function prepare(
         )
           throw new Error('provider reported usage over request budget');
         return { answer, usage };
-      } catch {
+      } catch (error) {
+        if (error instanceof AdvisorProviderRateLimitError) throw error;
         // Never expose provider body, status text, URL, response ID or an error cause.
         throw new Error('Advisor provider unavailable');
       }

@@ -22,10 +22,13 @@ export async function askOrganizerAdvisor(
   const result = await client.request<{
     answer?: unknown;
     mode?: unknown;
+    fallbackReason?: unknown;
   }>("/ai-sortex/advisor/chat", "POST", { question: prompt, allowAi });
   if (!result || typeof result.answer !== "string" || !result.answer.trim()
       || result.answer.length > 1600) throw new Error("Resposta indisponível.");
   const source = result.mode === "GEMINI" ? "Google Gemini"
     : result.mode === "OPENAI" ? "OpenAI" : "Regras locais, sem IA externa";
-  return { answer: result.answer, source };
+  const providerLimited = result.mode === "DETERMINISTIC" &&
+    result.fallbackReason === "PROVIDER_RATE_LIMIT";
+  return { answer: result.answer, source, providerLimited };
 }
