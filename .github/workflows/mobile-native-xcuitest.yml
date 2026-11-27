@@ -123,6 +123,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sortex-ios-xcuitest-failure-${{ github.sha }}
-          path: ${{ runner.temp }}/sortex-xcuitest-failure.txt
+          path: |
+            ${{ runner.temp }}/sortex-xcuitest-failure.txt
+            ${{ runner.temp }}/sortex-xcuitest-fixture-failure.txt
           if-no-files-found: ignore
           retention-days: 1

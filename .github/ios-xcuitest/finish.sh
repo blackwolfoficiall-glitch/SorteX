@@ -4,7 +4,14 @@ set -euo pipefail
 umask 077
 base="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$base/../.." && pwd)"
-bash "$root/.github/native-ui/with-fixture.sh" bash "$base/run.sh"
+if bash "$root/.github/native-ui/with-fixture.sh" bash "$base/run.sh"; then
+  :
+else
+  result=$?
+  # Preserve the target's failed result regardless of optional diagnostics.
+  bash "$base/fixture-failure.sh" >/dev/null 2>&1 || true
+  exit "$result"
+fi
 [[ "${GITHUB_SHA:-}" =~ ^[0-9a-f]{40}$ && -d "${RUNNER_TEMP:-}" ]]
 IFS= read -r stage < "$RUNNER_TEMP/sortex-native-ui-checkpoint"
 [[ "$stage" == server-verification-complete ]]

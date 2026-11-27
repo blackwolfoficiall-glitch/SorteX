@@ -64,3 +64,9 @@ detalhe, o prêmio e o regulamento. Quando o caso falha, as leituras da tela
 inicial e da campanha sintética recebem classificações independentes (sem
 URL, parâmetros, contagem, corpo ou status exato). O diagnóstico nunca
 altera a validação do cenário completo nem substitui a consulta no aplicativo.
+
+Se o fixture ou o lançamento pararem antes de gerar um resultado do Xcode,
+o artefato de falha pode conter apenas o último marco fixo e a próxima
+etapa não registrada. Ele não retém logs do fixture e não prova a causa de
+uma falha nessa transição. A aprovação continua condicionada às verificações
+do aplicativo e da API/PostgreSQL, na ordem exigida.
