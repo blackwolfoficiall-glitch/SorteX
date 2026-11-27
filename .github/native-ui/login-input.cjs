@@ -8,19 +8,20 @@ const classifications = new Set([
   'email-mismatch',
   'password-mismatch',
   'both-mismatch',
-  'missing-field',
+  'missing-email',
+  'missing-password',
+  'missing-both',
 ]);
 
 const digest = (value) => createHash('sha256').update(value).digest();
 
 function classifyInput(body, expectedPassword) {
-  if (
-    !/^[0-9a-f]{48}$/.test(expectedPassword ?? '') ||
-    typeof body?.email !== 'string' ||
-    typeof body?.password !== 'string' ||
-    !body.email ||
-    !body.password
-  ) return 'missing-field';
+  if (!/^[0-9a-f]{48}$/.test(expectedPassword ?? '')) return 'unknown';
+  const hasEmail = typeof body?.email === 'string' && body.email.trim() !== '';
+  const hasPassword = typeof body?.password === 'string' && body.password !== '';
+  if (!hasEmail && !hasPassword) return 'missing-both';
+  if (!hasEmail) return 'missing-email';
+  if (!hasPassword) return 'missing-password';
   const emailMatch = body.email.toLowerCase() === buyerEmail;
   const passwordMatch = timingSafeEqual(digest(body.password), digest(expectedPassword));
   if (emailMatch && passwordMatch) return 'matches';

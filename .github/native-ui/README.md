@@ -57,9 +57,11 @@ do CLI, classe HTTP da última resposta para `POST /auth/login` e se os
 campos do pedido conferem com a fixture. O observador só existe na API
 descartável, não muda a requisição nem a autenticação e nunca registra
 valores, tamanhos, hashes ou identificadores dos campos. A interface
-confirma o valor do e-mail sintético antes de preencher a senha, sem ler
-o campo seguro. `not-seen` indica que não há registro correspondente, não
-prova que o app não enviou a solicitação. O login usa o app já aberto e verificado, sem
+confirma o e-mail sintético antes e depois de preencher a senha e aguarda
+o botão de envio habilitado pelo estado do formulário, sem ler o campo
+seguro. As categorias de campo ausente distinguem e-mail, senha ou ambos.
+`not-seen` indica que não há registro correspondente, não prova que o app
+não enviou a solicitação. O login usa o app já aberto e verificado, sem
 pedir novo lançamento ao Maestro. O resumo também funciona antes de iniciar
 o cenário, inclusive se o checkout falhar. A saída bruta do CLI fica em
 scratch privado somente quando necessária à classificação e não é publicada.

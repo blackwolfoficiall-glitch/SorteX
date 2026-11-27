@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { isLoginReady } from "../src/auth/login-input";
 import { SortexClient, type Vault } from "../src/api/client";
 import { QA_API, TEST_API, validateApiUrl } from "../src/api/config";
 import { BuyerSandboxPix } from "../src/buyer/sandbox-pix";
@@ -46,6 +47,16 @@ function setup(
     stored: () => value,
   };
 }
+test("login waits for both controlled values without trimming the password", () => {
+  const email = "tester@sortex.example.invalid";
+  assert.equal(isLoginReady("", ""), false);
+  assert.equal(isLoginReady("  ", "12345678"), false);
+  assert.equal(isLoginReady(email, ""), false);
+  assert.equal(isLoginReady(email, "1234567"), false);
+  assert.equal(isLoginReady(email, "🔒123456"), false);
+  assert.equal(isLoginReady(email, "🔒1234567"), true);
+  assert.equal(isLoginReady(email, " 123456 "), true);
+});
 test("API principal, credenciais e proxy arbitrário recusados", () => {
   assert.equal(validateApiUrl(TEST_API), TEST_API);
   assert.equal(validateApiUrl(QA_API + "/"), QA_API);

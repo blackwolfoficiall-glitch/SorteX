@@ -182,7 +182,8 @@ jobs:
               esac
               case "$input" in
                 login_input=matches|login_input=email-mismatch|login_input=password-mismatch|\
-                login_input=both-mismatch|login_input=missing-field|login_input=not-seen|login_input=unknown)
+                login_input=both-mismatch|login_input=missing-email|login_input=missing-password|\
+                login_input=missing-both|login_input=not-seen|login_input=unknown)
                   printf '%s\n' "$input" ;;
               esac
             fi

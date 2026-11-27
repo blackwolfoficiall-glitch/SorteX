@@ -16,6 +16,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { recoveryTokenFromUrl } from "./src/auth/callback";
+import { isLoginReady } from "./src/auth/login-input";
 import { StatusBar } from "expo-status-bar";
 import { API_URL, client } from "./src/auth/runtime";
 import {
@@ -123,6 +124,7 @@ function Login({ navigation }: any) {
     [password, setPassword] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const ready = isLoginReady(email, password);
   return (
     <Page>
       <Text style={s.brand}>SorteX</Text>
@@ -156,7 +158,9 @@ function Login({ navigation }: any) {
         title="Entrar com e-mail"
         testID="sortex-login-submit"
         busy={busy}
+        disabled={!ready}
         onPress={() => {
+          if (!ready || busy) return;
           setBusy(true);
           setError("");
           client

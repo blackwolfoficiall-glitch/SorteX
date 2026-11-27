@@ -13,14 +13,26 @@ name: Login nativo (PostgreSQL local)
     text: '^sortex-ios-ui@example\.test$'
 - tapOn:
     id: sortex-login-password
-- inputText: ${BUYER_PASSWORD}
+# The XCTest driver sends each command's first character slowly. Split an
+# initial keystroke from the remaining input without refocusing the secure field.
+- inputText: ${BUYER_PASSWORD.slice(0, 1)}
+- inputText: ${BUYER_PASSWORD.slice(1)}
 - hideKeyboard
+- assertVisible:
+    id: sortex-login-email
+    text: '^sortex-ios-ui@example\.test$'
 - scrollUntilVisible:
     element:
       id: sortex-login-submit
     direction: DOWN
+- extendedWaitUntil:
+    visible:
+      id: sortex-login-submit
+      enabled: true
+    timeout: 5000
 - tapOn:
     id: sortex-login-submit
+    enabled: true
 - extendedWaitUntil:
     visible: "Olá, CompradorIOS"
     timeout: 45000

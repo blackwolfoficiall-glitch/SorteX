@@ -182,7 +182,9 @@ test('disposable login observer preserves request, only handles exact route, and
     [{ email: otherSecrets, password: credential }, 'email-mismatch', 401],
     [{ email, password: otherSecrets }, 'password-mismatch', 401],
     [{ email: otherSecrets, password: otherSecrets }, 'both-mismatch', 401],
-    [{ email, password: '' }, 'missing-field', 400],
+    [{ email, password: '' }, 'missing-password', 400],
+    [{ password: credential }, 'missing-email', 400],
+    [{ email: ' ' }, 'missing-both', 400],
   ]) {
     const req = Object.freeze({ method: 'POST', originalUrl: '/auth/login', body: Object.freeze(body) });
     const res = new EventEmitter();
@@ -218,6 +220,10 @@ test('the published phase report revalidates login categories and never forwards
   };
   const base = `sha=${sha}\nfailed_step=scenario\nlast_completed=startup-controls-verified\n`;
   assert.equal(run(`login_cli=keyboard-dismiss-failed\nlogin_api=not-seen\nlogin_input=not-seen\n${otherSecrets}\n`), base + 'login_cli=keyboard-dismiss-failed\nlogin_api=not-seen\nlogin_input=not-seen\n');
+  for (const input of ['missing-email', 'missing-password', 'missing-both']) {
+    const labels = `login_cli=signed-in-view\nlogin_api=400-validation\nlogin_input=${input}\n`;
+    assert.equal(run(labels), base + labels);
+  }
   assert.equal(run(`login_cli=${otherSecrets}\nlogin_api=${credential}\n`), base);
 });
 
