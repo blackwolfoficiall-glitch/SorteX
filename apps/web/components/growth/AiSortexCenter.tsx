@@ -1,173 +1,223 @@
 "use client";
-/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
+/* eslint-disable react-hooks/set-state-in-effect */
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   BarChart3,
-  Bot,
   Calculator,
   ChevronRight,
   LoaderCircle,
   MessageCircle,
   RefreshCw,
-  Send,
   Sparkles,
   WandSparkles,
 } from "lucide-react";
 import {
-  askAdvisor,
   generateAdvisorMessage,
   getAdvisor,
   simulateAdvisor,
-  type AdvisorAction,
-  type AdvisorAnswer,
   type AdvisorSnapshot,
 } from "@/lib/growth/client";
+import { useAuthorizedUser } from "@/components/auth/RoleGate";
+import PremiumScope from "@/components/premium/PremiumScope";
+import AdvisorConversation from "./AdvisorConversation";
+import { AdvisorConfirmAction } from "./AdvisorConfirmAction";
+import ui from "./advisor-premium.module.css";
+
 const money = new Intl.NumberFormat("pt-BR", {
   style: "currency",
   currency: "BRL",
 });
 type Tab = "resumo" | "chat" | "simulacoes" | "mensagens";
 
-const analyses: Record<string, { title: string; description: string; tab: Tab }> = {
+const analyses: Record<
+  string,
+  { title: string; description: string; tab: Tab }
+> = {
   "sales-time": {
     title: "Melhor horário para vender",
-    description: "A análise usa o histórico real de vendas. Quando ainda não houver amostra suficiente, mostramos exatamente quais dados faltam.",
+    description:
+      "A análise usa o histórico real de vendas. Quando ainda não houver amostra suficiente, mostramos exatamente quais dados faltam.",
     tab: "resumo",
   },
   "underperforming-campaigns": {
     title: "Campanhas abaixo da média",
-    description: "Compare alertas e recomendações calculados a partir do desempenho atual das suas campanhas.",
+    description:
+      "Compare alertas e recomendações calculados a partir do desempenho atual das suas campanhas.",
     tab: "resumo",
   },
   recommendations: {
     title: "Sugestões automáticas",
-    description: "Prioridades e próximas ações produzidas com os dados atuais da conta, sempre sujeitas à sua confirmação.",
+    description:
+      "Prioridades e próximas ações produzidas com os dados atuais da conta, sempre sujeitas à sua confirmação.",
     tab: "resumo",
   },
   "revenue-forecast": {
     title: "Previsão de faturamento",
-    description: "Simule cenários com premissas editáveis. Projeções são estimativas, não garantias.",
+    description:
+      "Simule cenários com premissas editáveis. Projeções são estimativas, não garantias.",
     tab: "simulacoes",
   },
 };
 
+const tabs = [
+  { id: "resumo", label: "Resumo", icon: BarChart3 },
+  { id: "chat", label: "Conversar", icon: MessageCircle },
+  { id: "simulacoes", label: "Simulações", icon: Calculator },
+  { id: "mensagens", label: "Rascunhos", icon: WandSparkles },
+] as const;
+
+function liveError(cause: unknown) {
+  return cause instanceof Error
+    ? cause.message
+    : "Não foi possível concluir. Tente novamente.";
+}
+
 export default function AiSortexCenter() {
+  const organizer = useAuthorizedUser();
+  // Account changes remount the full view, including all unsaved text.
+  return organizer ? <AdvisorCenterView key={organizer.id} /> : null;
+}
+
+function AdvisorCenterView() {
   const searchParams = useSearchParams();
-  const analysis = analyses[searchParams.get("analysis") || ""];
-  const [data, setData] = useState<AdvisorSnapshot | null>(null),
-    [tab, setTab] = useState<Tab>(analysis?.tab || "resumo"),
-    [loading, setLoading] = useState(true),
-    [error, setError] = useState("");
-  async function load() {
+  const analysisId = searchParams.get("analysis") ?? "";
+  const analysis = Object.hasOwn(analyses, analysisId)
+    ? analyses[analysisId]
+    : undefined;
+  const requested = searchParams.get("tab");
+  const tab =
+    tabs.find(({ id }) => id === requested)?.id ?? analysis?.tab ?? "resumo";
+  const [data, setData] = useState<AdvisorSnapshot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  async function load(isCurrent = () => true) {
     setLoading(true);
     setError("");
     try {
-      setData(await getAdvisor());
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Não foi possível carregar a análise.",
-      );
+      const snapshot = await getAdvisor();
+      if (isCurrent()) setData(snapshot);
+    } catch {
+      if (isCurrent())
+        setError("Não foi possível carregar os indicadores desta conta.");
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
   }
   useEffect(() => {
-    void load();
+    let current = true;
+    void load(() => current);
+    return () => {
+      current = false;
+    };
   }, []);
-  if (loading)
-    return (
-      <div className="grid min-h-[60vh] place-items-center">
-        <div className="text-center">
-          <LoaderCircle className="mx-auto animate-spin text-violet-600" />
-          <p className="mt-3 text-sm text-zinc-500">Analisando sua conta...</p>
-        </div>
-      </div>
-    );
-  if (error || !data)
-    return (
-      <div className="mx-auto max-w-xl rounded-3xl border bg-white p-8 text-center">
-        <AlertTriangle className="mx-auto text-red-500" />
-        <h1 className="mt-3 text-xl font-black">
-          Não foi possível carregar o SorteX Advisor
-        </h1>
-        <p className="mt-2 text-sm text-zinc-500">{error}</p>
-        <button
-          onClick={() => void load()}
-          className="mt-5 rounded-xl bg-violet-600 px-5 py-3 font-bold text-white"
-        >
-          Tentar novamente
-        </button>
-      </div>
-    );
+
   return (
-    <div className="mx-auto w-full max-w-[1500px] overflow-x-hidden pb-12">
-      <header className="rounded-3xl bg-gradient-to-br from-violet-950 via-violet-800 to-fuchsia-700 p-5 text-white shadow-xl md:p-8">
-        <div className="flex flex-col justify-between gap-5 md:flex-row md:items-center">
+    <PremiumScope className={ui.root}>
+      <header className={`sx-premium-ticket ${ui.hero}`}>
+        <div>
+          <p className={ui.heroTag}>
+            <Sparkles size={17} aria-hidden="true" /> SorteX Advisor
+          </p>
+          <h1 className="sx-premium-title">
+            {data ? `Olá, ${data.organizerName}.` : "Copilot de operações"}
+          </h1>
+          <p>
+            Desempenho, oportunidades e próximos passos em um só lugar. Nenhuma
+            ação é executada sem sua confirmação.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void load()}
+          disabled={loading}
+          className={`sx-premium-button ${ui.heroAction}`}
+        >
+          <RefreshCw size={17} aria-hidden="true" /> Atualizar análise
+        </button>
+      </header>
+      {loading && !data && (
+        <div className={`sx-premium-surface ${ui.load}`} role="status">
+          <LoaderCircle className={ui.spinner} aria-hidden="true" /> Carregando
+          os indicadores desta conta…
+        </div>
+      )}
+      {error && (
+        <div className={`sx-premium-surface ${ui.loadError}`} role="alert">
+          <AlertTriangle size={21} aria-hidden="true" />
           <div>
-            <p className="flex items-center gap-2 text-sm font-bold text-violet-200">
-              <Sparkles size={16} />
-              SorteX Advisor
-            </p>
-            <h1 className="mt-2 text-3xl font-black md:text-4xl">
-              Olá, {data.organizerName}.
-            </h1>
-            <p className="mt-2 max-w-2xl text-violet-100">
-              Analisei suas campanhas e organizei as oportunidades mais
-              importantes para hoje. Nenhuma ação será executada sem sua
-              confirmação.
-            </p>
+            <strong>{error}</strong>
+            {data && <p>Os dados abaixo são da última consulta concluída.</p>}
           </div>
           <button
+            type="button"
             onClick={() => void load()}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-white/15 px-4 font-bold backdrop-blur hover:bg-white/25"
+            className="sx-premium-button"
           >
-            <RefreshCw size={17} />
-            Atualizar análise
+            Tentar novamente
           </button>
         </div>
-      </header>
-      {analysis && (
-        <section className="mt-5 rounded-2xl border border-violet-200 bg-violet-50 p-4" aria-labelledby="analysis-title">
-          <p className="text-xs font-black uppercase tracking-wider text-violet-600">Análise selecionada</p>
-          <h2 id="analysis-title" className="mt-1 text-xl font-black text-zinc-950">{analysis.title}</h2>
-          <p className="mt-1 text-sm leading-6 text-zinc-600">{analysis.description}</p>
-        </section>
       )}
-      <nav className="mt-5 grid grid-cols-2 gap-2 rounded-2xl border bg-white p-2 sm:flex">
-        {(
-          [
-            { id: "resumo", label: "Resumo", icon: BarChart3 },
-            { id: "chat", label: "Conversar", icon: MessageCircle },
-            { id: "simulacoes", label: "Simulações", icon: Calculator },
-            { id: "mensagens", label: "Mensagens IA", icon: WandSparkles },
-          ] as const
-        ).map((x) => (
-          <button
-            key={x.id}
-            onClick={() => setTab(x.id)}
-            className={`flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-bold transition ${tab === x.id ? "bg-violet-600 text-white" : "text-zinc-600 hover:bg-zinc-50"}`}
+      {data && (
+        <>
+          {analysis && (
+            <section
+              className={`sx-premium-surface ${ui.analysis}`}
+              aria-labelledby="advisor-analysis-title"
+            >
+              <p className={ui.eyebrow}>Análise selecionada</p>
+              <h2 id="advisor-analysis-title" className="sx-premium-section">
+                {analysis.title}
+              </h2>
+              <p className="sx-premium-muted">{analysis.description}</p>
+            </section>
+          )}
+          <nav
+            className={`sx-premium-surface ${ui.navigation}`}
+            aria-label="Seções do SorteX Advisor"
           >
-            <x.icon size={17} />
-            {x.label}
-          </button>
-        ))}
-      </nav>
-      {tab === "resumo" && <Summary data={data} />}
-      {tab === "chat" && <Chat pilotAvailable={data.aiPilotAvailable === true} />}
-      {tab === "simulacoes" && <Simulations data={data} />}
-      {tab === "mensagens" && <Messages data={data} />}
-    </div>
+            {tabs.map((item) => (
+              <Link
+                key={item.id}
+                href={
+                  item.id === "resumo"
+                    ? "/dashboard/ia"
+                    : `/dashboard/ia?tab=${item.id}`
+                }
+                scroll={false}
+                prefetch={false}
+                aria-current={tab === item.id ? "page" : undefined}
+                className="sx-premium-button"
+              >
+                <item.icon size={17} aria-hidden="true" /> {item.label}
+              </Link>
+            ))}
+          </nav>
+          {tab === "resumo" && <Summary data={data} />}
+          <div className={ui.chatSection} hidden={tab !== "chat"}>
+            <AdvisorConversation
+              pilotAvailable={
+                data.aiPilotAvailable === true && !error && !loading
+              }
+              active={tab === "chat"}
+            />
+          </div>
+          {tab === "simulacoes" && <Simulations data={data} />}
+          {tab === "mensagens" && <Messages data={data} />}
+        </>
+      )}
+    </PremiumScope>
   );
 }
 
 function Summary({ data }: { data: AdvisorSnapshot }) {
   const s = data.summary;
   return (
-    <div className="mt-5 space-y-5">
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
+    <div className={ui.summary}>
+      <section className={ui.stats} aria-label="Indicadores da conta">
         <Stat label="Campanhas" value={s.campaigns} />
         <Stat label="Receita" value={money.format(s.revenue)} />
         <Stat label="Conversão" value={`${s.conversion}%`} />
@@ -179,25 +229,25 @@ function Summary({ data }: { data: AdvisorSnapshot }) {
         <Stat label="Promoções ativas" value={s.promotions} />
         <Stat label="Cotas premiadas" value={s.availablePrizes} />
       </section>
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
-        <section className="rounded-3xl border bg-white p-5 md:p-6">
-          <h2 className="text-xl font-black">Recomendações para hoje</h2>
-          <p className="mt-1 text-sm text-zinc-500">
+      <div className={ui.summaryPanels}>
+        <section className={`sx-premium-surface ${ui.panel}`}>
+          <h2 className="sx-premium-section">Recomendações para hoje</h2>
+          <p className="mt-1 sx-premium-muted">
             Priorizadas a partir dos dados atuais da conta.
           </p>
           <div className="mt-4 space-y-3">
             {data.alerts.length ? (
               data.alerts.map((a) => <AlertCard key={a.id} alert={a} />)
             ) : (
-              <div className="rounded-2xl bg-zinc-50 p-6 text-center text-sm text-zinc-500">
+              <div className={ui.note}>
                 Nenhum alerta acionável foi encontrado com os dados atuais.
               </div>
             )}
           </div>
         </section>
-        <section className="rounded-3xl border bg-white p-5 md:p-6">
-          <h2 className="text-xl font-black">Visão da operação</h2>
-          <div className="mt-4 grid grid-cols-2 gap-3">
+        <section className={`sx-premium-surface ${ui.panel}`}>
+          <h2 className="sx-premium-section">Visão da operação</h2>
+          <div className={`mt-4 ${ui.miniGrid}`}>
             <Mini label="Vendas aprovadas" value={s.approvedSales} />
             <Mini label="Títulos vendidos" value={s.ticketsSold} />
             <Mini label="Pagamentos pendentes" value={s.pendingPayments} />
@@ -205,7 +255,7 @@ function Summary({ data }: { data: AdvisorSnapshot }) {
             <Mini label="Automações ativas" value={s.automations} />
             <Mini label="Afiliados ativos" value={s.affiliates} />
           </div>
-          <p className="mt-4 rounded-2xl bg-blue-50 p-4 text-xs leading-5 text-blue-800">
+          <p className={`mt-4 ${ui.note}`}>
             Métricas calculadas a partir da conta autenticada. Valores ausentes
             permanecem em zero; projeções não são garantias.
           </p>
@@ -215,288 +265,183 @@ function Summary({ data }: { data: AdvisorSnapshot }) {
   );
 }
 
-function Chat({ pilotAvailable }: { pilotAvailable: boolean }) {
-  const [consent, setConsent] = useState(false);
-  const [q, setQ] = useState(""),
-    [messages, setMessages] = useState<
-      Array<{
-        role: "user" | "assistant";
-        text: string;
-        answer?: AdvisorAnswer;
-      }>
-    >([]),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  async function submit(e?: FormEvent, quick?: string) {
-    e?.preventDefault();
-    const question = (quick ?? q).trim();
-    if (question.length < 3 || busy) return;
-    setMessages((m) => [...m, { role: "user", text: question }]);
-    setQ("");
+function Simulations({ data }: { data: AdvisorSnapshot }) {
+  const [campaignId, setCampaignId] = useState(data.campaigns[0]?.id ?? "");
+  const [quantity, setQuantity] = useState("1000");
+  const [price, setPrice] = useState("");
+  const [discount, setDiscount] = useState(0);
+  const [result, setResult] = useState<Awaited<
+    ReturnType<typeof simulateAdvisor>
+  > | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function run(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    const units = Number(quantity);
+    const alternative = price.trim()
+      ? Number(price.trim().replace(",", "."))
+      : undefined;
+    if (
+      !Number.isInteger(units) ||
+      units < 1 ||
+      units > 10_000_000 ||
+      (alternative !== undefined &&
+        (!Number.isFinite(alternative) || alternative < 0.01))
+    ) {
+      setError(
+        "Confira a quantidade e informe um preço válido, quando necessário.",
+      );
+      return;
+    }
     setBusy(true);
     setError("");
-    try {
-      const answer = await askAdvisor(question, pilotAvailable && consent);
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", text: answer.answer, answer },
-      ]);
-    } catch (x) {
-      setError(x instanceof Error ? x.message : "Não foi possível responder.");
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <section className="mt-5 grid min-h-[620px] gap-4 lg:grid-cols-[280px_1fr]">
-      <aside className="rounded-3xl border bg-white p-5">
-        <h2 className="font-black">Perguntas rápidas</h2>
-        <div className="mt-3 space-y-2">
-          {[
-            "Como estão minhas vendas?",
-            "Como está meu CRM?",
-            "Como está meu financeiro?",
-            "Qual a origem das vendas?",
-            "Qual promoção devo criar?",
-            "Como recuperar reservas abandonadas?",
-            "Qual horário devo divulgar?",
-          ].map((x) => (
-            <button
-              key={x}
-              onClick={() => void submit(undefined, x)}
-              className="w-full rounded-xl bg-zinc-50 p-3 text-left text-sm font-semibold hover:bg-violet-50 hover:text-violet-700"
-            >
-              {x}
-            </button>
-          ))}
-        </div>
-      </aside>
-      <div className="flex min-w-0 flex-col rounded-3xl border bg-white">
-        <div className="border-b p-5">
-          <h2 className="flex items-center gap-2 text-xl font-black">
-            <Bot className="text-violet-600" />
-            Converse com seu consultor
-          </h2>
-          {pilotAvailable ? (
-            <label className="mt-3 flex items-start gap-2 text-sm text-zinc-700">
-              <input type="checkbox" className="mt-1" checked={consent}
-                onChange={(event) => setConsent(event.target.checked)} />
-              Usar IA externa nas perguntas rápidas compatíveis. Serão enviados somente indicadores fictícios agregados.
-            </label>
-          ) : (
-            <p className="mt-2 text-sm text-zinc-500">Provedor de IA indisponível nesta conta. As respostas usam regras locais.</p>
-          )}
-        </div>
-        <div className="flex-1 space-y-4 overflow-y-auto p-4 md:p-6">
-          {messages.length === 0 && (
-            <div className="mx-auto max-w-md py-16 text-center">
-              <Sparkles className="mx-auto text-violet-400" size={38} />
-              <h3 className="mt-3 font-black">Pergunte sobre a sua operação</h3>
-              <p className="mt-2 text-sm text-zinc-500">
-                As respostas usam os indicadores disponíveis nesta conta. Nenhuma ação é executada automaticamente.
-              </p>
-            </div>
-          )}
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              className={`max-w-3xl rounded-2xl p-4 ${m.role === "user" ? "ml-auto bg-violet-600 text-white" : "bg-zinc-50"}`}
-            >
-              <p className="whitespace-pre-wrap text-sm leading-6">{m.text}</p>
-              {m.answer && (
-                <>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {m.answer.evidence.map((e) => (
-                      <span
-                        key={e}
-                        className="rounded-full bg-white px-3 py-1 text-xs font-bold text-zinc-600"
-                      >
-                        {e}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {m.answer.actions.map((a) => (
-                      <ConfirmAction key={a.label} action={a} />
-                    ))}
-                  </div>
-                  <p className="mt-3 text-[11px] text-zinc-400">
-                    {m.answer.mode === "GEMINI"
-                      ? "Resposta gerada pelo Google Gemini"
-                      : m.answer.mode === "OPENAI"
-                        ? "Resposta gerada pela OpenAI"
-                        : "Resposta de regras locais, sem IA externa"}
-                  </p>
-                  {m.answer.mode === "DETERMINISTIC" &&
-                    m.answer.fallbackReason === "PROVIDER_RATE_LIMIT" && (
-                      <p className="mt-2 text-sm text-zinc-600" role="status">
-                        O provedor externo atingiu um limite de uso. Esta resposta foi gerada apenas pelas regras locais.
-                      </p>
-                    )}
-                </>
-              )}
-            </div>
-          ))}
-          {busy && (
-            <div className="flex items-center gap-2 text-sm text-zinc-500">
-              <LoaderCircle className="animate-spin" size={17} />
-              Analisando dados...
-            </div>
-          )}
-          {error && (
-            <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
-              {error}
-            </p>
-          )}
-        </div>
-        <form
-          onSubmit={(e) => void submit(e)}
-          className="flex gap-2 border-t p-3 md:p-4"
-        >
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Pergunte sobre campanhas, vendas ou clientes..."
-            className="min-w-0 flex-1 rounded-xl border px-4 outline-none focus:border-violet-500"
-          />
-          <button
-            disabled={busy || q.trim().length < 3}
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-violet-600 text-white disabled:opacity-40"
-          >
-            <Send size={18} />
-          </button>
-        </form>
-      </div>
-    </section>
-  );
-}
-
-function Simulations({ data }: { data: AdvisorSnapshot }) {
-  const [campaignId, setCampaignId] = useState(data.campaigns[0]?.id ?? ""),
-    [quantity, setQuantity] = useState("1000"),
-    [price, setPrice] = useState(""),
-    [discount, setDiscount] = useState(0),
-    [result, setResult] = useState<any>(null),
-    [busy, setBusy] = useState(false);
-  async function run(e: FormEvent) {
-    e.preventDefault();
-    setBusy(true);
+    setResult(null);
     try {
       setResult(
         await simulateAdvisor({
           campaignId: campaignId || undefined,
-          quantity: Math.max(1, Number(quantity) || 1),
-          price: price ? Number(price) : undefined,
+          quantity: units,
+          price: alternative,
           discountPercent: discount,
         }),
       );
+    } catch (cause) {
+      setError(liveError(cause));
     } finally {
       setBusy(false);
     }
   }
+
   return (
-    <div className="mt-5 grid gap-5 lg:grid-cols-[.75fr_1.25fr]">
+    <div className={ui.workbench}>
       <form
-        onSubmit={(e) => void run(e)}
-        className="space-y-4 rounded-3xl border bg-white p-5 md:p-6"
+        onSubmit={(event) => void run(event)}
+        className={`sx-premium-surface ${ui.panel} ${ui.form}`}
       >
-        <h2 className="text-xl font-black">Simular cenário</h2>
-        <label className="block text-sm font-bold">
+        <h2 className="sx-premium-section">Simular cenário</h2>
+        <p className="sx-premium-muted">
+          Projeções hipotéticas, sem gerar pedidos ou alterar campanhas.
+        </p>
+        <label className={ui.fieldLabel}>
           Campanha
           <select
+            className={ui.field}
             value={campaignId}
-            onChange={(e) => setCampaignId(e.target.value)}
-            className="mt-2 h-12 w-full rounded-xl border px-3"
+            onChange={(event) => setCampaignId(event.target.value)}
           >
-            {data.campaigns.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.title}
+            {data.campaigns.length === 0 && (
+              <option value="">Nenhuma campanha nesta conta</option>
+            )}
+            {data.campaigns.map((campaign) => (
+              <option key={campaign.id} value={campaign.id}>
+                {campaign.title}
               </option>
             ))}
           </select>
         </label>
-        <label className="block text-sm font-bold">
+        <label className={ui.fieldLabel}>
           Quantidade
           <input
+            className={ui.field}
             type="number"
             min={1}
+            max={10_000_000}
+            step={1}
+            required
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            onBlur={() => {
-              if (!quantity || Number(quantity) < 1) setQuantity("1");
-            }}
-            className="mt-2 h-12 w-full rounded-xl border px-3"
+            onChange={(event) => setQuantity(event.target.value)}
           />
         </label>
-        <label className="block text-sm font-bold">
+        <label className={ui.fieldLabel}>
           Preço alternativo (opcional)
           <input
+            className={ui.field}
             inputMode="decimal"
             value={price}
-            onChange={(e) => setPrice(e.target.value)}
             placeholder="Usar preço atual"
-            className="mt-2 h-12 w-full rounded-xl border px-3"
+            onChange={(event) => setPrice(event.target.value)}
           />
         </label>
-        <label className="block text-sm font-bold">
+        <label className={ui.fieldLabel}>
           Desconto: {discount}%
           <input
             type="range"
             min={0}
             max={90}
             value={discount}
-            onChange={(e) => setDiscount(Number(e.target.value))}
-            className="mt-2 w-full accent-violet-600"
+            onChange={(event) => setDiscount(Number(event.target.value))}
           />
         </label>
+        {error && (
+          <p className={ui.formError} role="alert">
+            {error}
+          </p>
+        )}
         <button
+          type="submit"
           disabled={busy}
-          className="h-12 w-full rounded-xl bg-violet-600 font-bold text-white"
+          className="sx-premium-button"
+          data-variant="primary"
         >
           {busy ? "Calculando..." : "Calcular simulação"}
         </button>
       </form>
-      <div className="rounded-3xl border bg-white p-5 md:p-6">
-        <h2 className="text-xl font-black">Resultado</h2>
-        {result ? (
-          <div className="mt-5 grid gap-3 sm:grid-cols-2">
-            <Mini
-              label="Faturamento bruto"
-              value={money.format(result.grossRevenue)}
-            />
-            <Mini label="Desconto" value={money.format(result.discount)} />
-            <Mini
-              label="Receita estimada"
-              value={money.format(result.estimatedRevenue)}
-            />
-            <Mini
-              label="Preço por título"
-              value={money.format(result.unitPrice)}
-            />
-            <div className="sm:col-span-2 rounded-2xl bg-zinc-50 p-4">
+      <section className={`sx-premium-surface ${ui.panel} ${ui.preview}`}>
+        <h2 className="sx-premium-section">Resultado</h2>
+        {busy ? (
+          <p role="status" className="sx-premium-muted">
+            Calculando com a API da SorteX…
+          </p>
+        ) : result ? (
+          <div className={ui.preview} aria-live="polite">
+            <div className={ui.miniGrid}>
+              <Mini
+                label="Faturamento bruto"
+                value={money.format(result.grossRevenue)}
+              />
+              <Mini label="Desconto" value={money.format(result.discount)} />
+              <Mini
+                label="Receita estimada"
+                value={money.format(result.estimatedRevenue)}
+              />
+              <Mini
+                label="Preço por título"
+                value={money.format(result.unitPrice)}
+              />
+            </div>
+            <div className={ui.note}>
               <b>Fórmula</b>
-              <p className="mt-1 text-sm">{result.formula}</p>
-              <p className="mt-3 text-xs text-zinc-500">{result.disclaimer}</p>
+              <p>{result.formula}</p>
+              <p>{result.disclaimer}</p>
             </div>
           </div>
         ) : (
-          <div className="grid h-64 place-items-center text-center text-sm text-zinc-400">
-            Configure um cenário para comparar valores.
-          </div>
+          <p className={ui.note}>Configure um cenário para comparar valores.</p>
         )}
-      </div>
+      </section>
     </div>
   );
 }
 
 function Messages({ data }: { data: AdvisorSnapshot }) {
-  const [objective, setObjective] = useState("Últimas cotas"),
-    [tone, setTone] = useState("Amigável"),
-    [campaignId, setCampaignId] = useState(data.campaigns[0]?.id ?? ""),
-    [result, setResult] = useState<any>(null),
-    [busy, setBusy] = useState(false);
-  async function generate() {
+  const [objective, setObjective] = useState("Últimas cotas");
+  const [tone, setTone] = useState("Amigável");
+  const [campaignId, setCampaignId] = useState(data.campaigns[0]?.id ?? "");
+  const [result, setResult] = useState<Awaited<
+    ReturnType<typeof generateAdvisorMessage>
+  > | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [copyStatus, setCopyStatus] = useState("");
+
+  async function generate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
     setBusy(true);
+    setError("");
+    setCopyStatus("");
     try {
       setResult(
         await generateAdvisorMessage({
@@ -505,140 +450,168 @@ function Messages({ data }: { data: AdvisorSnapshot }) {
           campaignId: campaignId || undefined,
         }),
       );
+    } catch (cause) {
+      setError(liveError(cause));
     } finally {
       setBusy(false);
     }
   }
+
+  async function copy() {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(result.content);
+      setCopyStatus("Rascunho copiado.");
+    } catch {
+      setCopyStatus(
+        "Não foi possível copiar automaticamente. Selecione o texto do rascunho para copiar.",
+      );
+    }
+  }
+
   return (
-    <div className="mt-5 grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
-      <section className="space-y-4 rounded-3xl border bg-white p-5 md:p-6">
-        <h2 className="text-xl font-black">Gerar mensagem contextual</h2>
-        <select
-          aria-label="Objetivo da mensagem"
-          value={objective}
-          onChange={(e) => setObjective(e.target.value)}
-          className="h-12 w-full rounded-xl border px-3"
-        >
-          {[
-            "Últimas cotas",
-            "Pagamento pendente",
-            "Reserva abandonada",
-            "Promoção",
-            "Roleta",
-            "Cota premiada",
-            "Lembrete",
-            "Agradecimento",
-          ].map((x) => (
-            <option key={x}>{x}</option>
-          ))}
-        </select>
-        <select
-          aria-label="Tom da mensagem"
-          value={tone}
-          onChange={(e) => setTone(e.target.value)}
-          className="h-12 w-full rounded-xl border px-3"
-        >
-          {[
-            "Amigável",
-            "Profissional",
-            "Urgente",
-            "Premium",
-            "Direto",
-            "Elegante",
-          ].map((x) => (
-            <option key={x}>{x}</option>
-          ))}
-        </select>
-        <select
-          aria-label="Campanha da mensagem"
-          value={campaignId}
-          onChange={(e) => setCampaignId(e.target.value)}
-          className="h-12 w-full rounded-xl border px-3"
-        >
-          {data.campaigns.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.title}
-            </option>
-          ))}
-        </select>
+    <div className={ui.workbench}>
+      <form
+        onSubmit={(event) => void generate(event)}
+        className={`sx-premium-surface ${ui.panel} ${ui.form}`}
+      >
+        <h2 className="sx-premium-section">Preparar mensagem</h2>
+        <p className="sx-premium-muted">
+          Rascunho baseado em regras locais. Esta tela não envia mensagens.
+        </p>
+        <label className={ui.fieldLabel}>
+          Objetivo da mensagem
+          <select
+            className={ui.field}
+            value={objective}
+            onChange={(event) => setObjective(event.target.value)}
+          >
+            {[
+              "Últimas cotas",
+              "Pagamento pendente",
+              "Reserva abandonada",
+              "Promoção",
+              "Roleta",
+              "Cota premiada",
+              "Lembrete",
+              "Agradecimento",
+            ].map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+        <label className={ui.fieldLabel}>
+          Tom da mensagem
+          <select
+            className={ui.field}
+            value={tone}
+            onChange={(event) => setTone(event.target.value)}
+          >
+            {[
+              "Amigável",
+              "Profissional",
+              "Urgente",
+              "Premium",
+              "Direto",
+              "Elegante",
+            ].map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+        <label className={ui.fieldLabel}>
+          Campanha da mensagem
+          <select
+            className={ui.field}
+            value={campaignId}
+            onChange={(event) => setCampaignId(event.target.value)}
+          >
+            {data.campaigns.length === 0 && (
+              <option value="">Nenhuma campanha nesta conta</option>
+            )}
+            {data.campaigns.map((campaign) => (
+              <option key={campaign.id} value={campaign.id}>
+                {campaign.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        {error && (
+          <p className={ui.formError} role="alert">
+            {error}
+          </p>
+        )}
         <button
-          onClick={() => void generate()}
+          type="submit"
           disabled={busy}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-violet-600 font-bold text-white"
+          className="sx-premium-button"
+          data-variant="primary"
         >
-          <Sparkles size={17} />
+          <Sparkles size={17} aria-hidden="true" />{" "}
           {busy ? "Gerando..." : "Gerar mensagem"}
         </button>
-      </section>
-      <section className="rounded-3xl border bg-white p-5 md:p-6">
-        <h2 className="text-xl font-black">Prévia</h2>
+      </form>
+      <section className={`sx-premium-surface ${ui.panel} ${ui.preview}`}>
+        <h2 className="sx-premium-section">Prévia</h2>
+        {busy && (
+          <p role="status" className="sx-premium-muted">
+            Preparando o rascunho…
+          </p>
+        )}
         {result ? (
-          <div className="mt-4 rounded-2xl bg-zinc-50 p-5">
-            <h3 className="font-black">{result.title}</h3>
-            <textarea
-              value={result.content}
-              onChange={(e) =>
-                setResult({ ...result, content: e.target.value })
-              }
-              className="mt-3 min-h-40 w-full resize-y rounded-xl border bg-white p-3 text-sm"
-            />
-            <p className="mt-2 text-xs text-zinc-500">
-              A mensagem pode ser editada. O envio só acontece após confirmação
-              na Central de Comunicação.
+          <div className={ui.preview}>
+            <h3 className="sx-premium-section">{result.title}</h3>
+            <label className={ui.fieldLabel}>
+              Rascunho da mensagem
+              <textarea
+                className={ui.field}
+                rows={5}
+                value={result.content}
+                onChange={(event) => {
+                  setCopyStatus("");
+                  setResult({ ...result, content: event.target.value });
+                }}
+              />
+            </label>
+            <p className="sx-premium-muted">
+              Copie o texto editado antes de abrir a Central de Comunicação. O
+              envio só acontece após confirmação.
             </p>
-            <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+            <div className={ui.actions}>
               <button
-                onClick={() => navigator.clipboard?.writeText(result.content)}
-                className="h-11 rounded-xl border px-4 font-bold"
+                type="button"
+                onClick={() => void copy()}
+                className="sx-premium-button"
               >
                 Copiar
               </button>
               <Link
                 href={result.openUrl}
-                className="flex h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 font-bold text-white"
+                className="sx-premium-button"
+                data-variant="primary"
               >
-                Abrir Comunicação
-                <ChevronRight size={17} />
+                Abrir Comunicação <ChevronRight size={17} aria-hidden="true" />
               </Link>
             </div>
+            {copyStatus && (
+              <p className="sx-premium-muted" role="status">
+                {copyStatus}
+              </p>
+            )}
           </div>
         ) : (
-          <div className="grid h-64 place-items-center text-center text-sm text-zinc-400">
-            Escolha o contexto para gerar uma mensagem.
-          </div>
+          <p className={ui.note}>Escolha o contexto para gerar uma mensagem.</p>
         )}
       </section>
     </div>
   );
 }
 
-function ConfirmAction({ action }: { action: AdvisorAction }) {
-  function confirm(e: React.MouseEvent<HTMLAnchorElement>) {
-    if (!window.confirm(action.confirmation)) e.preventDefault();
-  }
-  return (
-    <Link
-      href={action.url}
-      onClick={confirm}
-      className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold text-white"
-    >
-      {action.label}
-    </Link>
-  );
-}
 function AlertCard({ alert }: { alert: AdvisorSnapshot["alerts"][number] }) {
-  const color =
-    alert.priority === "HIGH"
-      ? "bg-red-50 text-red-700"
-      : alert.priority === "MEDIUM"
-        ? "bg-amber-50 text-amber-700"
-        : "bg-blue-50 text-blue-700";
   return (
-    <article className="rounded-2xl border p-4">
+    <article className={ui.alertCard}>
       <div className="flex gap-3">
-        <span
-          className={`h-fit rounded-full px-2 py-1 text-[10px] font-black ${color}`}
-        >
+        <span className={`sx-premium-badge h-fit text-xs ${ui.priority}`}>
           {alert.priority === "HIGH"
             ? "ALTA"
             : alert.priority === "MEDIUM"
@@ -647,13 +620,11 @@ function AlertCard({ alert }: { alert: AdvisorSnapshot["alerts"][number] }) {
         </span>
         <div className="min-w-0">
           <h3 className="font-black">{alert.title}</h3>
-          <p className="mt-1 text-sm text-zinc-500">{alert.detail}</p>
-          <p className="mt-2 text-xs font-bold text-zinc-400">
-            {alert.evidence}
-          </p>
+          <p className="mt-1 sx-premium-muted">{alert.detail}</p>
+          <p className="mt-2 text-xs font-bold">{alert.evidence}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {alert.actions.map((a) => (
-              <ConfirmAction key={a.label} action={a} />
+              <AdvisorConfirmAction key={a.label} action={a} />
             ))}
           </div>
         </div>
@@ -672,33 +643,28 @@ function Stat({
 }) {
   const body = (
     <>
-      <span className="block truncate text-xs font-bold text-zinc-500">
-        {label}
-      </span>
-      <b className="mt-2 block break-words text-xl md:text-2xl">{value}</b>
+      <span className="font-bold">{label}</span>
+      <b className="tabular-nums">{value}</b>
       {href && (
-        <span className="mt-2 block text-xs font-black text-violet-700">
+        <span data-link="" className="font-bold">
           Ver reservas →
         </span>
       )}
     </>
   );
   return href ? (
-    <Link
-      href={href}
-      className="min-w-0 rounded-2xl border bg-white p-4 transition hover:border-violet-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-200"
-    >
+    <Link href={href} className={`sx-premium-surface ${ui.stat}`}>
       {body}
     </Link>
   ) : (
-    <div className="min-w-0 rounded-2xl border bg-white p-4">{body}</div>
+    <div className={`sx-premium-surface ${ui.stat}`}>{body}</div>
   );
 }
 function Mini({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-2xl bg-zinc-50 p-4">
-      <span className="text-xs font-bold text-zinc-500">{label}</span>
-      <b className="mt-1 block text-lg">{value}</b>
+    <div className={ui.mini}>
+      <span className="font-bold">{label}</span>
+      <b className="tabular-nums">{value}</b>
     </div>
   );
 }

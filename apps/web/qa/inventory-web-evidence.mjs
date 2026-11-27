@@ -43,4 +43,22 @@ export const pageEvidence = [
     source: "apps/web/e2e/organizer-finance-premium.spec.ts",
     revision: "4e13760",
   },
+  {
+    path: "/dashboard/ads",
+    detail: "vendas internas, filtros, temas e origem; leitura Meta, Google e TikTok desativada, sem métricas não comprovadas",
+    source: "apps/web/e2e-local/run-organizer-ads-premium.mjs",
+    revision: "46dceef",
+  },
+  {
+    path: "/dashboard/crm",
+    detail: "visão geral, filtros e links, origem geográfica, teclado e separação por conta; não enviou comunicação",
+    source: "apps/web/e2e/crm-overview-premium.spec.ts",
+    revision: "37d36c5",
+  },
+  {
+    path: "/dashboard/ia",
+    detail: "chat local, presets, simulação, rascunhos e isolamento; provedores reais desligados",
+    source: "apps/web/e2e-local/run-organizer-advisor-premium.mjs",
+    revision: "fe7cc53",
+  },
 ];

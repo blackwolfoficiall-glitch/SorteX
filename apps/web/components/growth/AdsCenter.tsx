@@ -26,6 +26,8 @@ import {
   X,
 } from "lucide-react";
 import AdsConfirmedSales from "./AdsConfirmedSales";
+import PremiumScope from "@/components/premium/PremiumScope";
+import styles from "./ads-premium.module.css";
 import { getMyCampaigns } from "@/lib/campaigns/client";
 import type { Campaign } from "@/lib/campaigns/types";
 import {
@@ -115,6 +117,7 @@ export default function AdsCenter() {
     [editingId, setEditingId] = useState<string | null>(null),
     [strategy, setStrategy] = useState<AdvisorAdStrategy | null>(null);
   const [integrations, setIntegrations] = useState<OrganizerIntegration[]>([]),
+    [metaStatusKnown, setMetaStatusKnown] = useState(false),
     [showModeHelp, setShowModeHelp] = useState(false),
     [showHowItWorks, setShowHowItWorks] = useState(false),
     [comingSoon, setComingSoon] = useState<string | null>(null),
@@ -131,6 +134,7 @@ export default function AdsCenter() {
       ]);
       if (ads.status === "fulfilled") setItems(ads.value.items);
       if (campaignList.status === "fulfilled") setCampaigns(campaignList.value);
+      setMetaStatusKnown(metaStatus.status === "fulfilled");
       if (metaStatus.status === "fulfilled") setMeta(metaStatus.value);
       if (connections.status === "fulfilled") setIntegrations(connections.value);
       if ([ads, campaignList, metaStatus, connections].some((item) => item.status === "rejected"))
@@ -359,44 +363,51 @@ export default function AdsCenter() {
           ? "bg-white"
           : "bg-amber-300";
   return (
-    <div className="mx-auto w-full max-w-[1500px] overflow-x-hidden pb-12">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <PremiumScope className={styles.page}>
+      <header className={styles.hero}>
         <div>
-          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">
-            Gerenciador de mídia
-          </p>
-          <h1 className="mt-2 text-3xl font-black">SorteX Ads</h1>
-          <p className="mt-2 max-w-2xl text-zinc-500">
-            A IA sugere. Somente você revisa e autoriza a execução.
+          <p className={styles.eyebrow}>Mídia e origem das vendas</p>
+          <h1 className={styles.title}>SorteX Ads</h1>
+          <p className={styles.copy}>
+            Compare pedidos pagos na SorteX e veja o que é possível medir por origem.
+            Métricas verificadas de mídia são exibidas separadamente quando disponíveis.
           </p>
         </div>
-        <div className="relative flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          <button
-            onClick={() => setShowModeHelp((value) => !value)}
-            className={`flex min-h-9 items-center justify-center gap-2 rounded-full px-4 text-xs font-black ${metaConnected ? "bg-green-50 text-green-700" : "bg-zinc-100 text-zinc-700"}`}
-          >
-            <span
-              className={`h-2 w-2 rounded-full ${metaConnected ? "bg-green-500" : "bg-zinc-400"}`}
-            />
-            {metaConnected ? "Meta conectada" : "Modo Teste"}
-          </button>
-          {showModeHelp && (
-            <div className="absolute right-0 top-11 z-20 w-72 rounded-2xl border bg-white p-4 text-xs leading-5 text-zinc-600 shadow-xl">
-              {metaConnected
-                ? "Conexão ativa não substitui a autorização para publicar nem comprova o desempenho de mídia."
-                : "Você pode criar e testar campanhas sem publicação externa ou cobrança."}
-            </div>
-          )}
-          <button
-            onClick={() => setOpen(true)}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 font-bold text-white"
-          >
-            <Plus size={18} />
+        <div className={styles.heroActions}>
+          <div className={styles.mode}>
+            <button
+              type="button"
+              aria-expanded={showModeHelp}
+              onClick={() => setShowModeHelp((value) => !value)}
+              className={styles.secondary}
+            >
+              <HelpCircle size={17} aria-hidden="true" />
+              {loading ? "Consultando modo" : !metaStatusKnown ? "Modo não confirmado" : metaConnected ? "Meta conectada" : "Modo Teste"}
+            </button>
+            {showModeHelp && (
+              <p className={styles.modeHelp}>
+                {!metaStatusKnown
+                  ? "O estado de gerenciamento externo ainda não foi confirmado."
+                  : metaConnected
+                    ? "Conexão ativa não substitui a autorização para publicar nem comprova o desempenho de mídia."
+                    : "Rascunhos e ativações em sandbox não são anúncios externos e não geram cobrança."}
+              </p>
+            )}
+          </div>
+          <button type="button" onClick={() => setOpen(true)} className={styles.primary}>
+            <Plus size={18} aria-hidden="true" />
             Criar campanha
           </button>
+          <a href="#area-de-gerenciamento-ads" className={styles.secondary}>Rascunhos e conexões</a>
         </div>
       </header>
       <AdsConfirmedSales campaigns={campaigns} />
+      <section id="area-de-gerenciamento-ads" className={styles.management} aria-labelledby="ads-management-title">
+        <header>
+          <p className={styles.eyebrow}>Área de trabalho</p>
+          <h2 id="ads-management-title">Rascunhos e conexões</h2>
+          <p className={styles.copy}>As conexões abaixo são de gerenciamento. Elas não habilitam por si só a leitura de mídia no relatório.</p>
+        </header>
       {!metaConnected ? (
         <section className="mt-6 overflow-hidden rounded-[2rem] border border-violet-100 bg-gradient-to-br from-violet-950 via-violet-800 to-fuchsia-700 p-6 text-white shadow-xl md:p-8">
           <div className="grid gap-7 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -620,6 +631,7 @@ export default function AdsCenter() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   onClick={() => edit(ad)}
+                  aria-label="Editar campanha de mídia"
                   className="rounded-xl border p-2"
                 >
                   <Settings2 size={16} />
@@ -627,6 +639,7 @@ export default function AdsCenter() {
                 {!["LIVE_ACTIVE", "SANDBOX_ACTIVE"].includes(ad.status) && (
                   <button
                     onClick={() => void action(ad.id, "activate")}
+                    aria-label="Ativar campanha de mídia"
                     className="rounded-xl border p-2 text-green-700"
                   >
                     <Play size={16} />
@@ -635,6 +648,7 @@ export default function AdsCenter() {
                 {["LIVE_ACTIVE", "SANDBOX_ACTIVE"].includes(ad.status) && (
                   <button
                     onClick={() => void action(ad.id, "pause")}
+                    aria-label="Pausar campanha de mídia"
                     className="rounded-xl border p-2 text-amber-700"
                   >
                     <Pause size={16} />
@@ -642,6 +656,7 @@ export default function AdsCenter() {
                 )}
                 <button
                   onClick={() => void duplicateAd(ad.id).then(load)}
+                  aria-label="Duplicar campanha de mídia"
                   className="rounded-xl border p-2"
                 >
                   <Copy size={16} />
@@ -658,6 +673,7 @@ export default function AdsCenter() {
                 <a
                   href={`/s/${ad.code}`}
                   target="_blank"
+                  rel="noopener noreferrer"
                   className="ml-auto rounded-xl bg-violet-50 px-3 py-2 text-sm font-bold text-violet-700"
                 >
                   Link rastreado
@@ -685,8 +701,9 @@ export default function AdsCenter() {
           </button>
         </div>
       )}
+      </section>
       {open && (
-        <div className="fixed inset-0 z-[90] overflow-y-auto bg-black/55 p-0 sm:p-4">
+        <div className={`${styles.legacyDialog} fixed inset-0 z-[90] overflow-y-auto bg-black/55 p-0 sm:p-4`}>
           <form
             onSubmit={(e) => void save(e)}
             className="relative mx-auto min-h-full w-full bg-white p-5 sm:my-5 sm:min-h-0 sm:max-w-4xl sm:rounded-3xl md:p-7"
@@ -694,6 +711,7 @@ export default function AdsCenter() {
             <button
               type="button"
               onClick={close}
+              aria-label="Fechar editor de campanha"
               className="absolute right-4 top-4 rounded-full p-2"
             >
               <X />
@@ -772,7 +790,7 @@ export default function AdsCenter() {
           onClose={() => setComingSoon(null)}
         />
       )}
-    </div>
+    </PremiumScope>
   );
 }
 function payloadFrom(f: typeof empty) {

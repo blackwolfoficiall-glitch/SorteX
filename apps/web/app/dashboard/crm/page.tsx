@@ -10,6 +10,7 @@ import {
   CheckSquare,
   CircleDollarSign,
   Clock3,
+  LoaderCircle,
   MapPin,
   Sparkles,
   TicketX,
@@ -17,6 +18,8 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
+import PremiumScope from "@/components/premium/PremiumScope";
+import "./crm-overview-premium.css";
 import CrmNav from "@/components/crm/CrmNav";
 import AutomationShortcutLink from "@/components/crm/AutomationShortcutLink";
 import { dashboard, type CrmDashboard } from "@/lib/crm/client";
@@ -37,15 +40,15 @@ export default function Crm() {
     let active = true;
     setLoading(true);
     setError("");
-    Promise.all([dashboard(), getPersonalization().catch(() => null)])
-      .then(([result, identity]) => {
-        if (!active) return;
-        setData(result);
-        if (identity?.brand.publicName)
-          setName(identity.brand.publicName.split(" ")[0]);
+    dashboard()
+      .then((result) => { if (active) setData(result); })
+      .catch(() => { if (active) setError("Não foi possível carregar esta área."); })
+      .finally(() => { if (active) setLoading(false); });
+    getPersonalization()
+      .then((identity) => {
+        if (active) setName(identity?.brand?.publicName?.trim().split(/\s+/)[0] || "Organizador");
       })
-      .catch(() => active && setError("Não foi possível carregar esta área."))
-      .finally(() => active && setLoading(false));
+      .catch(() => undefined);
     return () => {
       active = false;
     };
@@ -124,38 +127,28 @@ export default function Crm() {
         : [],
     [data],
   );
-  if (loading)
+  if (loading || error || !data)
     return (
-      <main className="min-h-screen bg-zinc-100 p-4 lg:p-8">
-        <div className="mx-auto max-w-[1500px] animate-pulse space-y-5">
-          <div className="h-24 rounded-3xl bg-white" />
-          <div className="h-52 rounded-3xl bg-violet-200" />
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-              <div key={i} className="h-32 rounded-2xl bg-white" />
-            ))}
-          </div>
-        </div>
-      </main>
-    );
-  if (error || !data)
-    return (
-      <main className="grid min-h-[70vh] place-items-center bg-zinc-100 p-4">
-        <div className="rounded-3xl border bg-white p-10 text-center">
-          <h1 className="text-xl font-black">
-            Não foi possível carregar esta área.
-          </h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            Verifique sua conexão e tente novamente.
-          </p>
-          <button
-            onClick={() => setReload((value) => value + 1)}
-            className="mt-5 rounded-xl bg-violet-700 px-5 py-3 font-bold text-white"
-          >
-            Tentar novamente
-          </button>
-        </div>
-      </main>
+      <PremiumScope className="sx-crm-overview">
+        <CrmHeader />
+        <div className="sx-crm-navigation"><CrmNav /></div>
+        <section className="sx-premium-surface sx-crm-panel">
+          {loading ? (
+            <p className="sx-crm-loading" role="status">
+              <LoaderCircle size={20} aria-hidden="true" /> Consultando indicadores do CRM…
+            </p>
+          ) : (
+            <>
+              <p className="sx-crm-error" role="alert">Não foi possível carregar esta área.</p>
+              <p className="sx-premium-muted">Verifique sua conexão e tente novamente.</p>
+              <button type="button" onClick={() => setReload((value) => value + 1)}
+                className="sx-premium-button sx-crm-retry" data-variant="primary">
+                Tentar novamente
+              </button>
+            </>
+          )}
+        </section>
+      </PremiumScope>
     );
   const cards = [
     {
@@ -216,121 +209,77 @@ export default function Crm() {
     },
   ];
   return (
-    <main className="min-h-screen overflow-x-hidden bg-zinc-100 p-3 sm:p-5 lg:p-8">
-      <div className="mx-auto max-w-[1500px]">
-        <header className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-black uppercase tracking-wide text-violet-700">
-              Relacionamento
-            </p>
-            <h1 className="mt-1 text-3xl font-black">CRM SorteX</h1>
-            <p className="mt-2 max-w-3xl text-sm text-zinc-500 sm:text-base">
-              Conheça seus compradores, organize relacionamentos e transforme
-              oportunidades em novas vendas.
-            </p>
-            <span className="mt-2 inline-flex rounded-full bg-violet-100 px-3 py-1 text-[11px] font-black text-violet-700">
-              Powered by IA SorteX
-            </span>
-          </div>
-          <div className="flex w-full gap-2 sm:w-auto">
-            <Link
-              href="/dashboard/crm/contatos?action=new"
-              className="flex min-h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-violet-700 px-5 font-black text-white"
-            >
-              <UserPlus size={17} />
-              Adicionar contato
-            </Link>
-            <Link
-              href="/dashboard/crm/segmentos?action=new"
-              className="flex min-h-12 flex-1 items-center justify-center rounded-xl border bg-white px-5 font-black"
-            >
-              Criar segmento
-            </Link>
-          </div>
-        </header>
-        <div className="mt-5">
-          <CrmNav />
+    <PremiumScope className="sx-crm-overview">
+      <CrmHeader />
+      <div className="sx-crm-navigation"><CrmNav /></div>
+      <section className="sx-premium-ticket sx-crm-hero" aria-labelledby="sx-crm-focus">
+        <p className="sx-crm-hero-eyebrow">Olá, {name}.</p>
+        <h2 id="sx-crm-focus" className="sx-premium-title">Relacionamentos em foco</h2>
+        <p>Revise sua base, reservas e tarefas usando os indicadores da sua operação.</p>
+        <div className="sx-crm-actions">
+          <a href="#oportunidades" className="sx-premium-button">Ver oportunidades <ArrowRight size={15} aria-hidden="true" /></a>
+          <Link href="/dashboard/crm/contatos?action=new" className="sx-premium-button sx-crm-hero-secondary">
+            Adicionar contato
+          </Link>
         </div>
-        <section className="mt-5 overflow-hidden rounded-3xl bg-gradient-to-br from-violet-950 via-violet-800 to-fuchsia-700 p-6 text-white shadow-xl sm:p-8">
-          <p className="text-sm font-bold text-violet-200">Olá, {name}.</p>
-          <h2 className="mt-2 max-w-3xl text-2xl font-black sm:text-3xl">
-            Seu relacionamento com os compradores pode gerar novas vendas hoje.
-          </h2>
-          <p className="mt-3 max-w-2xl text-sm text-violet-100">
-            Analise contatos, recupere reservas e organize ações com ajuda da IA
-            SorteX.
-          </p>
-          <div className="mt-6 flex flex-col gap-2 sm:flex-row">
-            <a
-              href="#oportunidades"
-              className="rounded-xl bg-white px-5 py-3 text-center font-black text-violet-800"
-            >
-              Ver oportunidades
-            </a>
-            <Link
-              href="/dashboard/crm/contatos?action=new"
-              className="rounded-xl bg-white/10 px-5 py-3 text-center font-black"
-            >
-              Adicionar contato
-            </Link>
-          </div>
-        </section>
+      </section>
         <section
           id="oportunidades"
-          className="mt-5 grid gap-5 xl:grid-cols-[1.35fr_.65fr]"
+          className="sx-crm-grid sx-crm-grid-split" aria-label="Oportunidades"
         >
-          <article className="rounded-3xl border bg-white p-5 sm:p-6">
-            <p className="text-xs font-black uppercase tracking-wide text-violet-700">
-              Oportunidades de hoje
+          <article className="sx-premium-surface sx-crm-panel">
+            <p className="sx-crm-eyebrow">
+              Oportunidades na operação
             </p>
-            <h2 className="mt-1 text-xl font-black">O que merece atenção</h2>
+            <h2 className="sx-premium-section">O que merece atenção</h2>
             {opportunities.length ? (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="sx-crm-opportunity-grid">
                 {opportunities.slice(0, 4).map((item) => (
                   <AutomationShortcutLink
                     key={item.title}
                     href={item.href}
-                    className="group rounded-2xl bg-zinc-50 p-4 transition hover:bg-violet-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-200"
+                    className="sx-crm-link sx-crm-inset sx-crm-opportunity"
                   >
-                    <div className="flex items-center justify-between gap-2">
-                      <h3 className="font-black">{item.title}</h3>
+                    <div className="sx-crm-pair">
+                      <h3 className="sx-crm-strong">{item.title}</h3>
                       <span
-                        className={`rounded-full px-2 py-1 text-[10px] font-black ${item.priority === "Alta" ? "bg-red-100 text-red-700" : item.priority === "Média" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-700"}`}
+                        className="sx-premium-badge sx-crm-priority" data-priority={item.priority}
                       >
-                        {item.priority}
+                        Prioridade {item.priority}
                       </span>
                     </div>
-                    <p className="mt-2 text-sm text-zinc-500">{item.detail}</p>
-                    <span className="mt-3 inline-flex items-center gap-1 text-xs font-black text-violet-700">
+                    <p className="sx-premium-muted">{item.detail}</p>
+                    <span className="sx-crm-action-text">
                       {item.action}
-                      <ArrowRight size={14} />
+                      <ArrowRight size={14} aria-hidden="true" />
                     </span>
                   </AutomationShortcutLink>
                 ))}
               </div>
             ) : (
-              <p className="mt-5 rounded-2xl bg-zinc-50 p-8 text-center text-sm text-zinc-500">
-                Nenhuma oportunidade relevante encontrada hoje.
+              <p className="sx-crm-empty sx-premium-muted">
+                Nenhuma oportunidade registrada nos indicadores atuais.
               </p>
             )}
           </article>
-          <article className="rounded-3xl border border-violet-200 bg-violet-50 p-5 sm:p-6">
-            <p className="text-xs font-black uppercase tracking-wide text-violet-700">
-              IA SorteX recomenda
+          <article className="sx-premium-surface sx-crm-panel sx-crm-guidance">
+            <p className="sx-crm-eyebrow">
+              Sugestão pelos indicadores
             </p>
-            <h2 className="mt-2 text-xl font-black">
+            <h2 className="sx-premium-section">
               {data.abandoned > 0
                 ? "Priorize a recuperação de reservas"
                 : "Mantenha a base organizada"}
             </h2>
-            <p className="mt-3 text-sm leading-6 text-zinc-600">
+            <p className="sx-premium-muted">
               {data.abandoned > 0
-                ? `Existem ${data.abandoned} reservas abandonadas. Revise os compradores e prepare uma comunicação antes de enviar.`
+                ? `Existem ${data.abandoned} reservas abandonadas. Revise os compradores e consulte as opções de comunicação disponíveis.`
                 : data.leads > 0
                   ? `Você possui ${data.leads} leads. Organize uma próxima ação para avançar o relacionamento.`
                   : "Não há evidência suficiente para recomendar uma ação urgente agora."}
             </p>
-            <dl className="mt-4 space-y-2 text-xs">
+            <p className="sx-premium-muted">Sugestão baseada em regras do CRM, não gerada por IA. Estes atalhos não enviam mensagens.</p>
+            <dl className="sx-crm-guidance-list">
               <Row
                 label="Público"
                 value={
@@ -348,54 +297,54 @@ export default function Crm() {
                 value="Estimativa indisponível sem histórico suficiente"
               />
             </dl>
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="sx-crm-actions">
               <Link
                 href="/dashboard/crm/reservas-abandonadas"
-                className="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white"
+                className="sx-premium-button" data-variant="primary"
               >
                 Ver reservas
               </Link>
               <Link
                 href="/dashboard/comunicacao?tab=new&objective=ABANDONED&audience=ABANDONED"
-                className="rounded-xl border border-violet-300 px-4 py-2 text-sm font-black"
+                className="sx-premium-button"
               >
                 Criar comunicação
               </Link>
               <AutomationShortcutLink
                 href="/dashboard/crm/automacoes?template=abandoned"
-                className="rounded-xl border border-violet-300 px-4 py-2 text-sm font-black"
+                className="sx-premium-button"
               >
                 Criar automação
               </AutomationShortcutLink>
             </div>
           </article>
         </section>
-        <section className="mt-5">
+        <section aria-labelledby="sx-crm-indicators">
           <div className="mb-3">
-            <h2 className="text-xl font-black">Indicadores principais</h2>
-            <p className="text-sm text-zinc-500">
+            <h2 id="sx-crm-indicators" className="sx-premium-section">Indicadores principais</h2>
+            <p className="sx-premium-muted">
               Selecione um indicador para abrir a análise correspondente.
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="sx-crm-metrics">
             {cards.map((card) => {
               const Icon = card.icon;
               return (
                 <Link
                   key={card.label}
                   href={card.href}
-                  className="group min-w-0 rounded-2xl border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-200 sm:p-5"
+                  className="sx-premium-surface sx-crm-panel sx-crm-link sx-crm-metric"
                 >
-                  <span className="grid h-9 w-9 place-items-center rounded-xl bg-violet-50 text-violet-700">
-                    <Icon size={18} />
+                  <span className="sx-crm-metric-icon">
+                    <Icon size={18} aria-hidden="true" />
                   </span>
-                  <p className="mt-3 text-xs font-bold text-zinc-500">
+                  <p className="sx-crm-label">
                     {card.label}
                   </p>
-                  <strong className="mt-1 block break-words text-xl font-black sm:text-2xl">
+                  <strong className="sx-crm-metric-value">
                     {card.value}
                   </strong>
-                  <p className="mt-1 text-[11px] text-zinc-400">
+                  <p className="sx-premium-muted">
                     {card.detail}
                   </p>
                 </Link>
@@ -403,8 +352,8 @@ export default function Crm() {
             })}
           </div>
         </section>
-        <section className="mt-5 grid gap-4 lg:grid-cols-3">
-          <Panel title="Relacionamento" icon={<Users size={19} />}>
+        <section className="sx-crm-grid sx-crm-grid-triple">
+          <Panel title="Relacionamento" icon={<Users size={19} aria-hidden="true" />}>
             <ActionLine
               label="Pagamentos pendentes"
               value={data.pendingPayments}
@@ -420,7 +369,7 @@ export default function Crm() {
               value={data.inactive}
               href="/dashboard/crm/contatos?status=INACTIVE"
             />
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="sx-crm-actions">
               <SmallLink href="/dashboard/crm/contatos">
                 Gerenciar contatos
               </SmallLink>
@@ -432,7 +381,7 @@ export default function Crm() {
               </SmallLink>
             </div>
           </Panel>
-          <Panel title="Automações" icon={<Bot size={19} />}>
+          <Panel title="Automações" icon={<Bot size={19} aria-hidden="true" />}>
             <ActionLine
               label="Fluxos ativos"
               value={data.automations}
@@ -448,7 +397,7 @@ export default function Crm() {
               value={data.abandoned}
               href="/dashboard/crm/automacoes?template=abandoned"
             />
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="sx-crm-actions">
               <SmallLink href="/dashboard/crm/automacoes">
                 Abrir automações
               </SmallLink>
@@ -460,9 +409,9 @@ export default function Crm() {
               </SmallLink>
             </div>
           </Panel>
-          <Panel title="Tarefas" icon={<CheckSquare size={19} />}>
-            <div className="grid grid-cols-2 gap-2">
-              <Mini label="Abertas" value={data.tasks} />
+          <Panel title="Tarefas" icon={<CheckSquare size={19} aria-hidden="true" />}>
+            <div className="sx-crm-mini-grid">
+              <Mini label="Abertas ou em andamento" value={data.tasks} />
               <Mini label="Em andamento" value={data.tasksInProgress} />
               <Mini
                 label="Vencidas"
@@ -471,7 +420,7 @@ export default function Crm() {
               />
               <Mini label="Concluídas hoje" value={data.completedToday} />
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="sx-crm-actions">
               <SmallLink href="/dashboard/crm/tarefas">Abrir central</SmallLink>
               <SmallLink href="/dashboard/crm/tarefas?action=new">
                 Criar tarefa
@@ -479,9 +428,9 @@ export default function Crm() {
             </div>
           </Panel>
         </section>
-        <section className="mt-5 grid gap-4 lg:grid-cols-[1.4fr_.6fr]">
-          <Panel title="Contatos por cidade" icon={<MapPin size={19} />}>
-            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <section className="sx-crm-grid sx-crm-grid-split">
+          <Panel title="Contatos por cidade" icon={<MapPin size={19} aria-hidden="true" />}>
+            <div className="sx-crm-cities">
               {data.cities.map((city) => {
                 const label = city.city
                     ? titleCase(city.city)
@@ -493,40 +442,40 @@ export default function Crm() {
                 return (
                   <Link
                     key={city.city || "missing"}
-                    href={`/dashboard/crm/contatos?city=${encodeURIComponent(city.city || "")}`}
-                    className="rounded-xl bg-zinc-50 p-3 transition hover:bg-violet-50"
+                    href={city.city ? `/dashboard/crm/contatos?city=${encodeURIComponent(city.city)}` : "/dashboard/crm/contatos?cityMissing=1"}
+                    className="sx-crm-link sx-crm-inset sx-crm-city"
                   >
-                    <strong className="block truncate text-sm">{label}</strong>
-                    <span className="mt-1 block text-xs text-zinc-500">
+                    <strong className="sx-crm-strong">{label}</strong>
+                    <span className="sx-premium-muted">
                       {count} contato(s) · {percent}%
                     </span>
-                    <span className="mt-1 block text-xs font-bold text-zinc-700">
-                      {money.format(Number(city._sum.totalSpent || 0))}
+                    <span className="sx-crm-strong">
+                      {formatAggregate(city._sum.totalSpent)}
                     </span>
-                    <span className="text-[10px] text-zinc-400">
-                      Ticket {money.format(Number(city._avg.totalSpent || 0))}
+                    <span className="sx-premium-muted">
+                      Média por contato: {formatAggregate(city._avg.totalSpent)}
                     </span>
                   </Link>
                 );
               })}
             </div>
             {!data.cities.length && (
-              <p className="rounded-xl bg-zinc-50 p-6 text-center text-sm text-zinc-500">
+              <p className="sx-crm-empty sx-premium-muted">
                 Sem localização suficiente para análise.
               </p>
             )}
             <Link
               href="/dashboard/crm/contatos?cityMissing=1"
-              className="mt-4 inline-flex items-center gap-2 text-sm font-black text-violet-700"
+              className="sx-premium-button sx-crm-retry" data-variant="ghost"
             >
-              Corrigir cadastros incompletos <ArrowRight size={15} />
+              Corrigir cadastros incompletos <ArrowRight size={15} aria-hidden="true" />
             </Link>
           </Panel>
           <Panel
             title="Próximas ações recomendadas"
-            icon={<Clock3 size={19} />}
+            icon={<Clock3 size={19} aria-hidden="true" />}
           >
-            <div className="space-y-2">
+            <div className="sx-crm-stack">
               <Next
                 href="/dashboard/crm/reservas-abandonadas"
                 label="Recuperar reservas"
@@ -550,20 +499,42 @@ export default function Crm() {
             </div>
           </Panel>
         </section>
-        <section className="mt-5 rounded-3xl border bg-white p-5 sm:p-6">
-          <h2 className="font-black">Resumo operacional</h2>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <section className="sx-premium-surface sx-crm-panel">
+          <h2 className="sx-premium-section">Resumo operacional</h2>
+          <div className="sx-crm-mini-grid sx-crm-summary">
             <Mini label="Contatos cadastrados" value={data.total} />
             <Mini label="Segmentos ativos" value={data.segments} />
             <Mini label="Automações ativas" value={data.automations} />
-            <Mini label="Tarefas abertas" value={data.tasks} />
+            <Mini label="Tarefas pendentes" value={data.tasks} />
             <Mini label="Reservas abandonadas" value={data.abandoned} />
             <Mini label="Pagamentos pendentes" value={data.pendingPayments} />
           </div>
         </section>
-      </div>
-    </main>
+    </PremiumScope>
   );
+}
+function CrmHeader() {
+  return (
+    <header className="sx-crm-header">
+      <div>
+        <p className="sx-premium-badge">CRM Intelligence</p>
+        <h1 className="sx-premium-title">CRM SorteX</h1>
+        <p className="sx-premium-muted">Contatos, segmentos e oportunidades de relacionamento da sua operação.</p>
+      </div>
+      <div className="sx-crm-actions">
+        <Link href="/dashboard/crm/contatos?action=new" className="sx-premium-button" data-variant="primary">
+          <UserPlus size={17} aria-hidden="true" /> Adicionar contato
+        </Link>
+        <Link href="/dashboard/crm/segmentos?action=new" className="sx-premium-button">Criar segmento</Link>
+      </div>
+    </header>
+  );
+}
+
+function formatAggregate(value: number | string | null) {
+  return value !== null && value !== "" && Number.isFinite(Number(value))
+    ? money.format(Number(value))
+    : "Não informado";
 }
 function Panel({
   title,
@@ -575,20 +546,20 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <article className="rounded-3xl border bg-white p-5 shadow-sm">
-      <h2 className="flex items-center gap-2 text-lg font-black">
+    <article className="sx-premium-surface sx-crm-panel">
+      <h2 className="sx-premium-section sx-crm-panel-title">
         {icon}
         {title}
       </h2>
-      <div className="mt-3">{children}</div>
+      <div className="sx-crm-panel-body">{children}</div>
     </article>
   );
 }
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between gap-3 rounded-xl bg-white/70 p-3">
-      <dt className="text-zinc-500">{label}</dt>
-      <dd className="text-right font-bold">{value}</dd>
+    <div className="sx-crm-inset sx-crm-pair">
+      <dt className="sx-premium-muted">{label}</dt>
+      <dd className="sx-crm-strong">{value}</dd>
     </div>
   );
 }
@@ -604,12 +575,12 @@ function ActionLine({
   return (
     <AutomationShortcutLink
       href={href}
-      className="flex items-center justify-between border-b py-3 text-sm last:border-0 hover:text-violet-700"
+      className="sx-crm-link sx-crm-line"
     >
-      <span className="text-zinc-500">{label}</span>
-      <span className="flex items-center gap-2 font-black">
+      <span className="sx-premium-muted">{label}</span>
+      <span className="sx-crm-action-text">
         {value}
-        <ArrowRight size={14} />
+        <ArrowRight size={14} aria-hidden="true" />
       </span>
     </AutomationShortcutLink>
   );
@@ -624,7 +595,7 @@ function SmallLink({
   return (
     <AutomationShortcutLink
       href={href}
-      className="rounded-xl border px-3 py-2 text-xs font-black text-violet-700 hover:bg-violet-50"
+      className="sx-premium-button"
     >
       {children}
     </AutomationShortcutLink>
@@ -640,9 +611,9 @@ function Mini({
   alert?: boolean;
 }) {
   return (
-    <div className={`rounded-xl p-3 ${alert ? "bg-red-50" : "bg-zinc-50"}`}>
-      <span className="block text-[11px] font-bold text-zinc-500">{label}</span>
-      <strong className={`mt-1 block text-lg ${alert ? "text-red-700" : ""}`}>
+    <div className="sx-crm-inset" data-urgent={alert || undefined}>
+      <span className="sx-crm-label">{label}</span>
+      <strong className="sx-crm-mini-value">
         {value}
       </strong>
     </div>
@@ -660,13 +631,13 @@ function Next({
   return (
     <AutomationShortcutLink
       href={href}
-      className="flex items-center justify-between gap-3 rounded-xl bg-zinc-50 p-3 text-sm transition hover:bg-violet-50"
+      className="sx-crm-link sx-crm-inset sx-crm-line"
     >
       <span>
         <b className="block">{label}</b>
-        <small className="text-zinc-500">{detail}</small>
+        <small className="sx-premium-muted">{detail}</small>
       </span>
-      <ArrowRight className="text-violet-700" size={16} />
+      <ArrowRight className="sx-crm-arrow" size={16} aria-hidden="true" />
     </AutomationShortcutLink>
   );
 }

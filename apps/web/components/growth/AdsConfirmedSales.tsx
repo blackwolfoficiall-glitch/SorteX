@@ -1,5 +1,7 @@
 "use client";
 
+import { ChartNoAxesCombined, CircleSlash, Database, SlidersHorizontal, Ticket } from "lucide-react";
+import styles from "./ads-premium.module.css";
 import { type FormEvent, useEffect, useState } from "react";
 import { AuthApiError, authRequest } from "@/lib/auth/client";
 import {
@@ -29,7 +31,7 @@ type Load = {
 
 const counts = new Intl.NumberFormat("pt-BR");
 const dateLabel = (date: string) => date.split("-").reverse().join("/");
-const field = "mt-1 min-h-11 w-full min-w-0 rounded-lg border bg-white px-3";
+const field = styles.field;
 
 export default function AdsConfirmedSales({
   campaigns,
@@ -88,15 +90,16 @@ export default function AdsConfirmedSales({
   return (
     <section
       aria-labelledby="ads-confirmed-sales-title"
-      className="mt-6 rounded-[2rem] border bg-white p-5 shadow-sm md:p-7"
+      className={styles.report}
     >
-      <p className="text-xs font-black uppercase tracking-[.18em] text-violet-700">
-        Dados da SorteX
-      </p>
-      <h2 id="ads-confirmed-sales-title" className="mt-1 text-2xl font-black">
-        Vendas confirmadas
-      </h2>
-      <p className="mt-2 max-w-3xl text-sm text-zinc-600">
+      <header className={styles.reportHeader}>
+        <div>
+          <p className={styles.eyebrow}>Dados internos da SorteX</p>
+          <h2 id="ads-confirmed-sales-title">Vendas confirmadas</h2>
+        </div>
+        <span className={styles.icon}><Database size={21} aria-hidden="true" /></span>
+      </header>
+      <p className={styles.copy}>
         O relatório conta pedidos pagos pela data de confirmação. O total bruto
         soma os valores registrados nos pedidos, com os descontos já aplicados
         na compra. Não é receita líquida: estornos, taxas e gastos de mídia não
@@ -104,9 +107,11 @@ export default function AdsConfirmedSales({
       </p>
       <form
         onSubmit={apply}
-        className="mt-5 grid items-end gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6"
+        className={styles.filters}
+        aria-label="Filtros de vendas confirmadas"
       >
-        <label className="min-w-0 text-sm font-semibold">
+        <p className={styles.filterHeading}><SlidersHorizontal size={17} aria-hidden="true" /> Ajustar relatório</p>
+        <label className={styles.label}>
           Período
           <select
             aria-label="Período"
@@ -127,7 +132,7 @@ export default function AdsConfirmedSales({
             ))}
           </select>
         </label>
-        <label className="min-w-0 text-sm font-semibold">
+        <label className={styles.label}>
           Campanha SorteX
           <select
             aria-label="Campanha SorteX"
@@ -148,7 +153,7 @@ export default function AdsConfirmedSales({
             ))}
           </select>
         </label>
-        <label className="min-w-0 text-sm font-semibold">
+        <label className={styles.label}>
           Origem dos pedidos
           <select
             aria-label="Origem dos pedidos"
@@ -172,7 +177,7 @@ export default function AdsConfirmedSales({
         </label>
         {draft.period === "CUSTOM" && (
           <>
-            <label className="min-w-0 text-sm font-semibold">
+            <label className={styles.label}>
               Data inicial
               <input
                 className={field}
@@ -187,7 +192,7 @@ export default function AdsConfirmedSales({
                 }
               />
             </label>
-            <label className="min-w-0 text-sm font-semibold">
+            <label className={styles.label}>
               Data final
               <input
                 className={field}
@@ -207,39 +212,39 @@ export default function AdsConfirmedSales({
         )}
         <button
           type="submit"
-          className="min-h-11 rounded-lg bg-violet-700 px-4 font-bold text-white hover:bg-violet-800"
+          className={styles.primary}
         >
           Aplicar filtros
         </button>
       </form>
-      <p className="mt-2 text-xs text-zinc-600">
+      <p className={styles.muted}>
         Datas no horário de Brasília.
       </p>
       {data && !data.supportsOriginFilter && (
-        <p className="mt-2 text-xs text-zinc-600">
+        <p className={styles.muted}>
           O filtro por origem requer a próxima versão da API.
         </p>
       )}
       {filterError && (
-        <p role="alert" className="mt-2 text-sm font-semibold text-red-800">
+        <p role="alert" className={styles.error}>
           {filterError}
         </p>
       )}
-      <div aria-busy={!view} className="mt-6">
+      <div aria-busy={!view} className={styles.reportResults}>
         {!view && (
-          <p role="status" className="text-sm text-zinc-700">
+          <p role="status" className={styles.copy}>
             Carregando vendas confirmadas…
           </p>
         )}
         {view && "error" in view && (
-          <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-            <p role="alert" className="text-sm font-semibold text-red-800">
+          <div className={styles.subpanel}>
+            <p role="alert" className={styles.error}>
               {view.error}
             </p>
             <button
               type="button"
               onClick={() => setAttempt((value) => value + 1)}
-              className="mt-2 min-h-10 font-bold text-violet-800"
+              className={styles.secondary}
             >
               Tentar novamente
             </button>
@@ -247,33 +252,33 @@ export default function AdsConfirmedSales({
         )}
         {data && <SalesSnapshot data={data} />}
       </div>
-      <aside className="mt-6 rounded-2xl bg-violet-50 p-4 text-sm text-violet-950">
-        <h3 className="font-bold">Desempenho de mídia indisponível</h3>
-        <p className="mt-1">
+      <aside className={styles.providers} aria-labelledby="ads-provider-status">
+        <header className={styles.reportHeader}>
+          <div>
+            <p className={styles.eyebrow}>Plataformas externas</p>
+            <h3 id="ads-provider-status">Desempenho de mídia indisponível</h3>
+          </div>
+          <span className={styles.icon}><CircleSlash size={20} aria-hidden="true" /></span>
+        </header>
+        <p className={styles.copy}>
           Investimento, conversões das plataformas, ROAS, ROI e CPA só aparecem
           quando houver dados de mídia e atribuição verificados. Os pedidos
           pagos neste relatório não são conversões de anúncios.
         </p>
-        {data && data.readOnlyReportingProviders.length > 0 && (
-          <ul
-            aria-label="Leitura de plataformas publicitárias"
-            className="mt-3 grid gap-2 sm:grid-cols-3"
-          >
-            {data.readOnlyReportingProviders.map((key) => (
-              <li
-                key={key}
-                className="rounded-xl border border-violet-200 bg-white p-3"
-              >
-                <span className="block font-semibold">
-                  {providerNames[key]}
-                </span>
-                <span className="text-xs">
-                  Leitura desativada · credenciais e permissões não verificadas
-                </span>
+        <ul aria-label="Leitura de plataformas publicitárias" className={styles.providerList}>
+          {Object.entries(providerNames).map(([key, name]) => {
+            const disabled = data?.readOnlyReportingProviders.some((provider) => provider === key);
+            return (
+              <li key={key}>
+                <span className={styles.providerName}>{name}</span>
+                <strong className={styles.providerBadge}>{disabled ? "Leitura desativada" : "Sem dados verificados"}</strong>
+                <p className={styles.muted}>
+                  {disabled ? "Credenciais e permissões não verificadas." : "Status de leitura não informado neste relatório."}
+                </p>
               </li>
-            ))}
-          </ul>
-        )}
+            );
+          })}
+        </ul>
       </aside>
     </section>
   );
@@ -299,26 +304,31 @@ function SalesSnapshot({ data }: { data: ConfirmedAdsSales }) {
     ["Pedidos pagos", counts.format(confirmedOrders)],
     ["Compradores únicos", counts.format(buyers)],
     ["Títulos vendidos", counts.format(titlesSold)],
-    ["Valor bruto dos pedidos pagos", formatConfirmedAdsMoney(paidOrderValue)],
     ["Ticket médio", formatConfirmedAdsMoney(averageOrderValue)],
   ];
   const lastDay = new Date(Date.parse(data.period.toDateExclusive) - 86_400_000)
     .toISOString()
     .slice(0, 10);
   return (
-    <div className="space-y-5">
-      <p className="text-sm font-semibold text-zinc-700">
-        Período aplicado: {dateLabel(data.period.fromDate)} a{" "}
-        {dateLabel(lastDay)} · {originLabel(data.originFilter)}
-      </p>
-      <dl className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+    <div className={styles.snapshot}>
+      <div className={styles.ticket}>
+        <dl>
+          <dt><Ticket size={18} aria-hidden="true" /> Valor bruto dos pedidos pagos</dt>
+          <dd>{formatConfirmedAdsMoney(paidOrderValue)}</dd>
+        </dl>
+        <p>
+          Período aplicado: {dateLabel(data.period.fromDate)} a{" "}
+          {dateLabel(lastDay)} · {originLabel(data.originFilter)}
+        </p>
+      </div>
+      <dl className={styles.kpis}>
         {headline.map(([label, value]) => (
           <div
             key={label}
-            className="min-w-0 rounded-xl border border-violet-100 bg-violet-50/60 p-3"
+            className={styles.kpi}
           >
-            <dt className="text-sm text-zinc-700">{label}</dt>
-            <dd className="mt-2 break-words text-lg font-black text-violet-950">
+            <dt className={styles.copy}>{label}</dt>
+            <dd>
               {value}
             </dd>
           </div>
@@ -326,25 +336,25 @@ function SalesSnapshot({ data }: { data: ConfirmedAdsSales }) {
       </dl>
       <AdsOriginSummary data={data} />
       {confirmedOrders === 0 ? (
-        <p className="rounded-xl border p-4 text-sm text-zinc-700">
+        <p className={styles.empty}>
           Nenhum pedido pago no período selecionado.
         </p>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
-          <article className="min-w-0 rounded-xl border p-4">
+        <div className={styles.insights}>
+          <article className={styles.subpanel}>
             <h3 className="font-bold">Origem dos pedidos pagos</h3>
-            <p className="mt-1 text-xs text-zinc-600">
+            <p className={styles.muted}>
               Origem não identificada não significa acesso direto, orgânico ou
               pago.
             </p>
-            <dl className="mt-4 space-y-3">
+            <dl className={styles.origins}>
               {data.attribution.map((row) => (
                 <div
                   key={row.origin}
-                  className="border-b pb-2 last:border-none"
+                  className={styles.origin}
                 >
                   <dt className="font-semibold">{originLabel(row.origin)}</dt>
-                  <dd className="mt-1 text-sm text-zinc-700">
+                  <dd className={styles.originValue}>
                     {counts.format(row.confirmedOrders)}{" "}
                     {row.confirmedOrders === 1 ? "pedido" : "pedidos"} ·{" "}
                     {formatConfirmedAdsMoney(row.paidOrderValue)}
@@ -359,16 +369,16 @@ function SalesSnapshot({ data }: { data: ConfirmedAdsSales }) {
               ))}
             </dl>
           </article>
-          <article className="min-w-0 rounded-xl border p-4">
-            <h3 className="font-bold">Evolução diária</h3>
+          <article className={styles.subpanel}>
+            <h3 className={styles.chartHeading}><ChartNoAxesCombined size={19} aria-hidden="true" /> Evolução diária</h3>
             <DailyPaidOrders data={data} />
             <div
-              className="mt-2 max-h-72 overflow-auto"
+              className={styles.tableRegion}
               tabIndex={0}
               role="region"
               aria-label="Tabela de evolução diária de pedidos pagos"
             >
-              <table className="w-full text-left text-sm">
+              <table className={styles.table}>
                 <thead>
                   <tr>
                     <th scope="col" className="py-2 pr-2">
@@ -384,7 +394,7 @@ function SalesSnapshot({ data }: { data: ConfirmedAdsSales }) {
                 </thead>
                 <tbody>
                   {data.daily.map((row) => (
-                    <tr key={row.date} className="border-t">
+                    <tr key={row.date} className={styles.tableRow}>
                       <td className="py-2 pr-2">{dateLabel(row.date)}</td>
                       <td className="py-2 pr-2">
                         {counts.format(row.confirmedOrders)}
@@ -409,7 +419,7 @@ function AdsOriginSummary({ data }: { data: ConfirmedAdsSales }) {
   return (
     <aside
       aria-label="Resumo das origens internas"
-      className="rounded-xl border border-violet-100 bg-violet-50/60 p-4 text-sm text-violet-950"
+      className={styles.originSummary}
     >
       <h3 className="font-bold">O que sabemos sobre a origem dos pedidos</h3>
       {summary.kind === "FILTERED" ? (
@@ -436,7 +446,7 @@ function AdsOriginSummary({ data }: { data: ConfirmedAdsSales }) {
             " A quantidade é a mesma, mas origem não identificada não é um canal."}
         </p>
       )}
-      <p className="mt-2 text-xs text-violet-900">
+      <p className={styles.muted}>
         Esses números não medem eficiência de mídia.
       </p>
     </aside>
@@ -451,15 +461,15 @@ function OriginShare({ orders, total }: { orders: number; total: number }) {
   }).format(share);
   return (
     <span className="mt-2 block">
-      <span className="mb-1 block text-xs text-zinc-600">
+      <span className={styles.shareLabel}>
         {label} dos pedidos
       </span>
       <span
         aria-hidden="true"
-        className="block h-2 overflow-hidden rounded-full bg-violet-100"
+        className={styles.shareTrack}
       >
         <span
-          className="block h-full rounded-full bg-violet-700"
+          className={styles.shareFill}
           style={{ width: `${share * 100}%` }}
         />
       </span>
@@ -480,20 +490,20 @@ function DailyPaidOrders({ data }: { data: ConfirmedAdsSales }) {
   return (
     <figure
       aria-label="Gráfico diário de pedidos pagos"
-      className="mt-3 rounded-xl bg-violet-50 px-3 py-2"
+      className={styles.figure}
     >
       <svg
         aria-hidden="true"
         focusable="false"
         viewBox="0 0 320 96"
-        className="w-full text-violet-700"
+        className={styles.svg}
       >
         <line
           x1="6"
           x2="314"
           y1="88"
           y2="88"
-          className="stroke-violet-300"
+          className={styles.chartAxis}
           strokeWidth="1"
         />
         <line
@@ -501,7 +511,7 @@ function DailyPaidOrders({ data }: { data: ConfirmedAdsSales }) {
           x2="314"
           y1="10"
           y2="10"
-          className="stroke-violet-200"
+          className={styles.chartAxis}
           strokeWidth="1"
         />
         {points.length > 1 && (
@@ -527,7 +537,7 @@ function DailyPaidOrders({ data }: { data: ConfirmedAdsSales }) {
             />
           ))}
       </svg>
-      <figcaption className="mb-1 flex flex-wrap justify-between gap-1 text-xs text-zinc-700">
+      <figcaption className={styles.figcaption}>
         <span>
           {dateLabel(series[0].date)} a {dateLabel(series.at(-1)!.date)}
         </span>
