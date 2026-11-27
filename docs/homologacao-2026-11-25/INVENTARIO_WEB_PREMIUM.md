@@ -35,6 +35,10 @@ O mapa lista **todas** as fontes; os grupos abaixo ordenam a execução e identi
 | Equipe SorteX | Login separado, convite/equipe, aprovações/organizador, campanhas, usuários, denuncias, ganhadores, pagamentos, financeiro, gateways, jurídico, taxas, auditoria, suporte, saúde, configurações, conteúdo, mídia, planos, CRM, afiliados, loteria | Revisar leitura vs escrita por papel, edição/ações sensíveis e diálogos sem ampliar autorização. Confirmar retorno previsível às listas e acesso negado dos papéis indevidos. |
 | Infraestrutura e reutilização | Layouts, componentes compartilhados, UI, tokenização e CSS, navegação, metadados, handlers, atalhos/aliases, BFF e fallback | Layouts e tokens podem mudar muitas rotas sem alterar arquivo de página. Rodar fumaça em todas as URLs afetadas e revalidar cache, navegação, metadados e integridade de sessão sem reproduzir interações ofensivas. |
 
+## Funcionalidade sem superfície implementada
+
+**Live SorteX:** não foi localizada uma rota Web de organização de lives ou streaming/chat nesta candidata. O filtro `LIVE` da vitrine identifica campanha publicada, e `/dashboard/sorteios` é a apuração, não uma transmissão. O app informa que a gestão de transmissões ainda não está homologada. Live permanece pendente de implementação, sem tela simulada nem inclusão artificial na contagem de rotas.
+
 ## Como atualizar após cada corte
 
 1. `npm --prefix apps/web ci` em checkout limpo; `node apps/web/qa/inventory-web.mjs` depois das alterações; revise o diff das rotas, aliases, dependências e fingerprints dos gates.

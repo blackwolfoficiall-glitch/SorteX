@@ -79,4 +79,22 @@ export const pageEvidence = [
     source: "apps/web/e2e-local/run-organizer-affiliates-premium.mjs",
     revision: "81b5571",
   },
+  {
+    path: "/dashboard/ganhadores",
+    detail: "cotas premiadas, zeros, estados e restrições, editor sem gravar e isolamento; sem compra ou sorteio",
+    source: "apps/web/e2e/prize-tickets-premium.spec.ts",
+    revision: "a0abca0",
+  },
+  {
+    path: "/dashboard/mini-campanhas",
+    detail: "lista e editor sem gravar, link público só quando publicado, recuperação e isolamento",
+    source: "apps/web/e2e-local/run-organizer-mini-campaigns-premium.mjs",
+    revision: "b39e26a",
+  },
+  {
+    path: "/dashboard/comunicacao",
+    detail: "prévia pela API, modelos e validações, teclado e isolamento; sem envio nem configuração de canal",
+    source: "apps/web/e2e/communication-premium.spec.ts",
+    revision: "3374c43",
+  },
 ];

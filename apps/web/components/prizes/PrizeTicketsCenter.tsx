@@ -1,7 +1,9 @@
 "use client";
 
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import PremiumScope from "@/components/premium/PremiumScope";
+import styles from "./PrizeTicketsCenter.module.css";
 import {
   AlertTriangle,
   Check,
@@ -81,6 +83,7 @@ const prizeTypes: Record<string, string> = {
 };
 const statusLabels: Record<string, string> = {
   AVAILABLE: "Disponível",
+  RESERVED: "Reservada",
   FOUND: "Encontrada",
   DELIVERED: "Entregue",
   CANCELLED: "Pausada",
@@ -141,6 +144,18 @@ const emptyForm = (): FormState => ({
   activate: true,
 });
 
+function canChangePrize(ticket: PrizeTicket) {
+  return !ticket.reservation && (ticket.status === "AVAILABLE" || ticket.status === "CANCELLED");
+}
+
+function displayPrizeStatus(ticket: PrizeTicket) {
+  return ticket.reservation ? "RESERVED" : ticket.status;
+}
+
+function displayPrizeNumber(ticket: PrizeTicket) {
+  return ticket.exactNumber ?? "Sem número fixo";
+}
+
 export default function PrizeTicketsCenter() {
   const [prizes, setPrizes] = useState<PrizeTicket[]>([]),
     [expired, setExpired] = useState<ExpiredInstantPrizeAlert[]>([]),
@@ -164,6 +179,7 @@ export default function PrizeTicketsCenter() {
     [filtersOpen, setFiltersOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const filtersReady = useRef(false);
+  const requestSequence = useRef(0);
   const [wizard, setWizard] = useState(false),
     [step, setStep] = useState(1),
     [form, setForm] = useState<FormState>(emptyForm()),
@@ -178,6 +194,7 @@ export default function PrizeTicketsCenter() {
     } | null>(null);
 
   async function load(silent = false) {
+    const sequence = ++requestSequence.current;
     if (!silent) setLoading(true);
     setError("");
     try {
@@ -192,6 +209,7 @@ export default function PrizeTicketsCenter() {
         }),
         getMyCampaigns(),
       ]);
+      if (sequence !== requestSequence.current) return;
       setPrizes(ticketPage.items);
       setTotal(ticketPage.total);
       setPages(ticketPage.pages);
@@ -207,13 +225,14 @@ export default function PrizeTicketsCenter() {
           "",
       }));
     } catch (cause) {
+      if (sequence !== requestSequence.current) return;
       if (cause instanceof AuthApiError && cause.status === 401)
         setError("SESSION");
       else if (cause instanceof AuthApiError && cause.status === 403)
         setError("FORBIDDEN");
       else setError("NETWORK");
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
   }
   useEffect(() => {
@@ -311,11 +330,12 @@ export default function PrizeTicketsCenter() {
     setWizard(true);
   }
   function openEdit(item: PrizeTicket) {
+    if (!canChangePrize(item)) return;
     setEditing(item);
     setForm({
       ...emptyForm(),
       campaignId: item.campaign.id,
-      numbers: item.exactNumber || "",
+      numbers: item.exactNumber ?? "",
       description: item.description,
       value: String(item.value),
       type: item.type,
@@ -329,7 +349,8 @@ export default function PrizeTicketsCenter() {
     const campaign = campaigns.find((item) => item.id === form.campaignId);
     if (form.mode === "RANDOM" && campaign) {
       const result = new Set<number>();
-      const limit = Math.min(Number(form.randomCount) || 1, 100);
+      const limit = Number(form.randomCount);
+      if (!Number.isInteger(limit) || limit < 1 || limit > Math.min(100, campaign.totalNumbers)) return [];
       while (result.size < limit)
         result.add(
           crypto.getRandomValues(new Uint32Array(1))[0] % campaign.totalNumbers,
@@ -432,15 +453,16 @@ export default function PrizeTicketsCenter() {
     }
   }
 
-  if (error) return <ErrorState kind={error} retry={() => void load()} />;
+  if (error) return <PremiumScope className={styles.scope}><ErrorState kind={error} retry={() => void load()} /></PremiumScope>;
   return (
-    <main className="mx-auto w-full max-w-[1500px] overflow-x-hidden pb-16">
-      <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <PremiumScope className={styles.scope}>
+    <section className={styles.layout} aria-labelledby="prizes-title">
+      <header className={styles.hero}>
         <div>
-          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">
+          <p className={styles.eyebrow}>
             Prêmios instantâneos
           </p>
-          <h1 className="mt-2 text-3xl font-black sm:text-4xl">
+          <h1 id="prizes-title" className="sx-premium-title">
             Cotas premiadas
           </h1>
           <p className="mt-2 max-w-2xl text-zinc-600">
@@ -450,13 +472,13 @@ export default function PrizeTicketsCenter() {
         </div>
         <button
           onClick={openCreate}
-          className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 font-black text-white transition hover:bg-violet-700 active:scale-[.98]"
+          className={styles.primary}
         >
           <Plus size={18} /> Adicionar cota premiada
         </button>
       </header>
       <section className="mt-7" aria-labelledby="prize-overview-title">
-        <div className="flex items-end justify-between gap-3">
+        <div className={styles.overviewHeading}>
           <div>
             <h2 id="prize-overview-title" className="text-xl font-black">Visão geral das cotas</h2>
             <p className="mt-1 text-sm text-zinc-500">Selecione um indicador para filtrar a listagem.</p>
@@ -465,7 +487,7 @@ export default function PrizeTicketsCenter() {
             Ganhadores de sorteios
           </button>
         </div>
-        <div className="-mx-4 mt-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-3 [scrollbar-width:none] md:mx-0 md:grid md:grid-cols-4 md:overflow-visible md:px-0 xl:grid-cols-7">
+        <div className={styles.statusGrid}>
           {statusCards.map((card) => (
             <StatusFilterCard
               key={card.key}
@@ -495,11 +517,13 @@ export default function PrizeTicketsCenter() {
           </button>
         </div>
       )}
-      <section className="mt-6 rounded-3xl border bg-white p-4 shadow-sm">
+      <section className={styles.filters} aria-label="Filtros de cotas">
         <div className="flex items-center justify-between md:hidden">
           <b>Filtros</b>
           <button
             onClick={() => setFiltersOpen(!filtersOpen)}
+            aria-expanded={filtersOpen}
+            aria-controls="prize-filters"
             className="flex min-h-10 items-center gap-2 rounded-xl border px-3 font-bold"
           >
             <Filter size={16} />
@@ -507,9 +531,11 @@ export default function PrizeTicketsCenter() {
           </button>
         </div>
         <div
-          className={`${filtersOpen ? "grid" : "hidden"} mt-4 gap-3 md:mt-0 md:grid md:grid-cols-6`}
+          id="prize-filters"
+          className={`${filtersOpen ? "grid" : "hidden"} ${styles.filterFields} mt-4 gap-3 md:mt-0 md:grid`}
         >
           <Select
+            label="Campanha"
             value={campaignId}
             set={(value) => { setCampaignId(value); setPage(1); syncUrl({ campaign: value, page: 1 }); }}
             options={[
@@ -518,11 +544,13 @@ export default function PrizeTicketsCenter() {
             ]}
           />
           <Select
+            label="Tipo de prêmio"
             value={type}
             set={(value) => { setType(value); setPage(1); syncUrl({ type: value, page: 1 }); }}
             options={[["", "Todos os prêmios"], ...Object.entries(prizeTypes)]}
           />
           <Select
+            label="Período"
             value={period}
             set={(value) => { setPeriod(value); setPage(1); syncUrl({ period: value, page: 1 }); }}
             options={[
@@ -533,6 +561,7 @@ export default function PrizeTicketsCenter() {
             ]}
           />
           <Select
+            label="Ordenação"
             value={sort}
             set={(value) => { setSort(value); setPage(1); syncUrl({ sort: value, page: 1 }); }}
             options={[["newest", "Mais recentes"], ["oldest", "Mais antigas"], ["number", "Número da cota"]]}
@@ -713,7 +742,8 @@ export default function PrizeTicketsCenter() {
       {material && (
         <MaterialDrawer data={material} close={() => setMaterial(null)} />
       )}
-    </main>
+    </section>
+    </PremiumScope>
   );
 }
 
@@ -751,16 +781,16 @@ function PrizeList({
             key={item.id}
             className="grid gap-2 border-b p-4 last:border-0 md:grid-cols-[1fr_1.5fr_1.5fr_1fr_auto] md:items-center"
           >
-            <b className="font-mono text-violet-700">{item.exactNumber}</b>
+            <b className="font-mono text-violet-700">{displayPrizeNumber(item)}</b>
             <span>{item.description}</span>
             <span className="text-sm text-zinc-500">{item.campaign.title}</span>
-            <Status value={item.status} />
-            <button
+            <Status value={displayPrizeStatus(item)} />
+            {canChangePrize(item) && <button
               onClick={() => edit(item)}
               className="rounded-lg border px-3 py-2 text-sm font-bold"
             >
               Editar
-            </button>
+            </button>}
           </div>
         ))}
       </div>
@@ -805,18 +835,18 @@ function PrizeCard({
   material: () => void;
 }) {
   return (
-    <article className="rounded-3xl border bg-white p-5 shadow-sm">
+    <article className={styles.ticket}>
       <div className="flex items-start justify-between gap-3">
         <span className="grid h-11 w-11 place-items-center rounded-2xl bg-amber-100 text-amber-700">
           <Crown size={21} />
         </span>
-        <Status value={item.status} />
+        <Status value={displayPrizeStatus(item)} />
       </div>
       <p className="mt-4 text-xs font-black uppercase text-zinc-400">
         Número premiado
       </p>
       <h3 className="mt-1 break-all font-mono text-2xl font-black text-violet-700">
-        {item.exactNumber}
+        {displayPrizeNumber(item)}
       </h3>
       <b className="mt-3 block">{item.description}</b>
       <p className="mt-1 text-sm text-zinc-500">{item.campaign.title}</p>
@@ -830,14 +860,14 @@ function PrizeCard({
           />
           <Info
             label="Disponibilidade"
-            value={item.status === "AVAILABLE" ? "Ativa" : "Pausada"}
+            value={statusLabels[displayPrizeStatus(item)] ?? "Em acompanhamento"}
           />
         </div>
       )}
       <div className="mt-4 flex flex-wrap gap-2">
-        <Small icon={Edit3} label="Editar" click={edit} disabled={busy} />
-        <Small icon={Copy} label="Copiar" click={copy} disabled={busy} />
-        {item.status === "AVAILABLE" ? (
+        {canChangePrize(item) && <Small icon={Edit3} label="Editar" click={edit} disabled={busy} />}
+        {item.exactNumber != null && <Small icon={Copy} label="Copiar" click={copy} disabled={busy} />}
+        {canChangePrize(item) && (item.status === "AVAILABLE" ? (
           <Small
             icon={Pause}
             label="Pausar"
@@ -851,23 +881,23 @@ function PrizeCard({
             click={() => action("reactivate")}
             disabled={busy}
           />
-        )}
-        <details className="relative">
+        ))}
+        <details className={styles.actionMenu}>
           <summary
             aria-label="Mais ações"
             className="grid h-10 w-10 cursor-pointer list-none place-items-center rounded-xl border"
           >
             <MoreHorizontal size={17} />
           </summary>
-          <div className="absolute bottom-12 right-0 z-20 w-48 rounded-2xl border bg-white p-2 shadow-xl">
+          <div className={styles.menuPanel}>
             <MenuButton icon={Megaphone} label="Divulgar" click={material} />
             <MenuButton icon={History} label="Ver histórico" click={history} />
-            <MenuButton
+            {canChangePrize(item) && <MenuButton
               icon={Trash2}
               label="Remover"
               click={() => action("remove")}
               danger
-            />
+            />}
           </div>
         </details>
       </div>
@@ -1155,21 +1185,44 @@ function Wizard({
   save: (activate: boolean) => void;
 }) {
   const campaign = campaigns.find((item) => item.id === form.campaignId);
+  const capacity = Math.min(100, campaign?.totalNumbers ?? 0);
+  const eligibleCampaign = Boolean(campaign && campaign.totalNumbers > 0 && ["PUBLISHED", "PAUSED"].includes(campaign.status));
+  const randomCount = Number(form.randomCount);
+  const validRandom = form.mode !== "RANDOM" || (Number.isInteger(randomCount) && randomCount >= 1 && randomCount <= capacity);
+  const canAdvance = Boolean(form.campaignId) && (editing || (eligibleCampaign && (step === 1 || validRandom)));
+  const canSave = (editing || eligibleCampaign && validRandom) && !busy;
+  const titleId = useId();
+  const dialog = useRef<HTMLDialogElement>(null);
+
+  useEffect(() => {
+    const element = dialog.current;
+    const previous = document.activeElement;
+    if (!element) return;
+    element.showModal();
+    return () => {
+      if (element.open) element.close();
+      if (previous instanceof HTMLElement && previous.isConnected) previous.focus();
+    };
+  }, []);
   return (
-    <Overlay>
-      <section
-        role="dialog"
-        aria-modal="true"
-        className="max-h-[96dvh] w-full overflow-y-auto rounded-t-[2rem] bg-white p-5 sm:max-w-3xl sm:rounded-[2rem] sm:p-8"
-      >
+    <dialog
+      ref={dialog}
+      aria-labelledby={titleId}
+      className={styles.editor}
+      onCancel={(event) => {
+        event.preventDefault();
+        close();
+      }}
+    >
         <Title
+          titleId={titleId}
           title={editing ? "Editar cota premiada" : "Adicionar cota premiada"}
           subtitle={`Etapa ${step} de 5 · ${["Campanha", "Número", "Prêmio", "Disponibilidade", "Revisão"][step - 1]}`}
           close={close}
         />
-        <div className="mt-5 h-2 rounded-full bg-zinc-100">
+        <div className={styles.track} role="progressbar" aria-label="Etapas da cota" aria-valuemin={0} aria-valuemax={5} aria-valuenow={step}>
           <div
-            className="h-full rounded-full bg-violet-600"
+            className={styles.trackFill}
             style={{ width: `${(step / 5) * 100}%` }}
           />
         </div>
@@ -1181,6 +1234,8 @@ function Wizard({
                 .map((item) => (
                   <button
                     key={item.id}
+                    disabled={item.totalNumbers <= 0}
+                    aria-pressed={form.campaignId === item.id}
                     onClick={() => setForm({ ...form, campaignId: item.id })}
                     className={`rounded-2xl border p-4 text-left ${form.campaignId === item.id ? "border-violet-500 bg-violet-50" : ""}`}
                   >
@@ -1195,7 +1250,7 @@ function Wizard({
           )}
           {step === 2 && (
             <div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className={styles.editorChoices}>
                 {[
                   ["MANUAL", "Manual"],
                   ["RANDOM", "Aleatório"],
@@ -1206,6 +1261,7 @@ function Wizard({
                     onClick={() =>
                       setForm({ ...form, mode: key as FormState["mode"] })
                     }
+                    aria-pressed={form.mode === key}
                     className={`rounded-xl border px-3 py-3 text-sm font-black ${form.mode === key ? "bg-zinc-900 text-white" : ""}`}
                   >
                     {label}
@@ -1217,7 +1273,7 @@ function Wizard({
                   <input
                     type="number"
                     min="1"
-                    max="100"
+                    max={Math.max(1, capacity)}
                     value={form.randomCount}
                     onChange={(event) =>
                       setForm({ ...form, randomCount: event.target.value })
@@ -1244,6 +1300,7 @@ function Wizard({
                   />
                 </Field>
               )}
+              {!validRandom && <p className={styles.editorError} role="status">Informe uma quantidade de 1 a {capacity} para esta campanha.</p>}
               <p className="mt-3 rounded-xl bg-blue-50 p-3 text-sm text-blue-800">
                 A API valida intervalo, duplicidade e se o número está vendido
                 ou reservado.
@@ -1356,7 +1413,7 @@ function Wizard({
             </div>
           )}
         </div>
-        <div className="mt-7 flex flex-col-reverse gap-2 sm:flex-row">
+        <div className={styles.editorActions}>
           <button
             onClick={() => (step === 1 ? close() : setStep(step - 1))}
             className="min-h-12 rounded-xl border px-5 font-black"
@@ -1365,7 +1422,7 @@ function Wizard({
           </button>
           {step < 5 ? (
             <button
-              disabled={!form.campaignId}
+              disabled={!canAdvance}
               onClick={() => setStep(step + 1)}
               className="min-h-12 rounded-xl bg-violet-600 px-6 font-black text-white disabled:opacity-50 sm:ml-auto"
             >
@@ -1374,14 +1431,14 @@ function Wizard({
           ) : (
             <>
               <button
-                disabled={busy}
+                disabled={!canSave}
                 onClick={() => void save(false)}
                 className="min-h-12 rounded-xl border px-5 font-black sm:ml-auto"
               >
                 Salvar pausada
               </button>
               <button
-                disabled={busy}
+                disabled={!canSave}
                 onClick={() =>
                   confirm("Ativar esta cota premiada?") && void save(true)
                 }
@@ -1393,8 +1450,7 @@ function Wizard({
             </>
           )}
         </div>
-      </section>
-    </Overlay>
+    </dialog>
   );
 }
 function MaterialDrawer({
@@ -1484,10 +1540,10 @@ function ErrorState({
   const session = kind === "SESSION",
     forbidden = kind === "FORBIDDEN";
   return (
-    <main className="mx-auto grid min-h-[65vh] max-w-2xl place-items-center p-5 text-center">
+    <section className={styles.errorState} aria-labelledby="prize-error-title">
       <div>
         <AlertTriangle className="mx-auto text-violet-600" size={42} />
-        <h1 className="mt-4 text-2xl font-black">
+        <h1 id="prize-error-title" className="mt-4 sx-premium-title">
           {session
             ? "Sua sessão expirou."
             : forbidden
@@ -1519,7 +1575,7 @@ function ErrorState({
           )
         )}
       </div>
-    </main>
+    </section>
   );
 }
 function Skeleton() {
@@ -1586,14 +1642,14 @@ function StatusFilterCard({
       aria-pressed={active}
       aria-label={`Filtrar por ${label}`}
       onClick={click}
-      className={`min-h-40 min-w-[218px] snap-center rounded-3xl border p-4 text-left shadow-sm outline-none transition active:scale-[.98] focus-visible:ring-4 focus-visible:ring-violet-200 md:min-w-0 ${active ? "border-violet-500 bg-violet-50 ring-1 ring-violet-300" : "bg-white hover:-translate-y-0.5 hover:border-violet-300"}`}
+      className={styles.statusCard}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className={`grid h-10 w-10 place-items-center rounded-2xl ${active ? "bg-violet-600 text-white" : "bg-zinc-100 text-violet-600"}`}><Icon size={19} /></span>
-        {active && <span className="rounded-full bg-violet-600 px-2 py-1 text-[10px] font-black uppercase text-white">Selecionado</span>}
+        <span className={styles.statusIcon}><Icon size={19} /></span>
+        {active && <span className={styles.selectedBadge}>Selecionado</span>}
       </div>
       <span className="mt-3 block text-sm font-black">{label}</span>
-      {loading ? <span className="mt-2 block h-7 w-14 animate-pulse rounded bg-zinc-200" /> : <b className="mt-1 block text-2xl">{value ?? 0}</b>}
+      {loading ? <span className="mt-2 block h-7 w-14 animate-pulse rounded bg-zinc-200" /> : <b className="mt-1 block text-2xl">{value ?? "—"}</b>}
       <span className="mt-1 block text-xs leading-4 text-zinc-500">{description}</span>
     </button>
   );
@@ -1676,6 +1732,7 @@ function MenuButton({
   );
 }
 function Select({
+  label,
   value,
   set,
   options,
@@ -1683,10 +1740,11 @@ function Select({
   value: string;
   set: (value: string) => void;
   options: string[][];
+  label: string;
 }) {
   return (
-    <label>
-      <span className="sr-only">Filtro</span>
+    <label className={styles.selectClip}>
+      <span className="sr-only">{label}</span>
       <select
         value={value}
         onChange={(event) => set(event.target.value)}
@@ -1716,6 +1774,7 @@ function ViewButton({
     <button
       aria-label={label}
       title={label}
+      aria-pressed={active}
       onClick={click}
       className={`grid h-9 w-9 place-items-center rounded-lg ${active ? "bg-zinc-900 text-white" : "text-zinc-500"}`}
     >
@@ -1731,13 +1790,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
         {children}
       </div>
     </label>
-  );
-}
-function Overlay({ children }: { children: ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center bg-zinc-950/55 backdrop-blur-sm sm:items-center sm:p-5">
-      {children}
-    </div>
   );
 }
 function Drawer({
@@ -1767,10 +1819,12 @@ function Drawer({
   );
 }
 function Title({
+  titleId,
   title,
   subtitle,
   close,
 }: {
+  titleId?: string;
   title: string;
   subtitle: string;
   close: () => void;
@@ -1778,7 +1832,7 @@ function Title({
   return (
     <div className="flex items-start justify-between gap-3">
       <div>
-        <h2 className="text-2xl font-black">{title}</h2>
+        <h2 id={titleId} className="sx-premium-section">{title}</h2>
         <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
       </div>
       <button

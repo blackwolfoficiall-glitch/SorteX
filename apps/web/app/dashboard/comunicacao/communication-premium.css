@@ -1,0 +1,98 @@
+.sx-communication {
+  max-width: 88rem;
+  min-width: 0;
+  margin-inline: auto;
+  padding: clamp(0.75rem, 2.4vw, 1.75rem);
+  border-radius: var(--sxp-panel-radius);
+  overflow-wrap: anywhere;
+  background-image: radial-gradient(ellipse at top left, var(--sxp-tint), transparent 42rem);
+}
+.sx-communication h1 { font-size: clamp(1.84rem, 4.8vw, 2.8rem); }
+.sx-communication :is(section, article, form, fieldset, label, [role="tabpanel"]) { min-width: 0; max-width: 100%; }
+.sx-communication h2:not(.sx-premium-title), .sx-communication h3 { font-family: var(--sxp-font-heading); }
+.sx-communication-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding: 0.55rem;
+}
+.sx-communication-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+  min-height: 2.75rem;
+  max-width: 100%;
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  background: var(--sxp-bg);
+  color: var(--sxp-text);
+  padding: 0.4rem 0.75rem;
+  font-size: 0.86rem;
+  font-weight: 750;
+  text-align: start;
+}
+.sx-communication-tab svg { flex: none; }
+.sx-communication-tab[aria-selected="true"] {
+  background: var(--sxp-tint);
+  border-color: var(--sxp-accent);
+  color: var(--sxp-accent);
+}
+.sx-communication :is(button, a, input, select, textarea, summary, [role="tabpanel"]):focus-visible {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 2px;
+}
+.sx-communication-inset {
+  background: var(--sxp-bg);
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+}
+.sx-communication :is(input:not([type="checkbox"], [type="radio"]), select, textarea) {
+  min-width: 0;
+  max-width: 100%;
+  background: var(--sxp-surface);
+  border-color: var(--sxp-line);
+  color: var(--sxp-text);
+}
+.sx-communication :is([type="checkbox"], [type="radio"]) { accent-color: var(--sxp-accent); }
+.sx-communication option { background: var(--sxp-surface); color: var(--sxp-text); }
+.sx-communication :is(.text-zinc-300, .text-zinc-400, .text-zinc-500, .text-zinc-600, .text-zinc-700) { color: var(--sxp-muted); }
+.sx-communication :is(.text-zinc-800, .text-zinc-900) { color: var(--sxp-text); }
+.sx-communication :is(.text-violet-600, .text-violet-700, .text-violet-800, .text-blue-800) { color: var(--sxp-accent); }
+.sx-communication :is(.text-green-700, .text-emerald-700) { color: var(--sxp-success); }
+.sx-communication :is(.text-red-600, .text-red-700, .text-amber-800) { color: var(--sxp-error); }
+.sx-communication :is(.border, .border-b, .border-t, .border-violet-200, .border-violet-300, .border-violet-600) { border-color: var(--sxp-line); }
+.sx-communication .bg-white { background-color: var(--sxp-surface); }
+.sx-communication :is(.bg-zinc-50, .bg-zinc-100, .bg-zinc-200, .bg-white\/70) { background-color: var(--sxp-bg); }
+.sx-communication :is(.bg-violet-50, .bg-violet-100, .bg-emerald-100, .bg-green-50, .bg-amber-50, .bg-red-50) { background-color: var(--sxp-tint); }
+.sx-communication .bg-violet-700 { background: var(--sxp-gradient); color: var(--sxp-white); }
+.sx-communication [role="dialog"] > section { background: var(--sxp-surface); }
+.sx-communication-hero { background-image: linear-gradient(rgba(15,7,44,.2), rgba(15,7,44,.2)), var(--sxp-gradient); }
+.sx-communication .sx-communication-hero :is(.text-violet-100,.text-violet-200) { color: var(--sxp-white); }
+.sx-communication .sx-communication-hero button { color: var(--sxp-ink); background-color: var(--sxp-white); }
+.sx-communication .sx-communication-hero button:focus-visible { outline-color: var(--sxp-white); }
+.sx-communication-meter { background-image: var(--sxp-gradient); }
+.sx-communication-preview { background-color: var(--sxp-surface); }
+.sx-communication-preview[data-preview-channel="WHATSAPP"] { background-color: var(--sxp-bg); }
+.sx-communication-state, .sx-communication-notice { padding: clamp(0.8rem, 2.3vw, 1.5rem); }
+.sx-communication-notice { border-radius: var(--sxp-button-radius); color: var(--sxp-success); background: var(--sxp-tint); }
+.sx-communication [role="alert"] { color: var(--sxp-error); }
+@media (max-width: 640px) {
+  .sx-communication-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sx-communication-tab { padding: 0.34rem 0.48rem; line-height: 1.24; font-size: 0.82rem; }
+  .sx-communication .min-h-28 { min-height: 7.75rem; }
+}
+@media (max-width: 290px) { .sx-communication-tabs { grid-template-columns: 1fr; } }
+@media (hover: hover) {
+  .sx-communication-tab:hover, .sx-communication button.bg-zinc-50:hover { background-color: var(--sxp-tint); color: var(--sxp-accent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sx-communication *, .sx-communication *::before, .sx-communication *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+.sx-communication-composer-actions { background-color: var(--sxp-surface); }
+@media (max-width: 1023px) {
+  .sx-communication-composer-actions { bottom: calc(4.75rem + env(safe-area-inset-bottom)); }
+}

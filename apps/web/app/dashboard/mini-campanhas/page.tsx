@@ -1,5 +1,8 @@
 "use client";
-import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import PremiumScope from "@/components/premium/PremiumScope";
+import styles from "./mini-campaigns-premium.module.css";
 import {
   Copy,
   Edit3,
@@ -9,6 +12,7 @@ import {
   Play,
   Plus,
   Square,
+  Ticket,
   Trash2,
   X,
 } from "lucide-react";
@@ -61,9 +65,12 @@ export default function MiniCampanhasPage() {
     [open, setOpen] = useState(false),
     [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  const load = async () => {
+    [error, setError] = useState(""),
+    [loadFailed, setLoadFailed] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const load = useCallback(async () => {
     setLoading(true);
+    setLoadFailed(false);
     try {
       const [mini, owned] = await Promise.all([
         listMiniCampaigns(),
@@ -71,21 +78,28 @@ export default function MiniCampanhasPage() {
       ]);
       setItems(mini);
       setCampaigns(owned);
-      if (!form.mainCampaignId && owned[0])
-        setForm((current) => ({ ...current, mainCampaignId: owned[0].id }));
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Não foi possível carregar as Mini Campanhas.",
-      );
+      if (owned[0])
+        setForm((current) => current.mainCampaignId ? current : { ...current, mainCampaignId: owned[0].id });
+    } catch {
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
-  };
-  useEffect(() => {
-    void load();
   }, []);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+  useEffect(() => {
+    if (!open) return;
+    const modal = dialog.current;
+    modal?.showModal();
+    return () => modal?.close();
+  }, [open]);
+  function close() {
+    dialog.current?.close();
+    setOpen(false);
+  }
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -106,7 +120,7 @@ export default function MiniCampanhasPage() {
       };
       if (editing) await updateMiniCampaign(editing, body);
       else await createMiniCampaign(body);
-      setOpen(false);
+      close();
       setEditing("");
       setForm({ ...empty, mainCampaignId: campaigns[0]?.id || "" });
       await load();
@@ -121,6 +135,7 @@ export default function MiniCampanhasPage() {
     }
   }
   function edit(item: MiniCampaign) {
+    setError("");
     setEditing(item.id);
     setForm({
       name: item.name,
@@ -141,6 +156,7 @@ export default function MiniCampanhasPage() {
   }
   async function action(id: string, value: string) {
     setBusy(true);
+    setError("");
     try {
       await miniCampaignAction(id, value);
       await load();
@@ -151,33 +167,38 @@ export default function MiniCampanhasPage() {
     }
   }
   return (
-    <div className="mx-auto max-w-7xl">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <PremiumScope className={styles.page}>
+      <header className={styles.hero}>
         <div>
-          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">
+          <p className={styles.eyebrow}>
             Campanhas vinculadas
           </p>
-          <h1 className="mt-2 text-3xl font-black">Mini Campanhas</h1>
-          <p className="mt-2 text-zinc-500">
-            Estoque, pedidos, resultado e histórico independentes da campanha
-            principal.
+          <h1 className={styles.title}>Mini Campanhas</h1>
+          <p className={styles.copy}>
+            Gerencie campanhas menores ligadas a uma campanha principal.
+            Estoque, pedidos e resultado ficam separados.
           </p>
         </div>
         <button
-          disabled={loading || !campaigns.length}
+          type="button"
+          disabled={loading || loadFailed || !campaigns.length}
           onClick={() => {
+            setError("");
             setEditing("");
             setForm({ ...empty, mainCampaignId: campaigns[0]?.id || "" });
             setOpen(true);
           }}
-          className="flex h-11 items-center gap-2 rounded-xl bg-violet-600 px-5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          className={styles.primary}
         >
-          <Plus size={18} />
+          <Plus size={18} aria-hidden="true" />
           Criar Mini Campanha
         </button>
-      </div>
-      {error && (
-        <p className="mt-5 rounded-2xl bg-red-50 p-4 text-red-700">
+      </header>
+      {!loading && !loadFailed && !campaigns.length && (
+        <p className={styles.notice}>Crie uma campanha principal antes de criar uma Mini Campanha. <Link href="/dashboard/campanhas/nova">Abrir criação de campanha</Link></p>
+      )}
+      {!open && error && (
+        <p role="alert" className={styles.error}>
           {error}{" "}
           {error.includes("plano") && (
             <a
@@ -190,61 +211,49 @@ export default function MiniCampanhasPage() {
         </p>
       )}
       {loading ? (
-        <div className="grid h-64 place-items-center">
-          <LoaderCircle className="animate-spin text-violet-600" />
+        <div className={styles.state} role="status">
+          <LoaderCircle size={18} className={styles.spinner} aria-hidden="true" /> Carregando Mini Campanhas…
         </div>
+      ) : loadFailed ? (
+        <section className={styles.state}>
+          <p role="alert">Não foi possível carregar as Mini Campanhas.</p>
+          <button type="button" onClick={() => void load()} className={styles.control}>Tentar novamente</button>
+        </section>
       ) : items.length ? (
-        <div className="mt-7 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <section className={styles.grid} aria-label="Mini Campanhas da conta">
           {items.map((item) => (
             <article
               key={item.id}
-              className="overflow-hidden rounded-3xl border bg-white shadow-sm"
+              className={styles.card}
+              aria-label={item.name}
             >
-              <div className="h-28 bg-gradient-to-br from-violet-100 via-white to-blue-100 p-5">
-                <div className="flex justify-between">
-                  <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-violet-700">
-                    {labels[item.status] || item.status}
-                  </span>
-                  <span className="text-xs font-bold text-zinc-500">
-                    #{item.slug}
-                  </span>
-                </div>
-              </div>
-              <div className="p-5">
-                <h2 className="text-xl font-black">{item.name}</h2>
-                <p className="mt-1 text-sm text-zinc-500">
-                  Vinculada a {item.mainCampaign.title}
-                </p>
-                <div className="mt-5 grid grid-cols-2 gap-3 text-sm">
-                  <Info
-                    label="Prêmio"
-                    value={labels[item.prizeType] || item.prizeType}
-                  />
-                  <Info
-                    label="Preço"
-                    value={money.format(Number(item.ticketPrice))}
-                  />
-                  <Info
-                    label="Estoque"
-                    value={`${item.soldTickets}/${item.maxTickets}`}
-                  />
-                  <Info
-                    label="Pedidos"
-                    value={String(item._count?.orders || 0)}
-                  />
-                </div>
-                <div className="mt-5 flex flex-wrap gap-2">
+              <header className={styles.cardTop}>
+                <span className={styles.icon}><Ticket size={22} aria-hidden="true" /></span>
+                <span className={styles.badge} data-status={item.status}>{labels[item.status] || item.status}</span>
+              </header>
+              <div className={styles.cardBody}>
+                <h2 className={styles.heading}>{item.name}</h2>
+                <p className={styles.copy}>Vinculada a {item.mainCampaign.title}</p>
+                <dl className={styles.fields}>
+                  <Info label="Prêmio" value={labels[item.prizeType] || item.prizeType} />
+                  <Info label="Preço por título" value={money.format(Number(item.ticketPrice))} />
+                  <Info label="Títulos vendidos" value={`${item.soldTickets} de ${item.maxTickets}`} />
+                  <Info label="Pedidos" value={item._count?.orders === undefined ? "Não informado" : String(item._count.orders)} />
+                </dl>
+                <div className={styles.actions}>
                   <button
                     onClick={() => edit(item)}
-                    className="rounded-xl bg-zinc-100 p-2"
+                    className={styles.control}
                     aria-label="Editar"
+                    disabled={busy || !["DRAFT", "PAUSED"].includes(item.status)}
+                    title={item.status === "PUBLISHED" ? "Pause a Mini Campanha antes de editar." : undefined}
                   >
-                    <Edit3 size={17} />
+                    <Edit3 size={17} aria-hidden="true" /> Editar
                   </button>
                   <button
                     onClick={() => void action(item.id, "duplicate")}
-                    className="rounded-xl bg-zinc-100 p-2"
-                    aria-label="Duplicar"
+                    className={styles.control}
+                    disabled={busy} aria-label="Duplicar"
                   >
                     <Copy size={17} />
                   </button>
@@ -252,8 +261,8 @@ export default function MiniCampanhasPage() {
                     item.status !== "FINISHED" && (
                       <button
                         onClick={() => void action(item.id, "publish")}
-                        className="rounded-xl bg-green-50 p-2 text-green-700"
-                        aria-label="Publicar"
+                        className={styles.control} data-tone="success"
+                        disabled={busy} aria-label="Publicar"
                       >
                         <Play size={17} />
                       </button>
@@ -261,8 +270,8 @@ export default function MiniCampanhasPage() {
                   {item.status === "PUBLISHED" && (
                     <button
                       onClick={() => void action(item.id, "pause")}
-                      className="rounded-xl bg-amber-50 p-2 text-amber-700"
-                      aria-label="Pausar"
+                      className={styles.control}
+                      disabled={busy} aria-label="Pausar"
                     >
                       <Pause size={17} />
                     </button>
@@ -270,8 +279,8 @@ export default function MiniCampanhasPage() {
                   {item.status !== "FINISHED" && (
                     <button
                       onClick={() => void action(item.id, "finish")}
-                      className="rounded-xl bg-red-50 p-2 text-red-700"
-                      aria-label="Finalizar"
+                      className={styles.control} data-tone="danger"
+                      disabled={busy} aria-label="Finalizar"
                     >
                       <Square size={17} />
                     </button>
@@ -283,48 +292,42 @@ export default function MiniCampanhasPage() {
                         .then(load)
                         .catch((cause) => setError(cause.message))
                     }
-                    className="rounded-xl bg-red-50 p-2 text-red-700"
-                    aria-label="Excluir"
+                    className={styles.control} data-tone="danger"
+                    disabled={busy || item.soldTickets > 0} aria-label="Excluir"
+                    title={item.soldTickets > 0 ? "Mini Campanhas com títulos vendidos não podem ser excluídas." : undefined}
                   >
                     <Trash2 size={17} />
                   </button>
-                  <a
-                    href={`/mini-campanhas/${item.slug}`}
-                    className="ml-auto flex items-center gap-1 rounded-xl bg-violet-50 px-3 text-xs font-bold text-violet-700"
-                  >
-                    Link <ExternalLink size={14} />
-                  </a>
+                  {item.status === "PUBLISHED" ? (
+                    <Link href={`/mini-campanhas/${item.slug}`} prefetch={false} className={styles.control}>Link público <ExternalLink size={15} aria-hidden="true" /></Link>
+                  ) : (
+                    <span className={styles.muted}>Link público indisponível neste status.</span>
+                  )}
                 </div>
               </div>
             </article>
           ))}
-        </div>
+        </section>
       ) : (
-        <div className="mt-7 rounded-3xl border bg-white p-14 text-center">
-          <h2 className="text-xl font-black">Nenhuma Mini Campanha criada</h2>
-          <p className="mt-2 text-zinc-500">
+        <section className={styles.state}>
+          <h2 className={styles.heading}>Nenhuma Mini Campanha criada</h2>
+          <p className={styles.copy}>
             Crie uma experiência menor vinculada a uma campanha principal.
           </p>
-        </div>
+        </section>
       )}
       {open && (
-        <div className="fixed inset-0 z-[70] overflow-y-auto bg-black/60 p-4">
-          <div className="mx-auto my-6 max-w-3xl rounded-3xl bg-white p-6 sm:p-8">
-            <div className="flex items-center justify-between">
+        <dialog ref={dialog} className={styles.dialog} aria-labelledby="mini-editor-title" onCancel={(event) => { event.preventDefault(); close(); }} onClick={(event) => { if (event.target === event.currentTarget) close(); }}>
+          <div className={styles.dialogBody}>
+            <header className={styles.hero}>
               <div>
-                <h2 className="text-2xl font-black">
-                  {editing ? "Editar" : "Criar"} Mini Campanha
-                </h2>
-                <p className="text-sm text-zinc-500">
-                  A publicação é local/sandbox; nenhum pagamento real será
-                  processado.
-                </p>
+                <h2 className={styles.heading} id="mini-editor-title">{editing ? "Editar" : "Criar"} Mini Campanha</h2>
+                <p className={styles.copy}>Salvar aqui não processa pagamentos. A disponibilidade da campanha depende do status de publicação.</p>
               </div>
-              <button onClick={() => setOpen(false)} className="rounded-xl p-2">
-                <X />
-              </button>
-            </div>
-            <form onSubmit={submit} className="mt-6 grid gap-4 md:grid-cols-2">
+              <button type="button" onClick={close} className={styles.control} aria-label="Fechar editor"><X size={19} aria-hidden="true" /></button>
+            </header>
+            {error && <div className={styles.error} role="alert">{error} {error.includes("plano") && <Link href="/dashboard/configuracoes/plano">Ver planos</Link>}</div>}
+            <form onSubmit={submit} className={styles.form}>
               <Field label="Nome">
                 <input
                   required
@@ -454,27 +457,27 @@ export default function MiniCampanhasPage() {
                   }
                 />
               </Field>
-              <label className="text-sm font-bold md:col-span-2">
+              <label className={`${styles.label} ${styles.formWide}`}>
                 Regra
                 <textarea
                   required
                   minLength={10}
-                  className="mt-2 min-h-28 w-full rounded-xl border p-3"
+                  className={styles.textarea}
                   value={form.rules}
                   onChange={(e) => setForm({ ...form, rules: e.target.value })}
                 />
               </label>
               <button
                 disabled={busy}
-                className="h-12 rounded-xl bg-violet-600 font-bold text-white md:col-span-2"
+                className={`${styles.primary} ${styles.formWide}`}
               >
                 {busy ? "Salvando..." : "Salvar Mini Campanha"}
               </button>
             </form>
           </div>
-        </div>
+        </dialog>
       )}
-    </div>
+    </PremiumScope>
   );
 }
 function Field({
@@ -485,7 +488,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="text-sm font-bold [&_input]:mt-2 [&_input]:h-11 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:px-3 [&_select]:mt-2 [&_select]:h-11 [&_select]:w-full [&_select]:rounded-xl [&_select]:border [&_select]:px-3">
+    <label className={styles.label}>
       {label}
       {children}
     </label>
@@ -493,11 +496,8 @@ function Field({
 }
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-zinc-50 p-3">
-      <span className="block text-[10px] font-bold uppercase text-zinc-400">
-        {label}
-      </span>
-      <b className="mt-1 block">{value}</b>
+    <div className={styles.field}>
+      <dt>{label}</dt><dd>{value}</dd>
     </div>
   );
 }
