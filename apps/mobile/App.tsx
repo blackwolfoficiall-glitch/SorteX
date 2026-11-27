@@ -1276,7 +1276,9 @@ export default function App() {
                 )}
                 {auth.user?.role === "BUYER" && (
                   <Stack.Screen name="BuyerCampaignTitles" component={BuyerCampaignTitlesScreen}
-                    options={{ title: "Meus títulos" }} />
+                    options={{ title: "Meus títulos", headerStyle: { backgroundColor: premium.surface },
+                      headerTintColor: premium.text, headerShadowVisible: false,
+                      contentStyle: { backgroundColor: premium.bg } }} />
                 )}
                 <Stack.Screen
                   name="Campaign"
