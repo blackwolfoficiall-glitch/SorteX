@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   BadgeCheck,
+  WalletCards,
   Copy,
   LoaderCircle,
   Plus,
@@ -11,6 +12,7 @@ import {
   Search,
   ShieldAlert,
 } from "lucide-react";
+import PremiumScope from "@/components/premium/PremiumScope";
 import { authRequest } from "@/lib/auth/client";
 import { useAuthorizedUser } from "@/components/auth/RoleGate";
 import { hasAdminPermission } from "@/lib/admin/authorization";
@@ -41,13 +43,17 @@ const titles: Record<Mode, [string, string]> = {
   ],
 };
 
-export default function AdminManagement({ mode }: { mode: Mode }) {
+export default function AdminManagement({ mode, premiumPlans = false }: { mode: Mode; premiumPlans?: boolean }) {
   const user = useAuthorizedUser();
   const [items, setItems] = useState<Json[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const premium = mode === "plans" && premiumPlans;
+  const plansRequest = useRef(0);
   const load = useCallback(async () => {
+    const request = premium ? ++plansRequest.current : 0;
+    const active = () => !premium || request === plansRequest.current;
     setLoading(true);
     setError("");
     try {
@@ -55,23 +61,75 @@ export default function AdminManagement({ mode }: { mode: Mode }) {
         `/api/admin/platform/${endpoint[mode]}`,
         { cache: "no-store" },
       );
-      setItems(Array.isArray(data) ? data : data.data || []);
+      if (active()) setItems(Array.isArray(data) ? data : data.data || []);
     } catch (cause) {
+      if (!active()) return;
       setError(
         cause instanceof Error
           ? cause.message
           : "Não foi possível carregar os dados.",
       );
     } finally {
-      setLoading(false);
+      if (active()) setLoading(false);
     }
-  }, [mode]);
+  }, [mode, premium]);
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!premium) {
+      void load();
+      return;
+    }
+    const task = window.setTimeout(() => void load(), 0);
+    return () => {
+      window.clearTimeout(task);
+      plansRequest.current += 1;
+    };
+  }, [load, premium]);
   const shown = items.filter((item) =>
     JSON.stringify(item).toLowerCase().includes(query.toLowerCase()),
   );
+  if (premium) return (
+    <PremiumScope className="sx-admin-plans">
+      <main className="sx-ap-wrap">
+        <header className="sx-premium-ticket sx-ap-hero">
+          <WalletCards size={30} aria-hidden="true" />
+          <div>
+            <p className="sx-ap-eyebrow">Equipe SorteX</p>
+            <h1 className="sx-premium-title">Planos</h1>
+            <p>Consulte os valores, limites e taxas padrão cadastrados.</p>
+          </div>
+        </header>
+        {user && hasAdminPermission(user, "SETTINGS_WRITE") && <div className="sx-ap-editor"><Editor mode="plans" onSaved={load} /></div>}
+        <section className="sx-premium-surface sx-ap-filters" aria-labelledby="sx-ap-filters">
+          <h2 className="sx-premium-section" id="sx-ap-filters">Filtrar planos</h2>
+          <div>
+            <label>
+              <span>Pesquisar plano</span>
+              <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
+            </label>
+            <button type="button" onClick={load} className="sx-premium-button"><RefreshCw size={17} aria-hidden="true" /> Atualizar</button>
+          </div>
+        </section>
+        <section className="sx-ap-results" aria-labelledby="sx-ap-results">
+          <header>
+            <h2 className="sx-premium-section" id="sx-ap-results">Catálogo administrativo</h2>
+            <p className="sx-premium-muted">Valores de referência do plano. Taxa padrão não inclui condições individuais e não indica cobrança realizada.</p>
+            <p role="status" className="sx-premium-muted">{loading ? "Carregando planos…" : error ? "Catálogo indisponível." : `${shown.length.toLocaleString("pt-BR")} ${shown.length === 1 ? "plano" : "planos"} ${query.trim() ? "na pesquisa" : "no catálogo"}`}</p>
+          </header>
+          {loading ? (
+            <div className="sx-premium-surface sx-ap-state" aria-hidden="true"><LoaderCircle size={25} className="sx-ap-spinner" /></div>
+          ) : error ? (
+            <div className="sx-premium-surface sx-ap-state">
+              <p role="alert" className="sx-ap-error">Não foi possível consultar os planos.</p>
+              <button type="button" onClick={load} className="sx-premium-button">Tentar novamente</button>
+            </div>
+          ) : !shown.length ? (
+            <p className="sx-premium-surface sx-ap-state">Nenhum plano encontrado{query.trim() ? " para a pesquisa." : "."}</p>
+          ) : <ul className="sx-ap-list" role="list">{shown.map((item) => <PlanCard key={item.id} plan={item} />)}</ul>}
+        </section>
+      </main>
+    </PremiumScope>
+  );
+
   return (
     <main className="p-5 pt-20 lg:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -129,6 +187,40 @@ export default function AdminManagement({ mode }: { mode: Mode }) {
         )}
       </div>
     </main>
+  );
+}
+
+function catalogAmount(value: unknown, mode: "money" | "rate" | "count") {
+  if (typeof value !== "number" && (typeof value !== "string" || !/^\d+(?:\.\d+)?$/.test(value))) return "Não informado";
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return "Não informado";
+  if (mode === "count" && !Number.isSafeInteger(number)) return "Não informado";
+  if (mode === "money") return number.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  if (mode === "rate") return `${number.toLocaleString("pt-BR", { maximumFractionDigits: 3 })}%`;
+  return number.toLocaleString("pt-BR");
+}
+
+function PlanCard({ plan }: { plan: Json }) {
+  return (
+    <li className="sx-premium-surface sx-ap-card">
+      <header>
+        <div>
+          <h3 className="sx-premium-section">{plan.name || "Plano sem nome"}</h3>
+          {plan.code && <p className="sx-premium-muted">{plan.code}</p>}
+        </div>
+        <span className="sx-premium-badge">{plan.isActive === true ? "Ativo" : plan.isActive === false ? "Inativo" : "Status não informado"}</span>
+      </header>
+      {plan.description && <p className="sx-premium-muted">{plan.description}</p>}
+      <dl>
+        <Info label="Valor mensal" value={catalogAmount(plan.monthlyPrice, "money")} />
+        <Info label="Valor anual" value={catalogAmount(plan.annualPrice, "money")} />
+        <Info label="Taxa padrão SorteX" value={catalogAmount(plan.platformFeeRate, "rate")} />
+        <Info label="Campanhas" value={catalogAmount(plan.campaignLimit, "count")} />
+        <Info label="Títulos" value={catalogAmount(plan.ticketLimit, "count")} />
+        <Info label="Usuários da equipe" value={catalogAmount(plan.teamMemberLimit, "count")} />
+        <Info label="Dias de teste" value={catalogAmount(plan.trialDays, "count")} />
+      </dl>
+    </li>
   );
 }
 

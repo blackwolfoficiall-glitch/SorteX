@@ -277,4 +277,22 @@ export const pageEvidence = [
     source: "apps/web/e2e/admin-audit-premium.spec.ts",
     revision: "0ebc52f",
   },
+  {
+    path: "/comprador/suporte",
+    detail: "histórico privado, rascunho, categorias, falha e recuperação por conta; sem abrir ou enviar chamado",
+    source: "apps/web/e2e-local/run-buyer-support-premium.mjs",
+    revision: "51b80d1",
+  },
+  {
+    path: "/dashboard/configuracoes",
+    detail: "seis destinos de configurações e acessos, temas e foco; sem editar configurações",
+    source: "apps/web/e2e/organizer-config-premium.spec.ts",
+    revision: "29a57fc",
+  },
+  {
+    path: "/admin/planos",
+    detail: "catálogo e estado, limites, período e permissões; sem alterar planos ou faturamento",
+    source: "apps/web/e2e/admin-plans-premium.spec.ts",
+    revision: "50f0fcf",
+  },
 ];

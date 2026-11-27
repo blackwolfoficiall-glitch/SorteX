@@ -1,0 +1,27 @@
+.sx-admin-plans { min-height: 100vh; padding: 4.75rem clamp(.75rem,3vw,2rem) 2rem; }
+.sx-admin-plans .sx-ap-wrap { width: min(100%,78rem); margin-inline: auto; min-width: 0; display: grid; gap: 1rem; }
+.sx-admin-plans .sx-ap-hero { display: flex; align-items: flex-start; gap: .85rem; padding: clamp(.9rem,4vw,1.7rem); background-image: linear-gradient(138deg,#5923c1,#214fc1); }
+.sx-admin-plans .sx-ap-hero > svg { flex: none; }
+.sx-admin-plans .sx-ap-hero > div { min-width: 0; }
+.sx-admin-plans .sx-ap-hero p:last-child { margin-top: .32rem; font-size: .93rem; }
+.sx-admin-plans .sx-ap-eyebrow { margin-block-end: .3rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 800; font-size: .72rem; }
+.sx-admin-plans .sx-ap-editor { min-width: 0; justify-self: end; max-width: 100%; }
+.sx-admin-plans :is(.sx-ap-filters,.sx-ap-results,.sx-ap-list) { display: grid; gap: .75rem; min-width: 0; }
+.sx-admin-plans .sx-ap-filters { padding: clamp(.75rem,3vw,1.3rem); }
+.sx-admin-plans .sx-ap-filters > div { display: flex; align-items: flex-end; flex-wrap: wrap; gap: .7rem; }
+.sx-admin-plans .sx-ap-filters label { flex: 1 1 12rem; min-width: 0; font-size: .84rem; font-weight: 750; }
+.sx-admin-plans .sx-ap-filters input {
+  display: block; min-width: 0; width: 100%; min-height: 2.75rem; margin-top: .28rem; padding: .5rem .65rem;
+  border: 1px solid var(--sxp-muted); border-radius: var(--sxp-button-radius); background: var(--sxp-surface); color: var(--sxp-text);
+}
+.sx-admin-plans .sx-ap-card { padding: clamp(.75rem,3vw,1.2rem); overflow-wrap: anywhere; }
+.sx-admin-plans .sx-ap-card header { display: flex; align-items: flex-start; flex-wrap: wrap; justify-content: space-between; gap: .55rem; margin-bottom: .6rem; }
+.sx-admin-plans .sx-ap-card dl { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: .65rem; margin-block-start: .65rem; }
+.sx-admin-plans .sx-ap-card dt { color: var(--sxp-muted); font-size: .76rem; }
+.sx-admin-plans .sx-ap-state { display: grid; align-content: center; justify-items: center; gap: .6rem; min-height: 7rem; padding: 1rem; text-align: center; }
+.sx-admin-plans .sx-ap-error { color: var(--sxp-error); }
+.sx-admin-plans .sx-ap-spinner { color: var(--sxp-accent); }
+.sx-admin-plans :is(button,input):focus-visible { outline: 2px solid var(--sxp-focus); outline-offset: 2px; }
+@media (min-width: 48rem) { .sx-admin-plans .sx-ap-list { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+@media (min-width: 64rem) { .sx-admin-plans { padding-block-start: 2rem; } }
+@media (prefers-reduced-motion: no-preference) { .sx-admin-plans .sx-ap-spinner { animation: spin 1s linear infinite; } }

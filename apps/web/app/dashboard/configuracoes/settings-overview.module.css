@@ -1,0 +1,109 @@
+.scope {
+  width: 100%;
+  min-width: 0;
+  border-radius: 1.5rem;
+}
+.content {
+  width: min(100%, 72rem);
+  margin-inline: auto;
+  padding: clamp(0.65rem, 2vw, 1.25rem);
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  overflow-wrap: anywhere;
+}
+.banner,
+.card {
+  min-width: 0;
+  color: var(--sxp-text);
+  background: var(--sxp-surface);
+  border: 1px solid var(--sxp-line);
+  border-radius: 1.25rem;
+  box-shadow: var(--sxp-shadow);
+}
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.85rem;
+  padding: clamp(1rem, 3vw, 1.65rem);
+}
+.banner > div {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+.banner h1 {
+  margin: 0.25rem 0;
+}
+.eyebrow {
+  color: var(--sxp-accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.description {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--sxp-muted);
+}
+.heroIcon,
+.cardIcon,
+.arrow {
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.heroIcon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  color: var(--sxp-white);
+  background: var(--sxp-gradient);
+}
+.grid {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+@media (min-width: 50rem) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.card {
+  display: flex;
+  align-items: flex-start;
+  min-height: 5rem;
+  gap: clamp(0.4rem, 2.5vw, 0.8rem);
+  padding: clamp(0.65rem, 2.5vw, 1.25rem);
+}
+.card:hover {
+  border-color: var(--sxp-focus);
+}
+.card:focus-visible {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 2px;
+}
+.cardIcon {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.8rem;
+  color: var(--sxp-accent);
+  background: var(--sxp-tint);
+}
+.text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cardTitle {
+  margin-bottom: 0.2rem;
+  font-size: 1.02rem;
+  font-weight: 800;
+}
+.card:hover .cardTitle {
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+.arrow {
+  align-self: center;
+  color: var(--sxp-accent);
+}
