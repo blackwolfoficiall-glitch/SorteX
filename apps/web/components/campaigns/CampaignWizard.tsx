@@ -34,7 +34,8 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
-import ProgressSteps from "@/components/organizador/ProgressSteps";
+import PremiumScope from "@/components/premium/PremiumScope";
+import styles from "./CampaignWizard.module.css";
 import {
   createCampaign,
   deleteCampaignImage,
@@ -565,40 +566,81 @@ export default function CampaignWizard({
 
   if (loading)
     return (
-      <div className="flex min-h-96 items-center justify-center">
-        <LoaderCircle className="animate-spin text-violet-700" />
-      </div>
-    );
-  return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-7 md:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-wider text-violet-600">
-              Módulo de campanhas
-            </p>
-            <h1 className="mt-2 text-3xl font-black">
-              {id ? "Editar rifa" : "Criar nova rifa"}
-            </h1>
-            <p className="mt-2 text-zinc-500">
-              {isPublished?"Atualize informações públicas sem alterar títulos emitidos ou regras do sorteio.":"Salve como rascunho e continue quando quiser."}
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => void saveDraft()}
-            disabled={saving}
-          >
-            <Save size={17} /> {isPublished?"Salvar alterações":"Salvar rascunho"}
-          </Button>
+      <PremiumScope className={styles.loading}>
+        <div role="status">
+          <LoaderCircle className={styles.spinner} aria-hidden="true" />
+          Carregando campanha…
         </div>
-        <ProgressSteps etapa={step} etapas={steps} />
-        {error && (
-          <p className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </p>
-        )}
-        {isPublished&&<div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Campanha publicada:</strong> preço, conteúdo, mídias, promoções e identidade visual continuam editáveis. Quantidade emitida e regra do sorteio permanecem protegidas.</div>}
+      </PremiumScope>
+    );
+  const stepPercent = Math.min(step / steps.length * 100, 100);
+
+  return (
+    <section className={styles.wizard} aria-labelledby="campaign-wizard-title">
+      <div className={styles.layout}>
+        <PremiumScope className={styles.chrome}>
+          <header className={styles.header}>
+            <div>
+              <p className={styles.eyebrow}>Módulo de campanhas</p>
+              <h1 id="campaign-wizard-title" className="sx-premium-title">
+                {id ? "Editar rifa" : "Criar nova rifa"}
+              </h1>
+              <p className={styles.muted}>
+                {isPublished
+                  ? "Atualize informações públicas sem alterar títulos emitidos ou regras do sorteio."
+                  : "Salve como rascunho e continue quando quiser."}
+              </p>
+            </div>
+            <button
+              className={styles.control}
+              type="button"
+              onClick={() => void saveDraft()}
+              disabled={saving}
+            >
+              <Save size={17} aria-hidden="true" /> {isPublished ? "Salvar alterações" : "Salvar rascunho"}
+            </button>
+          </header>
+
+          <section className={styles.progress} aria-labelledby="campaign-wizard-progress">
+            <div className={styles.progressHeading}>
+              <div>
+                <p className={styles.eyebrow}>Etapas da campanha</p>
+                <h2 id="campaign-wizard-progress" className="sx-premium-section">Etapa {step} de {steps.length}</h2>
+              </div>
+              <span className={styles.progressBadge} aria-hidden="true">{Math.round(stepPercent)}%</span>
+            </div>
+            <div
+              className={styles.track}
+              role="progressbar"
+              aria-label="Etapas da campanha"
+              aria-valuemin={0}
+              aria-valuemax={steps.length}
+              aria-valuenow={step}
+            >
+              <div style={{ width: `${stepPercent}%` }} />
+            </div>
+            <ol className={styles.steps} role="list" aria-label="Etapas do formulário">
+              {steps.map((title, index) => (
+                <li
+                  key={title}
+                  aria-current={step === index + 1 ? "step" : undefined}
+                  data-complete={step > index + 1 ? true : undefined}
+                >
+                  <span aria-hidden="true">
+                    {step > index + 1 ? <CheckCircle2 size={16} /> : index + 1}
+                  </span>
+                  {title}
+                </li>
+              ))}
+            </ol>
+          </section>
+          {error && <p className={styles.error} role="alert">{error}</p>}
+          {isPublished && (
+            <p className={styles.notice}>
+              <strong>Campanha publicada:</strong> preço, conteúdo, mídias, promoções e identidade visual continuam editáveis. Quantidade emitida e regra do sorteio permanecem protegidas.
+            </p>
+          )}
+        </PremiumScope>
 
         {step === 1 && (
           <Step
@@ -1523,26 +1565,35 @@ export default function CampaignWizard({
                   : "· Publicação imediata"}
               </p>
             </div>
-            <div className="mt-8 flex flex-wrap justify-between gap-3">
-              <Button variant="outline" onClick={() => setStep(6)}>
-                <ArrowLeft size={17} /> Voltar
-              </Button>
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
+            <WizardFooter>
+              <button className={styles.control} type="button" onClick={() => setStep(6)}>
+                <ArrowLeft size={17} aria-hidden="true" /> Voltar
+              </button>
+              <div className={styles.footerGroup}>
+                <button
+                  className={styles.control}
+                  type="button"
                   onClick={() => void saveDraft()}
                   disabled={saving}
                 >
-                  <Save size={17} /> {isPublished?"Salvar alterações":"Salvar rascunho"}
-                </Button>
-                {!isPublished && (publishNotice ? <p className="text-sm text-amber-800">{publishNotice}</p> : <Button onClick={publish} disabled={saving}><Rocket size={17} /> Publicar campanha</Button>)}
+                  <Save size={17} aria-hidden="true" /> {isPublished ? "Salvar alterações" : "Salvar rascunho"}
+                </button>
+                {!isPublished && (
+                  publishNotice ? (
+                    <p className={styles.notice}>{publishNotice}</p>
+                  ) : (
+                    <button className={styles.primary} type="button" onClick={publish} disabled={saving}>
+                      <Rocket size={17} aria-hidden="true" /> Publicar campanha
+                    </button>
+                  )
+                )}
               </div>
-            </div>
+            </WizardFooter>
           </Step>
         )}
       </div>
       {priceReductionOpen&&<div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4" role="presentation"><section role="dialog" aria-modal="true" aria-labelledby="price-reduction-title" className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl"><h2 id="price-reduction-title" className="text-2xl font-black">O valor da cota foi reduzido.</h2><p className="mt-3 text-zinc-600">Deseja criar uma promoção oficial utilizando esse novo valor?</p><div className="mt-6 grid gap-2 sm:grid-cols-3"><Button onClick={()=>void confirmPriceReduction(true)} disabled={saving}>Criar promoção</Button><Button variant="outline" onClick={()=>void confirmPriceReduction(false)} disabled={saving}>Somente atualizar preço</Button><Button variant="ghost" onClick={()=>setPriceReductionOpen(false)} disabled={saving}>Cancelar</Button></div></section></div>}
-    </main>
+    </section>
   );
 
   function updatePrize(
@@ -1666,23 +1717,29 @@ function Actions({
   next: () => void;
 }) {
   return (
-    <div className="mt-8 flex justify-between">
-      {back ? (
-        <Button variant="outline" onClick={back}>
-          <ArrowLeft size={17} /> Voltar
-        </Button>
-      ) : (
-        <span />
+    <WizardFooter>
+      {back && (
+        <button className={styles.control} type="button" onClick={back}>
+          <ArrowLeft size={17} aria-hidden="true" /> Voltar
+        </button>
       )}
-      <Button onClick={next} disabled={saving}>
+      <button className={styles.primary} type="button" onClick={next} disabled={saving}>
         {saving ? (
-          <LoaderCircle className="animate-spin" size={17} />
+          <LoaderCircle className={styles.spinner} size={17} aria-hidden="true" />
         ) : (
-          <ArrowRight size={17} />
-        )}{" "}
+          <ArrowRight size={17} aria-hidden="true" />
+        )}
         Salvar e continuar
-      </Button>
-    </div>
+      </button>
+    </WizardFooter>
+  );
+}
+
+function WizardFooter({ children }: { children: React.ReactNode }) {
+  return (
+    <PremiumScope className={styles.footer}>
+      <footer aria-label="Ações da etapa">{children}</footer>
+    </PremiumScope>
   );
 }
 function QuickChoices({
