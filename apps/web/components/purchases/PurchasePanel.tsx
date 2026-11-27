@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock3, LoaderCircle, Minus, Plus, Ticket, X } from "lucide-react";
+import { Clock3, LoaderCircle, Minus, Plus, Star, Ticket, X } from "lucide-react";
 import Button from "@/components/ui/Button";
 import type { Campaign } from "@/lib/campaigns/types";
 import {
@@ -50,6 +50,8 @@ export default function PurchasePanel({
   const latestSalesBlock = useRef(salesBlock);
   useEffect(() => { latestSalesBlock.current = salesBlock; }, [salesBlock]);
   const accent = campaignAccent(campaign);
+  const popularAccent = /^#[0-9A-Fa-f]{6}$/.test(accent) ? accent : "#2563EB";
+  const popularText = popularTileText(popularAccent);
 
   useEffect(() => {
     if (campaign.numberSelectionMode !== "MANUAL" || salesBlock) return;
@@ -404,7 +406,7 @@ export default function PurchasePanel({
       )}
 
       {campaign.numberSelectionMode === "RANDOM" ? (
-        <div className="grid gap-4 md:grid-cols-[1.4fr_0.6fr]">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[1.4fr_0.6fr]">
           <div>
             <p className="text-xs font-black uppercase text-zinc-600">
               Escolha uma quantidade
@@ -418,20 +420,16 @@ export default function PurchasePanel({
                     key={value}
                     className="relative min-w-0 overflow-visible"
                   >
-                    {popular && (
-                      <span
-                        className="absolute left-1/2 top-0 z-20 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-white px-2 py-1 text-[9px] font-black shadow"
-                        style={{ color: accent }}
-                      >
-                        Mais popular ⭐
-                      </span>
-                    )}
                     <button
                       disabled={quantity >= maximum}
                       onClick={() => addQuick(value)}
                       style={
                         popular
-                          ? { borderColor: accent, backgroundColor: accent }
+                          ? {
+                              borderColor: popularAccent,
+                              backgroundColor: popularAccent,
+                              color: popularText,
+                            }
                           : active
                             ? {
                                 borderColor: accent,
@@ -439,10 +437,16 @@ export default function PurchasePanel({
                               }
                             : {}
                       }
-                      className={`h-full w-full rounded-xl border px-1 py-3 text-sm font-black transition-all duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 ${popular ? "text-white shadow-lg" : active ? "bg-white" : "border-zinc-200 bg-white"}`}
+                      className={`relative h-full w-full rounded-xl border px-1 py-3 text-sm font-black transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 ${popular ? "shadow-lg" : active ? "bg-white" : "border-zinc-200 bg-white"}`}
                     >
+                      {popular && (
+                        <span className="absolute left-1/2 top-0 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-0.5 whitespace-nowrap rounded-full bg-white px-1.5 py-0.5 text-[9px] font-black leading-tight text-[#0f172a] shadow">
+                          <Star aria-hidden="true" className="size-2 shrink-0" />
+                          Mais popular
+                        </span>
+                      )}
                       +{value.toLocaleString("pt-BR")}
-                      <span className="mt-1 block text-[9px] font-semibold opacity-80">
+                      <span className="mt-1 block text-[11px] font-semibold leading-tight">
                         {(value * campaign.numberPrice).toLocaleString(
                           "pt-BR",
                           { style: "currency", currency: "BRL" },
@@ -782,6 +786,30 @@ function campaignAccent(campaign: Campaign) {
     CUSTOM: campaign.customAccentColor || "#2563EB",
   };
   return colors[campaign.accentColorMode || "BLUE"];
+}
+
+// WCAG relative luminance; the tile's solid price is small body text (4.5:1).
+function popularTileText(background: string) {
+  const navy = "#0F172A";
+  const brightness = (hex: string) => {
+    const weights = [0.2126, 0.7152, 0.0722];
+    return weights.reduce((sum, weight, index) => {
+      const channel =
+        Number.parseInt(hex.slice(1 + 2 * index, 3 + 2 * index), 16) / 255;
+      const linear =
+        channel <= 0.04045
+          ? channel / 12.92
+          : ((channel + 0.055) / 1.055) ** 2.4;
+      return sum + weight * linear;
+    }, 0);
+  };
+  const fill = brightness(background);
+  const dark = brightness(navy);
+  const overNavy = (Math.max(fill, dark) + 0.05) / (Math.min(fill, dark) + 0.05);
+  if (overNavy >= 4.5) return navy;
+  const overBlack = (fill + 0.05) / 0.05;
+  const overWhite = 1.05 / (fill + 0.05);
+  return overBlack > overWhite ? "#000000" : "#FFFFFF";
 }
 
 function rouletteRoundsForQuantity(

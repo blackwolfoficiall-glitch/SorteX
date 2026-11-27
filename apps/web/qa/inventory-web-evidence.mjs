@@ -163,4 +163,34 @@ export const pageEvidence = [
     source: "apps/web/e2e/personalization-premium.spec.ts",
     revision: "5866324",
   },
+  {
+    path: "/comprador/compras/[id]",
+    detail: "detalhe pago, pendente, reservado e expirado, títulos, links e isolamento; sem chamar checkout ou gateway",
+    source: "apps/web/e2e-local/run-buyer-purchase-detail-premium.mjs",
+    revision: "47bb97c",
+  },
+  {
+    path: "/esqueci-senha",
+    detail: "solicitação de recuperação e validação local; sem disparar e-mail",
+    source: "apps/web/e2e/password-recovery-premium.spec.ts",
+    revision: "691cb10",
+  },
+  {
+    path: "/recuperar-senha",
+    detail: "entrada de redefinição, teclado e rejeição local de dados ausentes ou divergentes; não alterou senha",
+    source: "apps/web/e2e/password-recovery-premium.spec.ts",
+    revision: "691cb10",
+  },
+  {
+    path: "/admin/organizadores",
+    detail: "lista, paginação, filtros e acesso autorizado restrito, recuperação; sem aprovar, editar ou alterar permissões",
+    source: "apps/web/e2e/admin-organizers-premium.spec.ts",
+    revision: "6b040c7",
+  },
+  {
+    path: "/campanha/[slug]",
+    detail: "somente painel de quantidade, promoção separada, contraste a 320 px e cotação autorizada local com API d4; sem reservar ou pagar",
+    source: "apps/web/e2e-local/run-quick-quantity-contrast.mjs",
+    revision: "96e9cd5",
+  },
 ];
