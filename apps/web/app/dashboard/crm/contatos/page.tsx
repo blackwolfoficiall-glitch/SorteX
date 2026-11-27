@@ -87,7 +87,7 @@ function ContactsView() {
   function communicate(ids = selected) {
     if (!ids.length) return;
     router.push(
-      `/dashboard/comunicacao?audience=MANUAL&contactIds=${encodeURIComponent(ids.join(","))}`,
+      `/dashboard/comunicacao?tab=new&audience=MANUAL&contactIds=${encodeURIComponent(ids.join(","))}`,
     );
   }
   function queryString(targetPage: number, limit = 20) {

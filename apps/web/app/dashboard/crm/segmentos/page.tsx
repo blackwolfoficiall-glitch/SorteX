@@ -332,7 +332,7 @@ function SegmentsView() {
                     Recalcular
                   </button>
                   <Link
-                    href={`/dashboard/comunicacao?segmentId=${segment.id}`}
+                    href={`/dashboard/comunicacao?tab=new&segmentId=${segment.id}`}
                     className="sx-premium-button"
                     data-variant="ghost"
                   >

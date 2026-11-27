@@ -63,21 +63,21 @@ export const pageEvidence = [
   },
   {
     path: "/dashboard/crm/contatos",
-    detail: "contatos, busca e estados, inclusão/remoção de tag e proteção de acesso; sem envio externo",
+    detail: "contatos, busca e estados, inclusão/remoção de tag e proteção de acesso; sem envio externo; composição manual abre com público pré-selecionado",
     source: "apps/web/e2e-local/run-organizer-crm-workspaces-premium.mjs",
-    revision: "404838a",
+    revision: "99c5e94",
   },
   {
     path: "/dashboard/crm/contatos/[id]",
-    detail: "perfil 360°, nota, tarefa, marcação VIP e recuperação de erro com conta fictícia; acesso de outra conta bloqueado",
+    detail: "perfil 360°, nota, tarefa, marcação VIP e recuperação de erro com conta fictícia; acesso de outra conta bloqueado; atalhos de contato e assistente abrem composição correta, sem provedor",
     source: "apps/web/e2e-local/run-organizer-crm-workspaces-premium.mjs",
-    revision: "404838a",
+    revision: "99c5e94",
   },
   {
     path: "/dashboard/crm/segmentos",
-    detail: "construtor, prévia, criação e recontagem persistidas, tema e responsividade; isolamento entre organizadores",
+    detail: "construtor, prévia, criação e recontagem persistidas, tema e responsividade; isolamento entre organizadores; abre composição com segmento já selecionado",
     source: "apps/web/e2e-local/run-organizer-crm-workspaces-premium.mjs",
-    revision: "404838a",
+    revision: "99c5e94",
   },
   {
     path: "/dashboard/ia",

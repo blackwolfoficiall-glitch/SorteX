@@ -234,13 +234,13 @@ function ContactProfile({ id }: { id: string }) {
                 <Star size={16} aria-hidden="true" /> Marcar como VIP
               </button>
               <Link
-                href={`/dashboard/comunicacao?contactId=${id}`}
+                href={`/dashboard/comunicacao?tab=new&contactId=${id}`}
                 className="sx-premium-button"
               >
                 <MessageCircle size={16} aria-hidden="true" /> Abrir comunicação
               </Link>
               <Link
-                href={`/dashboard/comunicacao?contactId=${id}&ai=1`}
+                href={`/dashboard/comunicacao?tab=new&contactId=${id}&ai=1`}
                 className="sx-premium-button"
                 data-variant="ghost"
               >

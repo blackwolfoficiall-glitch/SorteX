@@ -165,7 +165,7 @@ try {
   ).toBeVisible();
   await expect(
     p.getByRole("link", { name: "Abrir comunicação" }),
-  ).toHaveAttribute("href", /\/dashboard\/comunicacao\?contactId=/);
+  ).toHaveAttribute("href", /\/dashboard\/comunicacao\?tab=new&contactId=/);
   await width(p, 390, "dark");
   await capture(p, "perfil-iphone-dark");
   await p.getByLabel("Nota interna").fill(note);
@@ -255,7 +255,7 @@ try {
       .getByRole("link", { name: "Preparar comunicação" })
       .filter({ visible: true })
       .last(),
-  ).toHaveAttribute("href", /\?segmentId=/);
+  ).toHaveAttribute("href", /\?tab=new&segmentId=/);
   await width(p, 1024, "dark");
   await click(
     p,

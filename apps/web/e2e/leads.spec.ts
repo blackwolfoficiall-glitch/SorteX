@@ -43,6 +43,14 @@ test("lead carrega, filtra, abre, edita, cria tarefa e inicia comunicação", as
   await page.reload();
   await expect(page.getByText(note)).toBeVisible();
   await page.getByRole("link", { name: "Abrir comunicação" }).click();
-  await expect(page).toHaveURL(new RegExp(`/dashboard/comunicacao\\?contactId=${lead.id}`));
+  await expect(page).toHaveURL(new RegExp(`/dashboard/comunicacao\\?tab=new&contactId=${lead.id}`));
   await expect(page.getByRole("heading", { name: "Comunicação inteligente" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Nova comunicação", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Continuar", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Defina o público", exact: true })).toBeVisible();
+  const select = (label: string) => page.locator("label").filter({
+    has: page.locator("span").and(page.getByText(label, { exact: true })),
+  }).locator("select");
+  await expect(select("Público")).toHaveValue("CONTACT");
+  await expect(select("Contato")).toHaveValue(lead.id);
 });
