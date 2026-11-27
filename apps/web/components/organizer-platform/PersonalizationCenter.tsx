@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
+import PremiumScope from "@/components/premium/PremiumScope";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
@@ -79,8 +80,10 @@ const statusLabels: Record<string, string> = {
 
 export function PersonalizationCenter({
   initialTab = "site",
+  premium = false,
 }: {
   initialTab?: string;
+  premium?: boolean;
 }) {
   const router = useRouter();
   const search = useSearchParams();
@@ -165,6 +168,10 @@ export function PersonalizationCenter({
     );
     return () => window.clearTimeout(timer);
   }, []);
+  function retryPersonalization() {
+    setError("");
+    void load().catch(() => setError("Não foi possível carregar sua personalização."));
+  }
   const appearance = useMemo<Record<string, unknown>>(
     () => ({
       showParticipants: true,
@@ -197,7 +204,21 @@ export function PersonalizationCenter({
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
-  if (!data || !brand || !savedBrand)
+  if (!data || !brand || !savedBrand) {
+    if (premium) return (
+      <PersonalizationFrame premium>
+        <section className="sx-premium-surface sx-personalization-state">
+          <h1 className="sx-premium-title">Personalização</h1>
+          {error ? (
+            <>
+              <p role="alert" className="sx-personalization-error">Não foi possível carregar sua personalização.</p>
+              <p className="sx-premium-muted">Nenhuma configuração foi aplicada. Consulte novamente sem alterar sua marca.</p>
+              <button type="button" className="sx-premium-button" data-variant="primary" onClick={retryPersonalization}>Tentar novamente</button>
+            </>
+          ) : <p role="status" className="sx-premium-muted">Consultando identidade e campanhas…</p>}
+        </section>
+      </PersonalizationFrame>
+    );
     return (
       <div className="min-h-72">
         {error ? (
@@ -226,6 +247,7 @@ export function PersonalizationCenter({
         )}
       </div>
     );
+  }
   const selectedCampaign =
     campaigns.find((item) => item.id === previewCampaignId) ||
     campaigns[0] ||
@@ -465,20 +487,22 @@ export function PersonalizationCenter({
     }
   }
   return (
-    <div className="mx-auto w-full min-w-0 max-w-[1700px] overflow-x-hidden">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <PersonalizationFrame premium={premium}>
+      <div className="sx-personalization-header flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">
+          <p className={premium ? "sx-premium-badge" : "text-xs font-black uppercase tracking-[.2em] text-violet-600"}>
             Identidade e experiência
           </p>
-          <h1 className="mt-2 text-3xl font-black">Personalização</h1>
-          <p className="mt-2 text-zinc-500">
-            Defina a identidade global herdada por todas as suas campanhas.
+          <h1 className={premium ? "sx-premium-title mt-2" : "mt-2 text-3xl font-black"}>Personalização</h1>
+          <p className={premium ? "sx-premium-muted mt-2" : "mt-2 text-zinc-500"}>
+            {premium
+              ? "Configure a identidade padrão das suas campanhas. O tema deste editor não muda sua marca pública."
+              : "Defina a identidade global herdada por todas as suas campanhas."}
           </p>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-3">
+        <div className={premium ? "sx-personalization-actions flex flex-wrap items-center gap-3" : "flex flex-wrap items-center justify-end gap-3"}>
           <span
-            aria-live="polite"
+            aria-live="polite" data-unsaved={dirty || undefined}
             className={`flex items-center gap-2 text-sm font-semibold ${dirty ? "text-amber-700" : "text-emerald-700"}`}
           >
             <span
@@ -491,14 +515,14 @@ export function PersonalizationCenter({
               <button
                 onClick={discard}
                 disabled={busy || !dirty}
-                className="h-11 rounded-xl border px-4 text-sm font-bold text-zinc-600 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"
+                className={premium ? "sx-premium-button" : "h-11 rounded-xl border px-4 text-sm font-bold text-zinc-600 hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-40"}
               >
                 Descartar alterações
               </button>
               <button
                 onClick={restore}
                 disabled={busy}
-                className="flex h-11 items-center gap-2 rounded-xl border px-4 text-sm font-bold"
+                className={premium ? "sx-premium-button" : "flex h-11 items-center gap-2 rounded-xl border px-4 text-sm font-bold"}
               >
                 <RotateCcw size={17} />
                 Restaurar padrão
@@ -509,7 +533,7 @@ export function PersonalizationCenter({
             <button
               onClick={() => void finishOnboarding(true)}
               disabled={busy}
-              className="h-11 rounded-xl px-4 text-sm font-bold text-zinc-600 hover:bg-zinc-100 disabled:opacity-50"
+              className={premium ? "sx-premium-button" : "h-11 rounded-xl px-4 text-sm font-bold text-zinc-600 hover:bg-zinc-100 disabled:opacity-50"}
             >
               Pular por agora
             </button>
@@ -517,7 +541,8 @@ export function PersonalizationCenter({
           <button
             onClick={() => void saveBrand()}
             disabled={busy || (!dirty && !onboarding)}
-            className="flex h-11 items-center gap-2 rounded-xl bg-violet-600 px-5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-45"
+            data-variant={premium ? "primary" : undefined}
+            className={premium ? "sx-premium-button" : "flex h-11 items-center gap-2 rounded-xl bg-violet-600 px-5 font-bold text-white disabled:cursor-not-allowed disabled:opacity-45"}
           >
             <Save size={18} />
             {busy
@@ -531,7 +556,7 @@ export function PersonalizationCenter({
       {error && (
         <p
           role="alert"
-          className="mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-700"
+          className={premium ? "sx-personalization-error mt-5" : "mt-5 rounded-2xl bg-red-50 p-4 text-sm text-red-700"}
         >
           {error}
         </p>
@@ -540,7 +565,7 @@ export function PersonalizationCenter({
         aria-label="Seção de personalização"
         value={tab}
         onChange={(e) => setTab(e.target.value)}
-        className="mt-6 h-12 w-full rounded-xl border bg-white px-3 font-bold md:hidden"
+        className="sx-personalization-select mt-6 h-12 w-full rounded-xl border bg-white px-3 font-bold md:hidden"
       >
         {tabs.map(([key, label]) => (
           <option key={key} value={key}>
@@ -549,18 +574,20 @@ export function PersonalizationCenter({
         ))}
       </select>
       <div className="mt-6 grid min-w-0 gap-4 md:grid-cols-[210px_minmax(0,1fr)] xl:grid-cols-[210px_minmax(0,1fr)_minmax(390px,520px)]">
-        <nav className="hidden content-start gap-2 md:grid">
+        <nav className="sx-personalization-nav hidden content-start gap-2 md:grid" aria-label={premium ? "Seções de personalização" : undefined}>
           {tabs.map(([key, label]) => (
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`rounded-xl px-4 py-3 text-left text-sm font-bold ${tab === key ? "bg-violet-600 text-white" : "border bg-white text-zinc-600"}`}
+              aria-pressed={premium ? tab === key : undefined}
+              className={premium ? "sx-personalization-tab" : `rounded-xl px-4 py-3 text-left text-sm font-bold ${tab === key ? "bg-violet-600 text-white" : "border bg-white text-zinc-600"}`}
             >
               {label}
             </button>
           ))}
         </nav>
-        <section className="min-w-0 max-w-full overflow-hidden rounded-3xl border bg-white p-5 shadow-sm sm:p-7">
+        <section aria-label={premium ? "Editor de personalização" : undefined}
+          className={premium ? "sx-premium-surface sx-personalization-editor p-4 sm:p-6" : "min-w-0 max-w-full overflow-hidden rounded-3xl border bg-white p-5 shadow-sm sm:p-7"}>
           {tab === "site" && (
             <div>
               <SectionTitle
@@ -1127,7 +1154,7 @@ export function PersonalizationCenter({
             </div>
           )}
           {tab === "preview" && (
-            <div className="xl:hidden">
+            <div className="xl:hidden" data-sx-brand-preview>
               <PersonalizationPreview
                 payload={{ campaign: selectedCampaign, brand, appearance }}
                 campaignId={previewCampaignId}
@@ -1137,7 +1164,7 @@ export function PersonalizationCenter({
             </div>
           )}
         </section>
-        <aside className="hidden min-w-0 self-start rounded-3xl border bg-white p-5 shadow-sm xl:sticky xl:top-5 xl:block">
+        <aside className="hidden min-w-0 self-start rounded-3xl border bg-white p-5 shadow-sm xl:sticky xl:top-5 xl:block" data-sx-brand-preview>
           <PersonalizationPreview
             payload={{ campaign: selectedCampaign, brand, appearance }}
             campaignId={previewCampaignId}
@@ -1146,8 +1173,13 @@ export function PersonalizationCenter({
           />
         </aside>
       </div>
-    </div>
+    </PersonalizationFrame>
   );
+}
+
+function PersonalizationFrame({ premium, children }: { premium: boolean; children: ReactNode }) {
+  if (premium) return <PremiumScope className="sx-personalization">{children}</PremiumScope>;
+  return <div className="mx-auto w-full min-w-0 max-w-[1700px] overflow-x-hidden">{children}</div>;
 }
 
 function Networks({

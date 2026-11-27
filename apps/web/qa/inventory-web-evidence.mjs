@@ -139,4 +139,28 @@ export const pageEvidence = [
     source: "apps/web/e2e/registration-choice-premium.spec.ts",
     revision: "4f38406",
   },
+  {
+    path: "/comprador/meus-numeros",
+    detail: "compras, títulos emitidos e estados distintos, filtros, temas e isolamento; sem alterar pagamentos ou reservas",
+    source: "apps/web/e2e-local/run-buyer-purchases-premium.mjs",
+    revision: "94c43ac",
+  },
+  {
+    path: "/cadastro/comprador",
+    detail: "três etapas, catálogo local de endereços, teclado e validação visual; sem criar conta",
+    source: "apps/web/e2e/registration-forms-premium.spec.ts",
+    revision: "a0a0805",
+  },
+  {
+    path: "/cadastro/organizador",
+    detail: "três etapas, PF/PJ e catálogo local, temas e validações vazias; sem aprovar, enviar ou cadastrar",
+    source: "apps/web/e2e/registration-forms-premium.spec.ts",
+    revision: "a0a0805",
+  },
+  {
+    path: "/dashboard/personalizacao",
+    detail: "editor de personalização, cores existentes independentes no iframe, descartar e isolar por conta; sem salvar, enviar arquivos ou configurar domínios",
+    source: "apps/web/e2e/personalization-premium.spec.ts",
+    revision: "5866324",
+  },
 ];

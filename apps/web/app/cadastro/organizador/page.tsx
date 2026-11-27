@@ -1,2 +1,10 @@
 import RegistrationForm from "@/components/auth/RegistrationForm";
-export default function CadastroOrganizador() { return <RegistrationForm role="ORGANIZER" />; }
+import RegistrationAccessScope from "../RegistrationAccessScope";
+
+export default function CadastroOrganizador() {
+  return (
+    <RegistrationAccessScope>
+      <RegistrationForm role="ORGANIZER" />
+    </RegistrationAccessScope>
+  );
+}
