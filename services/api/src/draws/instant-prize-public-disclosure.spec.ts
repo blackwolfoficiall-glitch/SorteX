@@ -24,14 +24,16 @@ function fixture(
 ) {
   const campaign = {
     findFirst: jest.fn(
-      async ({
+      ({
         where,
       }: {
         where: { slug: string; status: { in: CampaignStatus[] } };
       }) =>
-        before && where.slug === slug && where.status.in.includes(before)
-          ? { id: campaignId }
-          : null,
+        Promise.resolve(
+          before && where.slug === slug && where.status.in.includes(before)
+            ? { id: campaignId }
+            : null,
+        ),
     ),
   };
   type ResultsWhere = {
@@ -40,25 +42,27 @@ function fixture(
     instantPrize: { status: { in: InstantPrizeStatus[] } };
   };
   const instantPrizeResult = {
-    findMany: jest.fn(async ({ where }: { where: ResultsWhere }) =>
-      after &&
-      where.campaignId === campaignId &&
-      where.campaign.slug === slug &&
-      where.campaign.status.in.includes(after) &&
-      where.instantPrize.status.in.includes(prizeStatus)
-        ? [
-            {
-              winningNumber,
-              status: 'IDENTIFIED',
-              identifiedAt: moment,
-              instantPrize: {
-                description: 'Prêmio sintético anunciado',
-                value: '12.34',
-                type: 'PRODUCT',
+    findMany: jest.fn(({ where }: { where: ResultsWhere }) =>
+      Promise.resolve(
+        after &&
+          where.campaignId === campaignId &&
+          where.campaign.slug === slug &&
+          where.campaign.status.in.includes(after) &&
+          where.instantPrize.status.in.includes(prizeStatus)
+          ? [
+              {
+                winningNumber,
+                status: 'IDENTIFIED',
+                identifiedAt: moment,
+                instantPrize: {
+                  description: 'Prêmio sintético anunciado',
+                  value: '12.34',
+                  type: 'PRODUCT',
+                },
               },
-            },
-          ]
-        : [],
+            ]
+          : [],
+      ),
     ),
   };
   return {
@@ -173,7 +177,11 @@ describe('anonymous instant-prize disclosure policy', () => {
   });
 
   it('keeps the narrow route public and prevents clients from caching it', () => {
-    const handler = DrawsController.prototype.publicInstant;
+    const handler: unknown = Object.getOwnPropertyDescriptor(
+      DrawsController.prototype,
+      'publicInstant',
+    )?.value;
+    if (typeof handler !== 'function') throw new Error('Missing route handler');
     expect(Reflect.getMetadata(IS_PUBLIC_KEY, handler)).toBe(true);
     expect(Reflect.getMetadata(HEADERS_METADATA, handler)).toContainEqual({
       name: 'Cache-Control',

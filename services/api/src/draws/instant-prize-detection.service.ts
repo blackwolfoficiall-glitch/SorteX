@@ -762,7 +762,9 @@ export class InstantPrizeDetectionService {
         // withdrawn after the initial existence check.
         campaign: visibleCampaign,
         instantPrize: {
-          status: { in: [InstantPrizeStatus.FOUND, InstantPrizeStatus.DELIVERED] },
+          status: {
+            in: [InstantPrizeStatus.FOUND, InstantPrizeStatus.DELIVERED],
+          },
         },
       },
       select: {

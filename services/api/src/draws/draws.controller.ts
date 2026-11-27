@@ -243,9 +243,7 @@ export class DrawsController {
   @Get('public/campaigns/:slug/instant-prizes')
   @Public()
   @Header('Cache-Control', 'no-store')
-  publicInstant(
-    @Param('slug') slug: string,
-  ) {
+  publicInstant(@Param('slug') slug: string) {
     return this.instant.publicResults(slug);
   }
   @Get('roulette/campaigns/:id/status') @Roles(UserRole.BUYER) rouletteStatus(
