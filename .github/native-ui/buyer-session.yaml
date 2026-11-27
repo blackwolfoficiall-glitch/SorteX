@@ -1,28 +1,49 @@
 appId: br.com.sortex.development
 name: Login nativo (PostgreSQL local)
 ---
+# The startup probe scrolls down to verify submit; return to the email field.
+- scrollUntilVisible:
+    element:
+      id: sortex-login-email
+    direction: UP
 - extendedWaitUntil:
     visible:
       id: sortex-login-email
     timeout: 45000
 - tapOn:
     id: sortex-login-email
+- extendedWaitUntil:
+    visible:
+      id: sortex-login-email
+      focused: true
+    timeout: 7000
 # Keep the input focused between parts. XCTest can drop the leading key
 # while the keyboard first appears; await both actual fixture fields later.
 - inputText: s
 - inputText: ortex-ios-ui@example.test
+- scrollUntilVisible:
+    element:
+      id: sortex-login-password
+    direction: DOWN
 - tapOn:
     id: sortex-login-password
+- extendedWaitUntil:
+    visible:
+      id: sortex-login-password
+      focused: true
+    timeout: 7000
 # The XCTest driver sends each command's first character slowly. Split an
 # initial keystroke from the remaining input without refocusing the secure field.
 - inputText: ${BUYER_PASSWORD.slice(0, 1)}
 - inputText: ${BUYER_PASSWORD.slice(1)}
-- hideKeyboard
 - scrollUntilVisible:
     element:
       id: sortex-login-inputs-ready
     direction: DOWN
-- assertVisible:
+- assertVisible: "Toque em Entrar com e-mail para continuar."
+# Dismiss by tapping neutral text. Do not send a keyboard-specific key
+# that can modify the focused secure input or depend on keyboard language.
+- tapOn:
     id: sortex-login-inputs-ready
 - scrollUntilVisible:
     element:

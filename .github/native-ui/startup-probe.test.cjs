@@ -23,12 +23,15 @@ test('startup Maestro probes real login view without typing or receiving credent
 test('credentialed flow keeps strict login selectors and only the login phase enters input', () => {
   const flow = readFileSync(resolve(dir, 'buyer-session.yaml'), 'utf8');
   assert.match(flow, /extendedWaitUntil:\s+visible:\s+id: sortex-login-email\s+timeout: 45000/);
-  assert.match(flow, /tapOn:\s+id: sortex-login-password(?:\n#[^\n]*)*\n- inputText: \$\{BUYER_PASSWORD\.slice\(0, 1\)\}\n- inputText: \$\{BUYER_PASSWORD\.slice\(1\)\}/);
-  assert.match(flow, /tapOn:\s+id: sortex-login-email(?:\n#[^\n]*)*\n- inputText: s\n- inputText: ortex-ios-ui@example\.test/);
+  assert.match(flow, /tapOn:\s+id: sortex-login-password\n- extendedWaitUntil:\s+visible:\s+id: sortex-login-password\s+focused: true\s+timeout: 7000(?:\n#[^\n]*)*\n- inputText: \$\{BUYER_PASSWORD\.slice\(0, 1\)\}\n- inputText: \$\{BUYER_PASSWORD\.slice\(1\)\}/);
+  assert.match(flow, /tapOn:\s+id: sortex-login-email\n- extendedWaitUntil:\s+visible:\s+id: sortex-login-email\s+focused: true\s+timeout: 7000(?:\n#[^\n]*)*\n- inputText: s\n- inputText: ortex-ios-ui@example\.test/);
+  assert.match(flow, /scrollUntilVisible:\s+element:\s+id: sortex-login-email\s+direction: UP/);
+  assert.match(flow, /assertVisible: "Toque em Entrar com e-mail para continuar."[\s\S]*?tapOn:\s+id: sortex-login-inputs-ready/);
+  assert.doesNotMatch(flow, /hideKeyboard|clearState/);
   const fixture = readFileSync(resolve(dir, 'fixture.cjs'), 'utf8');
   assert.match(fixture, /assert\.equal\(loginInputs\.length, 1,/);
   assert.match(fixture, /assert\.equal\(loginInputs\[0\]\.input, 'matches',/);
-  assert.match(flow, /assertVisible:\s+id: sortex-login-inputs-ready[\s\S]*?tapOn:\s+id: sortex-login-submit\n- extendedWaitUntil:\s+visible: "Olá, CompradorIOS"/);
+  assert.match(flow, /assertVisible: "Toque em Entrar com e-mail para continuar."[\s\S]*?tapOn:\s+id: sortex-login-submit\n- extendedWaitUntil:\s+visible: "Olá, CompradorIOS"/);
   const app = readFileSync(resolve(dir, '../../apps/mobile/App.tsx'), 'utf8');
   assert.match(app, /ready \? "sortex-login-inputs-ready" : "sortex-login-inputs-incomplete"/);
   assert.match(app, /testID="sortex-login-submit"[\s\S]*?disabled=\{!ready\}[\s\S]*?if \(!ready \|\| busy\) return/);

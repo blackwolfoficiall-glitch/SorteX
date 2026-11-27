@@ -21,7 +21,7 @@ function maestroStatus(log) {
   if (lastFailure.includes('sortex-ios-ui@example')) return 'email-value';
   if (/sortex-login-email/.test(lastFailure)) return 'email-control';
   if (/sortex-login-password/.test(lastFailure)) return 'password-control';
-  if (/sortex-login-inputs-ready/.test(lastFailure)) return 'inputs-not-observed';
+  if (/sortex-login-inputs-ready|Toque em Entrar com e-mail para continuar/.test(lastFailure)) return 'inputs-not-observed';
   if (/sortex-login-submit/.test(lastFailure)) return 'submit-control';
   if (/Olá, CompradorIOS/.test(lastFailure)) return 'signed-in-view';
   return 'unclassified';
