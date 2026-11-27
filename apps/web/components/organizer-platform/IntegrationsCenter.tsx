@@ -17,6 +17,8 @@ import {
   Unplug,
   X,
 } from "lucide-react";
+import PremiumScope from "@/components/premium/PremiumScope";
+import styles from "./integrations-premium.module.css";
 import {
   configureIntegration,
   integrationAction,
@@ -266,239 +268,243 @@ export function IntegrationsCenter() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-7 overflow-x-hidden pb-12">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">
-            Canais oficiais
-          </p>
-          <h1 className="mt-2 text-3xl font-black sm:text-4xl">Integrações</h1>
-          <p className="mt-2 max-w-2xl text-zinc-500">
-            Conecte os canais usados pela SorteX para anunciar, comunicar e
-            automatizar.
-          </p>
-        </div>
-        <span className="rounded-full border bg-white px-3 py-1.5 text-xs font-black text-zinc-600">
-          <ShieldCheck className="mr-1 inline" size={15} /> Credenciais
-          protegidas no backend
-        </span>
-      </header>
-
-      {notice && (
-        <div
-          role="status"
-          className={`flex flex-wrap items-center justify-between gap-3 rounded-2xl p-4 text-sm font-bold ${notice.tone === "error" ? "bg-red-50 text-red-800" : "bg-emerald-50 text-emerald-800"}`}
-        >
-          <span className="flex-1">{notice.text}</span>
-          <div className="flex items-center gap-2">
-            {notice.tone === "error" && (
-              <button
-                onClick={() => void load()}
-                className="rounded-lg border border-current px-3 py-1.5"
-              >
-                Tentar novamente
-              </button>
-            )}
-            <button
-              aria-label="Fechar mensagem"
-              onClick={() => setNotice(null)}
-            >
-              <X size={17} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      <nav
-        aria-label="Seções das integrações"
-        className="grid grid-cols-3 rounded-2xl bg-zinc-100 p-1"
+    <PremiumScope className={styles.scope}>
+      <section
+        className={styles.content}
+        aria-labelledby="organizer-integrations-title"
       >
-        {(
-          [
-            ["available", "Disponíveis"],
-            ["connected", `Conectadas (${connectedItems.length})`],
-            ["soon", "Em breve"],
-          ] as const
-        ).map(([key, label]) => (
-          <button
-            key={key}
-            aria-pressed={view === key}
-            onClick={() => setView(key)}
-            className={`min-h-11 rounded-xl px-2 text-sm font-black transition ${view === key ? "bg-white text-violet-700 shadow-sm" : "text-zinc-500 hover:text-zinc-900"}`}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
+        <header className={styles.banner}>
+          <div>
+            <p className={styles.eyebrow}>Canais oficiais</p>
+            <h1 id="organizer-integrations-title" className="sx-premium-title">
+              Integrações
+            </h1>
+            <p className={`mt-2 max-w-2xl ${styles.muted}`}>
+              Conecte os canais usados pela SorteX para anunciar, comunicar e
+              automatizar.
+            </p>
+          </div>
+          <span className={styles.status}>
+            <ShieldCheck aria-hidden="true" className="mr-1 inline" size={15} />{" "}
+            Credenciais protegidas no backend
+          </span>
+        </header>
 
-      {loading ? (
-        <IntegrationSkeleton />
-      ) : (
-        <>
-          {(view === "available" || view === "connected") && (
-            <section aria-labelledby="available-title">
-              <div className="mb-4">
-                <h2 id="available-title" className="text-xl font-black">
-                  Conexões disponíveis
-                </h2>
-                <p className="text-sm text-zinc-500">
-                  Entre pela plataforma oficial ou conheça a experiência em modo
-                  demonstração.
-                </p>
-              </div>
-              {view === "connected" && !connectedItems.length ? (
-                <EmptyConnected onAvailable={() => setView("available")} />
-              ) : (
-                <div className="grid gap-5 lg:grid-cols-2">
-                  {(view === "available" || isConnected(meta)) && (
-                    <ConnectionCard
-                      kind="META_ADS"
-                      item={meta}
-                      busy={busy}
-                      onOpen={() => setSelected("META_ADS")}
-                      onOAuth={() => beginOAuth("META_ADS")}
-                      onDemo={() => setDemoConfirm("META_ADS")}
-                      onSync={() => meta && runAction(meta, "sync")}
-                      onDisconnect={() => meta && runAction(meta, "disconnect")}
-                      onNavigate={(path) => router.push(path)}
-                    />
-                  )}
-                  {(view === "available" || isConnected(whatsapp)) && (
-                    <ConnectionCard
-                      kind="WHATSAPP"
-                      item={whatsapp}
-                      busy={busy}
-                      onOpen={() => setSelected("WHATSAPP")}
-                      onOAuth={() => beginOAuth("WHATSAPP")}
-                      onDemo={() => setDemoConfirm("WHATSAPP")}
-                      onSync={() => whatsapp && runAction(whatsapp, "sync")}
-                      onDisconnect={() =>
-                        whatsapp && runAction(whatsapp, "disconnect")
-                      }
-                      onNavigate={(path) => router.push(path)}
-                    />
-                  )}
-                </div>
+        {notice && (
+          <div role="status" className={styles.notice} data-tone={notice.tone}>
+            <span className="flex-1">{notice.text}</span>
+            <div className="flex items-center gap-2">
+              {notice.tone === "error" && (
+                <button
+                  onClick={() => void load()}
+                  className="sx-premium-button"
+                >
+                  Tentar novamente
+                </button>
               )}
-            </section>
-          )}
+              <button
+                className="sx-premium-button"
+                aria-label="Fechar mensagem"
+                onClick={() => setNotice(null)}
+              >
+                <X aria-hidden="true" size={17} />
+              </button>
+            </div>
+          </div>
+        )}
 
-          {(view === "available" || view === "soon") && (
-            <section className="rounded-3xl border bg-white p-5 sm:p-6">
-              <div>
-                <h2 className="text-xl font-black">Em breve</h2>
-                <p className="mt-1 text-sm text-zinc-500">
-                  Novos canais oficiais, sem formulários incompletos.
-                </p>
-              </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {future.map((entry) => {
-                  const interested = interests.has(entry.type);
-                  return (
-                    <article
-                      key={entry.name}
-                      className="flex min-w-0 items-center gap-3 rounded-2xl bg-zinc-50 p-4"
-                    >
-                      <Clock3 className="shrink-0 text-zinc-400" />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="font-black">{entry.name}</h3>
-                          <span className="rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-black uppercase">
-                            Em breve
-                          </span>
+        <nav aria-label="Seções das integrações" className={styles.tabs}>
+          {(
+            [
+              ["available", "Disponíveis"],
+              ["connected", `Conectadas (${connectedItems.length})`],
+              ["soon", "Em breve"],
+            ] as const
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              aria-pressed={view === key}
+              onClick={() => setView(key)}
+              className={styles.tab}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        {loading ? (
+          <IntegrationSkeleton />
+        ) : (
+          <>
+            {(view === "available" || view === "connected") && (
+              <section aria-labelledby="available-title">
+                <div className="mb-4">
+                  <h2 id="available-title" className="text-xl font-black">
+                    Conexões disponíveis
+                  </h2>
+                  <p className={`text-sm ${styles.muted}`}>
+                    Entre pela plataforma oficial ou conheça a experiência em
+                    modo demonstração.
+                  </p>
+                </div>
+                {view === "connected" && !connectedItems.length ? (
+                  <EmptyConnected onAvailable={() => setView("available")} />
+                ) : (
+                  <div className="grid gap-5 lg:grid-cols-2">
+                    {(view === "available" || isConnected(meta)) && (
+                      <ConnectionCard
+                        kind="META_ADS"
+                        item={meta}
+                        busy={busy}
+                        onOpen={() => setSelected("META_ADS")}
+                        onOAuth={() => beginOAuth("META_ADS")}
+                        onDemo={() => setDemoConfirm("META_ADS")}
+                        onSync={() => meta && runAction(meta, "sync")}
+                        onDisconnect={() =>
+                          meta && runAction(meta, "disconnect")
+                        }
+                        onNavigate={(path) => router.push(path)}
+                      />
+                    )}
+                    {(view === "available" || isConnected(whatsapp)) && (
+                      <ConnectionCard
+                        kind="WHATSAPP"
+                        item={whatsapp}
+                        busy={busy}
+                        onOpen={() => setSelected("WHATSAPP")}
+                        onOAuth={() => beginOAuth("WHATSAPP")}
+                        onDemo={() => setDemoConfirm("WHATSAPP")}
+                        onSync={() => whatsapp && runAction(whatsapp, "sync")}
+                        onDisconnect={() =>
+                          whatsapp && runAction(whatsapp, "disconnect")
+                        }
+                        onNavigate={(path) => router.push(path)}
+                      />
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {(view === "available" || view === "soon") && (
+              <section className={`p-4 sm:p-6 ${styles.surface}`}>
+                <div>
+                  <h2 className="text-xl font-black">Em breve</h2>
+                  <p className={`mt-1 text-sm ${styles.muted}`}>
+                    Novos canais oficiais, sem formulários incompletos.
+                  </p>
+                </div>
+                <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {future.map((entry) => {
+                    const interested = interests.has(entry.type);
+                    return (
+                      <article
+                        key={entry.name}
+                        className={`flex min-w-0 items-start gap-3 rounded-2xl p-3 sm:p-4 ${styles.inset}`}
+                      >
+                        <Clock3
+                          aria-hidden="true"
+                          className={`shrink-0 ${styles.muted}`}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="font-black">{entry.name}</h3>
+                            <span className={styles.status}>Em breve</span>
+                          </div>
+                          <p className={`mt-1 text-xs ${styles.muted}`}>
+                            {entry.description}
+                          </p>
+                          <button
+                            disabled={
+                              interested || busy === `notify-${entry.type}`
+                            }
+                            onClick={() => void notify(entry.type, entry.name)}
+                            className={`mt-2 sx-premium-button ${styles.interest}`}
+                          >
+                            {busy === `notify-${entry.type}`
+                              ? "Registrando…"
+                              : interested
+                                ? "✓ Interesse registrado"
+                                : "Avise-me"}
+                          </button>
                         </div>
-                        <p className="mt-1 text-xs text-zinc-500">
-                          {entry.description}
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            <section className="grid gap-5 lg:grid-cols-2">
+              <div className={`p-4 sm:p-6 ${styles.surface}`}>
+                <h2 className="flex items-center gap-2 text-lg font-black">
+                  <History aria-hidden="true" size={19} /> Histórico recente
+                </h2>
+                {history.length ? (
+                  <div className={`mt-4 ${styles.history}`}>
+                    {history.map((log) => (
+                      <div key={log.id} className="py-3">
+                        <div className="flex flex-wrap justify-between gap-2">
+                          <b className="text-sm">{log.integration}</b>
+                          <time className={`text-xs ${styles.muted}`}>
+                            {new Date(log.createdAt).toLocaleString("pt-BR")}
+                          </time>
+                        </div>
+                        <p className={`mt-1 text-xs ${styles.muted}`}>
+                          {friendlyLog(log.action)}
                         </p>
-                        <button
-                          disabled={
-                            interested || busy === `notify-${entry.type}`
-                          }
-                          onClick={() => void notify(entry.type, entry.name)}
-                          className="mt-2 text-xs font-black text-violet-700 disabled:text-emerald-700"
-                        >
-                          {busy === `notify-${entry.type}`
-                            ? "Registrando…"
-                            : interested
-                              ? "✓ Interesse registrado"
-                              : "Avise-me"}
-                        </button>
                       </div>
-                    </article>
-                  );
-                })}
+                    ))}
+                  </div>
+                ) : (
+                  <p className={`mt-5 text-sm ${styles.muted}`}>
+                    Nenhuma atividade de conexão registrada.
+                  </p>
+                )}
+              </div>
+              <div className={`p-4 sm:p-6 ${styles.surface}`}>
+                <h2 className="flex items-center gap-2 text-lg font-black">
+                  <ShieldCheck aria-hidden="true" size={19} /> Saúde das
+                  conexões
+                </h2>
+                <div className="mt-4 space-y-3">
+                  <Health name="Meta Business" item={meta} />
+                  <Health name="WhatsApp Business" item={whatsapp} />
+                </div>
               </div>
             </section>
-          )}
+          </>
+        )}
 
-          <section className="grid gap-5 lg:grid-cols-2">
-            <div className="rounded-3xl border bg-white p-5 sm:p-6">
-              <h2 className="flex items-center gap-2 text-lg font-black">
-                <History size={19} /> Histórico recente
-              </h2>
-              {history.length ? (
-                <div className="mt-4 divide-y">
-                  {history.map((log) => (
-                    <div key={log.id} className="py-3">
-                      <div className="flex justify-between gap-3">
-                        <b className="text-sm">{log.integration}</b>
-                        <time className="text-xs text-zinc-400">
-                          {new Date(log.createdAt).toLocaleString("pt-BR")}
-                        </time>
-                      </div>
-                      <p className="mt-1 text-xs text-zinc-500">
-                        {friendlyLog(log.action)}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-5 text-sm text-zinc-500">
-                  Nenhuma atividade de conexão registrada.
-                </p>
-              )}
-            </div>
-            <div className="rounded-3xl border bg-white p-5 sm:p-6">
-              <h2 className="flex items-center gap-2 text-lg font-black">
-                <ShieldCheck size={19} /> Saúde das conexões
-              </h2>
-              <div className="mt-4 space-y-3">
-                <Health name="Meta Business" item={meta} />
-                <Health name="WhatsApp Business" item={whatsapp} />
-              </div>
-            </div>
-          </section>
-        </>
-      )}
-
-      {selected && (
-        <ConnectionDrawer
-          kind={selected}
-          item={selected === "META_ADS" ? meta : whatsapp}
-          busy={busy}
-          onClose={() => setSelected(null)}
-          onOAuth={() => void beginOAuth(selected)}
-          onDemo={() => setDemoConfirm(selected)}
-          onSync={() => {
-            const item = selected === "META_ADS" ? meta : whatsapp;
-            if (item) void runAction(item, "sync");
-          }}
-          onDisconnect={() => {
-            const item = selected === "META_ADS" ? meta : whatsapp;
-            if (item) void runAction(item, "disconnect");
-          }}
-          onNavigate={(path) => router.push(path)}
-        />
-      )}
-      {demoConfirm && (
-        <DemoDialog
-          kind={demoConfirm}
-          busy={busy === `demo-${demoConfirm}`}
-          onClose={() => setDemoConfirm(null)}
-          onConfirm={() => void enterDemo(demoConfirm)}
-        />
-      )}
-    </div>
+        {selected && (
+          <ConnectionDrawer
+            kind={selected}
+            item={selected === "META_ADS" ? meta : whatsapp}
+            busy={busy}
+            onClose={() => setSelected(null)}
+            onOAuth={() => void beginOAuth(selected)}
+            onDemo={() => setDemoConfirm(selected)}
+            onSync={() => {
+              const item = selected === "META_ADS" ? meta : whatsapp;
+              if (item) void runAction(item, "sync");
+            }}
+            onDisconnect={() => {
+              const item = selected === "META_ADS" ? meta : whatsapp;
+              if (item) void runAction(item, "disconnect");
+            }}
+            onNavigate={(path) => router.push(path)}
+          />
+        )}
+        {demoConfirm && (
+          <DemoDialog
+            kind={demoConfirm}
+            busy={busy === `demo-${demoConfirm}`}
+            onClose={() => setDemoConfirm(null)}
+            onConfirm={() => void enterDemo(demoConfirm)}
+          />
+        )}
+      </section>
+    </PremiumScope>
   );
 }
 
@@ -537,25 +543,30 @@ function ConnectionCard({
           onOpen();
         }
       }}
-      className="group cursor-pointer rounded-3xl border bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-200 sm:p-7"
+      className={`p-4 sm:p-7 ${styles.surface} ${styles.card}`}
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div
-          className={`grid size-13 place-items-center rounded-2xl ${isMeta ? "bg-blue-50 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}
+          className={styles.providerIcon}
+          data-tone={isMeta ? "brand" : "success"}
         >
-          {isMeta ? <BarChart3 size={27} /> : <MessageCircle size={27} />}
+          {isMeta ? (
+            <BarChart3 aria-hidden="true" size={27} />
+          ) : (
+            <MessageCircle aria-hidden="true" size={27} />
+          )}
         </div>
         <Status value={item?.status || "NOT_CONNECTED"} />
       </div>
       <h3 className="mt-5 text-2xl font-black">
         {isMeta ? "Meta Business" : "WhatsApp Business"}
       </h3>
-      <p className="mt-2 text-sm leading-6 text-zinc-500">
+      <p className={`mt-2 text-sm leading-6 ${styles.muted}`}>
         {isMeta
           ? "Publique e acompanhe anúncios no Instagram e Facebook sem sair da SorteX."
           : "Conecte seu número comercial para enviar mensagens oficiais, acompanhar entregas e usar automações."}
       </p>
-      <ul className="mt-5 grid gap-2 text-sm font-semibold text-zinc-700 sm:grid-cols-2">
+      <ul className="mt-5 grid gap-2 text-sm font-semibold sm:grid-cols-2">
         {(isMeta
           ? [
               "Meta e Instagram Ads",
@@ -571,7 +582,7 @@ function ConnectionCard({
             ]
         ).map((feature) => (
           <li key={feature} className="flex items-center gap-2">
-            <Check className="text-emerald-600" size={15} />
+            <Check aria-hidden="true" className={styles.success} size={15} />
             {feature}
           </li>
         ))}
@@ -586,7 +597,7 @@ function ConnectionCard({
             <button
               disabled={Boolean(busy)}
               onClick={onOAuth}
-              className="min-h-11 rounded-xl bg-violet-700 px-4 font-black text-white transition hover:bg-violet-800 active:scale-[.98] disabled:opacity-50"
+              className={`sx-premium-button ${styles.primary}`}
             >
               {busy === `oauth-${kind}`
                 ? "Abrindo ambiente oficial…"
@@ -597,7 +608,7 @@ function ConnectionCard({
             <button
               disabled={Boolean(busy)}
               onClick={onDemo}
-              className="min-h-11 rounded-xl border px-4 font-bold hover:bg-zinc-50 disabled:opacity-50"
+              className="sx-premium-button"
             >
               Testar em modo demonstração
             </button>
@@ -606,14 +617,14 @@ function ConnectionCard({
           <>
             <button
               onClick={onOpen}
-              className="min-h-11 rounded-xl bg-violet-700 px-4 font-black text-white"
+              className={`sx-premium-button ${styles.primary}`}
             >
               Gerenciar
             </button>
             <button
               disabled={Boolean(busy)}
               onClick={onSync}
-              className="min-h-11 rounded-xl border px-4 font-bold"
+              className="sx-premium-button"
             >
               Sincronizar
             </button>
@@ -621,14 +632,14 @@ function ConnectionCard({
               onClick={() =>
                 onNavigate(isMeta ? "/dashboard/ads" : "/dashboard/comunicacao")
               }
-              className="min-h-11 rounded-xl border px-4 font-bold"
+              className="sx-premium-button"
             >
               {isMeta ? "Ir para SorteX Ads" : "Abrir Comunicação"}
             </button>
             <button
               disabled={Boolean(busy)}
               onClick={onDisconnect}
-              className="min-h-11 rounded-xl px-3 text-sm font-bold text-red-700"
+              className={`sx-premium-button ${styles.danger}`}
             >
               Desconectar
             </button>
@@ -636,7 +647,7 @@ function ConnectionCard({
         )}
       </div>
       {demo && (
-        <p className="mt-3 text-xs font-bold text-amber-700">
+        <p className={`mt-3 text-xs font-bold ${styles.warning}`}>
           Dados demonstrativos — nenhuma conta externa está conectada.
         </p>
       )}
@@ -674,12 +685,14 @@ function ConnectionDrawer({
       aria-modal="true"
       aria-labelledby="connection-title"
     >
-      <div className="ml-auto flex h-full w-full max-w-2xl flex-col overflow-y-auto bg-white shadow-2xl">
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-white/95 p-5 backdrop-blur">
+      <div
+        className={`ml-auto flex h-full w-full max-w-2xl flex-col overflow-y-auto ${styles.drawer}`}
+      >
+        <header
+          className={`sticky top-0 z-10 flex items-center justify-between gap-2 border-b p-4 ${styles.drawerHeader}`}
+        >
           <div>
-            <p className="text-xs font-black uppercase text-violet-600">
-              Conexão oficial
-            </p>
+            <p className={styles.eyebrow}>Conexão oficial</p>
             <h2 id="connection-title" className="text-xl font-black">
               {connected
                 ? `Gerenciar ${meta ? "Meta Business" : "WhatsApp Business"}`
@@ -689,20 +702,24 @@ function ConnectionDrawer({
           <button
             onClick={onClose}
             aria-label="Fechar"
-            className="rounded-xl p-2 hover:bg-zinc-100"
+            className="sx-premium-button"
           >
-            <X />
+            <X aria-hidden="true" />
           </button>
         </header>
         <div className="flex-1 p-5 sm:p-8">
           {!connected ? (
             <>
-              <div className="rounded-3xl bg-gradient-to-br from-violet-50 to-blue-50 p-6">
-                <ShieldCheck className="text-violet-700" size={34} />
+              <div className={`rounded-2xl p-4 sm:p-6 ${styles.inset}`}>
+                <ShieldCheck
+                  aria-hidden="true"
+                  className={styles.accent}
+                  size={34}
+                />
                 <h3 className="mt-4 text-2xl font-black">
                   Login seguro no ambiente oficial
                 </h3>
-                <p className="mt-2 leading-7 text-zinc-600">
+                <p className={`mt-2 leading-7 ${styles.muted}`}>
                   {meta
                     ? "Você será direcionado ao ambiente oficial da Meta para entrar na sua conta e escolher os ativos que deseja conectar."
                     : "O Embedded Signup oficial permite escolher sua empresa, conta WhatsApp Business e número sem copiar tokens ou identificadores."}
@@ -722,17 +739,19 @@ function ConnectionDrawer({
                     ]
                 ).map((text, index) => (
                   <li key={text} className="flex gap-3">
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-violet-100 text-sm font-black text-violet-700">
+                    <span
+                      className={`grid size-8 shrink-0 place-items-center rounded-full text-sm font-black ${styles.inset} ${styles.accent}`}
+                    >
                       {index + 1}
                     </span>
-                    <p className="pt-1 text-sm font-semibold text-zinc-700">
-                      {text}
-                    </p>
+                    <p className="pt-1 text-sm font-semibold">{text}</p>
                   </li>
                 ))}
               </ol>
               {!meta && (
-                <p className="mt-6 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
+                <p
+                  className={`mt-6 rounded-2xl p-4 text-sm ${styles.inset} ${styles.warning}`}
+                >
                   Dependendo da disponibilidade da sua conta, você poderá
                   conectar um número existente ou cadastrar um novo número.
                 </p>
@@ -741,32 +760,36 @@ function ConnectionDrawer({
                 <button
                   disabled={Boolean(busy)}
                   onClick={onOAuth}
-                  className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-violet-700 px-5 font-black text-white disabled:opacity-50"
+                  className={`sx-premium-button ${styles.primary}`}
                 >
                   {busy === `oauth-${kind}` && (
-                    <LoaderCircle className="animate-spin" size={18} />
+                    <LoaderCircle
+                      aria-hidden="true"
+                      className="animate-spin"
+                      size={18}
+                    />
                   )}{" "}
-                  Continuar com a Meta <ExternalLink size={16} />
+                  Continuar com a Meta{" "}
+                  <ExternalLink aria-hidden="true" size={16} />
                 </button>
                 <button
                   disabled={Boolean(busy)}
                   onClick={onDemo}
-                  className="min-h-12 rounded-xl border font-bold"
+                  className="sx-premium-button"
                 >
                   Testar em modo demonstração
                 </button>
-                <button
-                  onClick={onClose}
-                  className="min-h-11 font-bold text-zinc-500"
-                >
+                <button onClick={onClose} className="sx-premium-button">
                   Voltar
                 </button>
               </div>
             </>
           ) : (
             <>
-              <div className="flex items-center gap-3 rounded-2xl bg-emerald-50 p-4 text-emerald-800">
-                <CheckCircle2 />
+              <div
+                className={`flex items-center gap-3 rounded-2xl p-4 ${styles.inset} ${styles.success}`}
+              >
+                <CheckCircle2 aria-hidden="true" />
                 <div>
                   <b>
                     {item?.status === "SANDBOX_CONNECTED"
@@ -785,9 +808,9 @@ function ConnectionDrawer({
                 <button
                   disabled={Boolean(busy)}
                   onClick={onSync}
-                  className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-700 px-4 font-black text-white"
+                  className={`sx-premium-button ${styles.primary}`}
                 >
-                  <RefreshCw size={17} />
+                  <RefreshCw aria-hidden="true" size={17} />
                   Sincronizar
                 </button>
                 <button
@@ -796,16 +819,16 @@ function ConnectionDrawer({
                       meta ? "/dashboard/ads" : "/dashboard/comunicacao",
                     )
                   }
-                  className="flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 font-bold"
+                  className="sx-premium-button"
                 >
                   {meta ? (
                     <>
-                      <BarChart3 size={17} />
+                      <BarChart3 aria-hidden="true" size={17} />
                       Ir para SorteX Ads
                     </>
                   ) : (
                     <>
-                      <MessageCircle size={17} />
+                      <MessageCircle aria-hidden="true" size={17} />
                       Abrir Comunicação
                     </>
                   )}
@@ -815,7 +838,7 @@ function ConnectionDrawer({
                     onClick={() =>
                       onNavigate("/dashboard/comunicacao?section=modelos")
                     }
-                    className="min-h-11 rounded-xl border px-4 font-bold"
+                    className="sx-premium-button"
                   >
                     Modelos de mensagem
                   </button>
@@ -823,9 +846,9 @@ function ConnectionDrawer({
                 <button
                   disabled={Boolean(busy)}
                   onClick={onDisconnect}
-                  className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 px-4 font-bold text-red-700"
+                  className={`sx-premium-button ${styles.danger}`}
                 >
-                  <Unplug size={17} />
+                  <Unplug aria-hidden="true" size={17} />
                   Desconectar
                 </button>
               </div>
@@ -853,7 +876,8 @@ function ConnectionSummary({
   const instagram = record(page?.instagram_business_account);
   return (
     <div
-      className={`mt-5 grid gap-3 rounded-2xl bg-zinc-50 p-4 text-sm ${expanded ? "sm:grid-cols-2" : "sm:grid-cols-2"}`}
+      className={`mt-5 grid gap-3 rounded-2xl p-4 text-sm sm:grid-cols-2 ${styles.inset}`}
+      data-expanded={expanded}
     >
       {kind === "META_ADS" ? (
         <>
@@ -912,18 +936,21 @@ function DemoDialog({
       className="fixed inset-0 z-[100] grid place-items-center bg-black/60 p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="demo-title"
     >
-      <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl sm:p-8">
-        <Megaphone className="text-violet-700" />
-        <h2 className="mt-4 text-2xl font-black">
+      <div
+        className={`w-full max-w-lg p-4 sm:p-8 ${styles.surface} ${styles.demoDialog}`}
+      >
+        <Megaphone aria-hidden="true" className={styles.accent} />
+        <h2 id="demo-title" className="mt-4 text-2xl font-black">
           Entrar no modo demonstração?
         </h2>
-        <p className="mt-3 leading-7 text-zinc-600">
+        <p className={`mt-3 leading-7 ${styles.muted}`}>
           O modo demonstração permite conhecer a interface sem conectar uma
           conta real. Nenhum anúncio será publicado e nenhuma mensagem será
           enviada.
         </p>
-        <p className="mt-3 text-sm font-bold text-amber-700">
+        <p className={`mt-3 text-sm font-bold ${styles.warning}`}>
           Integração:{" "}
           {kind === "META_ADS" ? "Meta Business" : "WhatsApp Business"}
         </p>
@@ -931,14 +958,14 @@ function DemoDialog({
           <button
             disabled={busy}
             onClick={onClose}
-            className="min-h-11 rounded-xl border px-5 font-bold"
+            className="sx-premium-button"
           >
             Cancelar
           </button>
           <button
             disabled={busy}
             onClick={onConfirm}
-            className="min-h-11 rounded-xl bg-violet-700 px-5 font-black text-white disabled:opacity-50"
+            className={`sx-premium-button ${styles.primary}`}
           >
             {busy ? "Ativando…" : "Entrar no modo demonstração"}
           </button>
@@ -951,29 +978,33 @@ function Status({ value }: { value: string }) {
   const label = statusLabels[value] || "Não conectado";
   const style =
     value === "CONNECTED"
-      ? "bg-emerald-100 text-emerald-800"
+      ? "success"
       : value === "SANDBOX_CONNECTED"
-        ? "bg-amber-100 text-amber-800"
+        ? "warning"
         : value === "ERROR"
-          ? "bg-red-100 text-red-800"
-          : "bg-zinc-100 text-zinc-700";
+          ? "error"
+          : "neutral";
   return (
-    <span className={`rounded-full px-3 py-1 text-xs font-black ${style}`}>
+    <span className={styles.status} data-tone={style}>
       {label}
     </span>
   );
 }
 function Health({ name, item }: { name: string; item?: OrganizerIntegration }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl bg-zinc-50 p-4">
+    <div
+      className={`flex flex-wrap items-center justify-between gap-2 rounded-2xl p-3 ${styles.inset}`}
+    >
       <div>
         <b className="text-sm">{name}</b>
-        <p className="mt-1 text-xs text-zinc-500">
+        <p className={`mt-1 text-xs ${styles.muted}`}>
           {item?.lastError
             ? "A conexão precisa de atenção."
-            : isConnected(item)
-              ? "Conexão operacional."
-              : "Aguardando conexão."}
+            : item?.status === "SANDBOX_CONNECTED"
+              ? "Modo demonstração, sem conta externa."
+              : isConnected(item)
+                ? "Conexão operacional."
+                : "Aguardando conexão."}
         </p>
       </div>
       <Status value={item?.status || "NOT_CONNECTED"} />
@@ -982,15 +1013,19 @@ function Health({ name, item }: { name: string; item?: OrganizerIntegration }) {
 }
 function EmptyConnected({ onAvailable }: { onAvailable: () => void }) {
   return (
-    <div className="rounded-3xl border bg-white p-10 text-center">
-      <ShieldCheck className="mx-auto text-zinc-300" size={38} />
+    <div className={`p-4 text-center sm:p-10 ${styles.surface}`}>
+      <ShieldCheck
+        aria-hidden="true"
+        className={`mx-auto ${styles.accent}`}
+        size={38}
+      />
       <h3 className="mt-4 text-xl font-black">Nenhuma conexão ativa</h3>
-      <p className="mt-2 text-sm text-zinc-500">
+      <p className={`mt-2 text-sm ${styles.muted}`}>
         Conecte a Meta ou o WhatsApp Business pelo fluxo oficial.
       </p>
       <button
         onClick={onAvailable}
-        className="mt-5 rounded-xl bg-violet-700 px-5 py-3 font-black text-white"
+        className={`mt-5 sx-premium-button ${styles.primary}`}
       >
         Ver conexões disponíveis
       </button>
@@ -999,9 +1034,17 @@ function EmptyConnected({ onAvailable }: { onAvailable: () => void }) {
 }
 function IntegrationSkeleton() {
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div
+      className="grid gap-5 lg:grid-cols-2"
+      role="status"
+      aria-label="Carregando integrações"
+    >
       {[0, 1].map((key) => (
-        <div key={key} className="h-96 animate-pulse rounded-3xl bg-zinc-100" />
+        <div
+          key={key}
+          aria-hidden="true"
+          className={`h-96 rounded-3xl motion-safe:animate-pulse ${styles.inset}`}
+        />
       ))}
     </div>
   );
@@ -1015,12 +1058,12 @@ function Detail({
 }) {
   return (
     <div className="min-w-0">
-      <span className="block text-[10px] font-black uppercase tracking-wide text-zinc-400">
+      <span
+        className={`block text-xs font-black uppercase tracking-wide ${styles.muted}`}
+      >
         {label}
       </span>
-      <b className="mt-1 block truncate text-zinc-800">
-        {value || "Não disponível"}
-      </b>
+      <b className="mt-1 block truncate">{value || "Não disponível"}</b>
     </div>
   );
 }

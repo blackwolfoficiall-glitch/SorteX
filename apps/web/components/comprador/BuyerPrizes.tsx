@@ -1,26 +1,37 @@
 "use client";
 
+import Link from "next/link";
+import { ArrowUpRight, Award, Clock3, LoaderCircle, Ticket, Trophy } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuthorizedUser } from "@/components/auth/RoleGate";
+import PremiumScope from "@/components/premium/PremiumScope";
 import { authRequest } from "@/lib/auth/client";
 import type { BuyerPrize, BuyerPrizes as PrizeGroups } from "@/lib/buyer/prizes";
 
-const panel = "rounded-3xl border border-violet-100 bg-white p-5 shadow-sm md:p-6";
+import styles from "./buyer-prizes-premium.module.css";
 
 export default function BuyerPrizes() {
   const user = useAuthorizedUser();
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-5 md:py-8">
-      <header>
-        <h1 className="text-3xl font-black text-slate-950">Meus prêmios</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Acompanhe os prêmios dos seus títulos e a situação de cada entrega.
-        </p>
-      </header>
-      {user?.role === "BUYER"
-        ? <PrizeLists key={user.id} />
-        : <p className={panel}>A consulta de prêmios é exclusiva para a conta compradora.</p>}
-    </div>
+    <PremiumScope className={styles.page}>
+      <div className={styles.wrap}>
+        <header className={styles.hero}>
+          <div>
+            <p className={styles.kicker}>Área do comprador</p>
+            <h1>Meus prêmios</h1>
+            <p>Acompanhe seus prêmios e a situação de cada entrega.</p>
+          </div>
+          <Award size={32} aria-hidden="true" />
+        </header>
+        <nav className={styles.links} aria-label="Atalhos dos prêmios">
+          <Link className={styles.button} href="/comprador/resultados"><Trophy size={17} aria-hidden="true" /> Resultados <ArrowUpRight size={15} aria-hidden="true" /></Link>
+          <Link className={styles.button} href="/comprador/meus-numeros"><Ticket size={17} aria-hidden="true" /> Meus títulos <ArrowUpRight size={15} aria-hidden="true" /></Link>
+        </nav>
+        {user?.role === "BUYER"
+          ? <PrizeLists key={user.id} />
+          : <p className={styles.restricted}>A consulta de prêmios é exclusiva para a conta compradora.</p>}
+      </div>
+    </PremiumScope>
   );
 }
 
@@ -49,43 +60,47 @@ function PrizeLists() {
   }
 
   return (
-    <div className="space-y-5">
-      <PrizeSection id="premios-sorteios" title="Prêmios de sorteios"
-        empty="Você ainda não tem prêmios de sorteios."
-        items={groups === null ? undefined : groups.draw} />
-      <PrizeSection id="cotas-premiadas" title="Cotas premiadas"
-        empty="Você ainda não tem cotas premiadas."
-        items={groups === null ? undefined : groups.instant} />
+    <div className={styles.lists}>
+      <div className={styles.grid}>
+        <PrizeSection id="premios-sorteios" title="Prêmios de sorteios" icon={Trophy}
+          empty="Você ainda não tem prêmios de sorteios."
+          items={groups === null ? undefined : groups.draw} />
+        <PrizeSection id="cotas-premiadas" title="Cotas premiadas" icon={Ticket}
+          empty="Você ainda não tem cotas premiadas."
+          items={groups === null ? undefined : groups.instant} />
+      </div>
       {groups && (groups.draw === null || groups.instant === null) && (
-        <button onClick={retry} type="button"
-          className="rounded-xl bg-violet-700 px-4 py-2 text-sm font-bold text-white hover:bg-violet-800">
-          Tentar novamente
-        </button>
+        <button onClick={retry} type="button" className={styles.button}>Tentar novamente</button>
       )}
     </div>
   );
 }
 
-function PrizeSection({ id, title, empty, items }: {
-  id: string; title: string; empty: string; items: BuyerPrize[] | null | undefined;
+function PrizeSection({ id, title, empty, icon: Icon, items }: {
+  id: string; title: string; empty: string; icon: typeof Trophy; items: BuyerPrize[] | null | undefined;
 }) {
   return (
-    <section aria-labelledby={id} aria-busy={items === undefined} className={panel}>
-      <h2 id={id} className="text-lg font-bold text-slate-950">{title}</h2>
+    <section aria-labelledby={id} className={styles.panel}>
+      <header className={styles.panelHead}>
+        <span className={styles.icon}><Icon size={20} aria-hidden="true" /></span>
+        <h2 id={id}>{title}</h2>
+      </header>
       {items === undefined ? (
-        <p className="mt-3 text-sm text-slate-600" role="status">Carregando prêmios...</p>
+        <p className={styles.state} role="status"><LoaderCircle className={styles.spinner} size={17} aria-hidden="true" /> Carregando prêmios…</p>
       ) : items === null ? (
-        <p className="mt-3 text-sm text-red-700" role="alert">Não foi possível carregar esta lista.</p>
+        <p className={styles.state} role="alert">Não foi possível carregar esta lista.</p>
       ) : items.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-600">{empty}</p>
+        <p className={styles.state}>{empty}</p>
       ) : (
-        <ul className="mt-4 grid gap-3">
+        <ul className={styles.prizes} role="list">
           {items.map((prize) => (
-            <li key={prize.id} className="rounded-2xl border bg-slate-50 p-4">
-              <p className="break-words font-bold text-slate-950">{prize.prizeName}</p>
-              <p className="mt-1 break-words text-sm text-slate-600">{prize.campaignTitle}</p>
-              <p className="mt-2 text-sm text-slate-700">Título <strong>{prize.ticketNumber}</strong></p>
-              <p className="mt-2 text-sm font-semibold text-violet-800">{prize.status}</p>
+            <li key={prize.id}>
+              <h3>{prize.prizeName}</h3>
+              <p className={styles.campaign}>{prize.campaignTitle}</p>
+              <dl className={styles.facts}>
+                <div><dt>Título</dt><dd className={styles.number}>{prize.ticketNumber}</dd></div>
+                <div><dt>Situação</dt><dd className={styles.status}><Clock3 size={14} aria-hidden="true" /> {prize.status}</dd></div>
+              </dl>
             </li>
           ))}
         </ul>

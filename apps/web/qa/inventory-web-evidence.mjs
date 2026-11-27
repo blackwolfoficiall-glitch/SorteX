@@ -229,4 +229,22 @@ export const pageEvidence = [
     source: "apps/web/e2e/admin-campaigns-premium.spec.ts",
     revision: "da1b44b",
   },
+  {
+    path: "/comprador/meus-premios",
+    detail: "sorteios e cotas premiadas autorizados, zeros, falha parcial e privacidade; sem resgate ou apuração",
+    source: "apps/web/e2e-local/run-buyer-prizes-premium.mjs",
+    revision: "a267178",
+  },
+  {
+    path: "/dashboard/integracoes",
+    detail: "leitura por conta, canais indisponíveis e demonstração rotulada; sem OAuth, conexão ou credenciais",
+    source: "apps/web/e2e/organizer-integrations-premium.spec.ts",
+    revision: "94789b6",
+  },
+  {
+    path: "/admin/pagamentos",
+    detail: "lista local autorizada, moedas e estados, sem confundir com liquidação; sem acionar revisão ou provedor",
+    source: "apps/web/e2e/admin-payments-premium.spec.ts",
+    revision: "6b0c62b",
+  },
 ];

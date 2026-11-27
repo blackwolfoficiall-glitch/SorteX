@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw, Search, ShieldAlert, TicketCheck, UsersRound, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CreditCard, LoaderCircle, RefreshCw, Search, ShieldAlert, TicketCheck, UsersRound, X } from 'lucide-react';
 import PremiumScope from '@/components/premium/PremiumScope';
 import { useAuthorizedUser } from '@/components/auth/RoleGate';
 import { hasAdminPermission } from '@/lib/admin/authorization';
@@ -29,11 +29,11 @@ const configs: Record<OperationalMode, Config> = {
   reports: { title: 'Denúncias', subtitle: 'Análise e resolução rastreável', read: 'SUPPORT_WRITE', write: 'SUPPORT_WRITE', search: 'Motivo, descrição ou entidade', status: ['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'DISMISSED'] },
 };
 
-export default function AdminResourcePage({ mode, premiumUsers = false, premiumCampaigns = false }: {
-  mode: Mode; premiumUsers?: boolean; premiumCampaigns?: boolean;
+export default function AdminResourcePage({ mode, premiumUsers = false, premiumCampaigns = false, premiumPayments = false }: {
+  mode: Mode; premiumUsers?: boolean; premiumCampaigns?: boolean; premiumPayments?: boolean;
 }) {
   if (!(mode in configs)) return <LegacyResource mode={mode} />;
-  return <OperationalResource mode={mode as OperationalMode} premiumList={(premiumUsers && mode === 'users') || (premiumCampaigns && mode === 'campaigns')} />;
+  return <OperationalResource mode={mode as OperationalMode} premiumList={(premiumUsers && mode === 'users') || (premiumCampaigns && mode === 'campaigns') || (premiumPayments && mode === 'payments')} />;
 }
 
 function OperationalResource({ mode, premiumList }: { mode: OperationalMode; premiumList: boolean }) {
@@ -128,22 +128,23 @@ function OperationalResource({ mode, premiumList }: { mode: OperationalMode; pre
 
   if (premiumList) {
     const campaigns = mode === 'campaigns';
-    const Icon = campaigns ? TicketCheck : UsersRound;
-    const item = campaigns ? 'campanha' : 'usuário';
-    const statuses = campaigns ? campaignStatuses : userStatuses;
+    const payments = mode === 'payments';
+    const Icon = payments ? CreditCard : campaigns ? TicketCheck : UsersRound;
+    const item = payments ? 'pagamento' : campaigns ? 'campanha' : 'usuário';
+    const statuses = payments ? paymentStatuses : campaigns ? campaignStatuses : userStatuses;
     const filtering = Boolean(search.trim() || status || from || to);
     const statusText = loading ? `Carregando ${item}s…`
       : listUnavailable ? 'Listagem indisponível.'
       : `${total.toLocaleString('pt-BR')} ${total === 1 ? item : `${item}s`} ${filtering ? 'nos filtros aplicados' : 'no cadastro'}`;
     return <>
-      <PremiumScope className={campaigns ? "sx-admin-campaigns" : "sx-admin-users"}>
+      <PremiumScope className={payments ? "sx-admin-payments" : campaigns ? "sx-admin-campaigns" : "sx-admin-users"}>
         <main className="sx-au-wrap">
           <header className="sx-premium-ticket sx-au-hero">
             <Icon aria-hidden="true" size={30} />
             <div>
               <p className="sx-au-eyebrow">Administração</p>
               <h1 className="sx-premium-title">{config.title}</h1>
-              <p>{config.subtitle}</p>
+              <p>{payments ? "Consulte os pagamentos registrados na SorteX." : config.subtitle}</p>
             </div>
             <button type="button" onClick={load} disabled={loading} className="sx-premium-button sx-au-refresh">
               <RefreshCw aria-hidden="true" size={17} /> Atualizar listagem
@@ -175,11 +176,12 @@ function OperationalResource({ mode, premiumList }: { mode: OperationalMode; pre
               <label><span>Data inicial</span><input type="date" value={from} onChange={(event) => { setFrom(event.target.value); setPage(1); }} /></label>
               <label><span>Data final</span><input type="date" value={to} onChange={(event) => { setTo(event.target.value); setPage(1); }} /></label>
             </div>
-            <p id="sx-au-search-hint" className="sx-premium-muted">{campaigns ? 'Pesquise pelo título da campanha.' : 'Pesquise por nome, e-mail, CPF, CNPJ ou telefone.'}</p>
+            <p id="sx-au-search-hint" className="sx-premium-muted">{payments ? 'Pesquise por referência, participante ou campanha.' : campaigns ? 'Pesquise pelo título da campanha.' : 'Pesquise por nome, e-mail, CPF, CNPJ ou telefone.'}</p>
           </section>
           <section className="sx-au-results" aria-labelledby="sx-au-results">
             <header>
               <h2 id="sx-au-results" className="sx-premium-section">Resultados</h2>
+              {payments && <p className="sx-premium-muted">O status é o da transação. Um pagamento aprovado não comprova liquidação, repasse nem saque.</p>}
               <p role="status" className="sx-premium-muted">{statusText}</p>
             </header>
             {error && (
@@ -205,7 +207,12 @@ function OperationalResource({ mode, premiumList }: { mode: OperationalMode; pre
                         {presenter.subtitle && <p className="sx-premium-muted">{campaigns ? `Organizador: ${presenter.subtitle}` : presenter.subtitle}</p>}
                       </div>
                       <dl className="sx-au-meta">
-                        {campaigns ? (
+                        {payments ? (
+                          <>
+                            <div><dt>Valor da transação</dt><dd>{paymentAmount(row.amount, row.currency)}</dd></div>
+                            <div><dt>Método</dt><dd>{paymentMethods[String(row.method)] ?? String(row.method ?? 'Não informado')}</dd></div>
+                          </>
+                        ) : campaigns ? (
                           <>
                             <div><dt>Títulos vendidos</dt><dd>{campaignCount(row.soldNumbers)}</dd></div>
                             <div><dt>Total de títulos</dt><dd>{campaignCount(row.totalNumbers)}</dd></div>
@@ -217,7 +224,7 @@ function OperationalResource({ mode, premiumList }: { mode: OperationalMode; pre
                           </>
                         )}
                         <div><dt>Status</dt><dd><span className="sx-premium-badge">{statuses[presenter.status] ?? presenter.status}</span></dd></div>
-                        <div><dt>Cadastro</dt><dd>{formatDate(row.createdAt ?? row.requestedAt)}</dd></div>
+                        <div><dt>{payments ? "Data do registro" : "Cadastro"}</dt><dd>{formatDate(row.createdAt ?? row.requestedAt)}</dd></div>
                       </dl>
                       <div className="sx-au-actions">
                         <button type="button" className="sx-premium-button" onClick={() => void openDetail(row)}>Detalhes</button>
@@ -306,6 +313,25 @@ function availableActions(mode: OperationalMode, status: string): string[] {
 }
 function primaryAction(mode: OperationalMode, status: string) { return availableActions(mode, status)[0]; }
 function actionLabel(action: string) { return ({ APPROVE: 'Aprovar', REJECT: 'Rejeitar', REQUEST_CHANGES: 'Solicitar ajustes', PAUSE: 'Pausar', REACTIVATE: 'Reativar', BLOCK_PURCHASES: 'Bloquear compras', UNBLOCK_PURCHASES: 'Liberar compras', ACTIVATE: 'Ativar', SUSPEND: 'Suspender', BLOCK: 'Bloquear', UNBLOCK: 'Desbloquear', REVOKE_SESSIONS: 'Encerrar sessões', REVIEW: 'Marcar para revisão', RESOLVED: 'Resolver', DISMISSED: 'Descartar', DISPUTED: 'Sinalizar disputa', DELIVERED: 'Confirmar entrega', OPEN: 'Reabrir', IN_PROGRESS: 'Iniciar atendimento', WAITING_CUSTOMER: 'Aguardar cliente', CLOSED: 'Fechar' } as Record<string, string>)[action] ?? action; }
+
+const paymentStatuses: Readonly<Record<string, string>> = {
+  CREATED: 'Criado', PENDING: 'Pendente', PROCESSING: 'Em processamento',
+  APPROVED: 'Aprovado', REJECTED: 'Recusado', CANCELLED: 'Cancelado', EXPIRED: 'Expirado',
+  REFUNDED: 'Estornado', CHARGEBACK: 'Contestado (chargeback)',
+};
+const paymentMethods: Readonly<Record<string, string>> = {
+  PIX: 'Pix', CREDIT_CARD: 'Cartão de crédito', DEBIT_CARD: 'Cartão de débito',
+};
+
+function paymentAmount(value: unknown, currency: unknown) {
+  const decimal = typeof value === 'number' ? String(value) : value;
+  if (typeof decimal !== 'string' || !/^-?\d{1,12}(?:\.\d{1,2})?$/.test(decimal) ||
+    typeof currency !== 'string' || !/^[A-Z]{3}$/.test(currency)) return 'Não informado';
+  // The payment record stores two fractional digits; formatting does not convert currencies.
+  return Number(decimal).toLocaleString('pt-BR', {
+    style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+}
 
 const campaignStatuses: Readonly<Record<string, string>> = {
   DRAFT: 'Rascunho', PENDING_REVIEW: 'Aguardando revisão', PUBLISHED: 'Publicada',
