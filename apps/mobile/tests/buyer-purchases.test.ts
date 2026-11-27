@@ -403,3 +403,60 @@ test("cotação incorreta não autoriza o cliente a reservar com cupom", async (
     /não confirmou/,
   );
 });
+
+test("legacy sales windows match absolute API timestamps and fail closed on ambiguity", async () => {
+  const { resolveBuyerSalesWindow, salesWindowMessage } = await import(
+    "../../../packages/contracts/src/campaign-sales-window"
+  );
+  const now = Date.parse("2026-11-28T00:00:00.000Z");
+  const legacy = {
+    status: "PUBLISHED", purchasesBlocked: false, salesStartAt: null,
+    salesEndAt: null, drawDate: "2026-11-29T00:00:00.000Z", drawTime: "20:00",
+  };
+  const resolve = (campaign: unknown, window?: unknown) =>
+    resolveBuyerSalesWindow(window, campaign, now);
+  assert.equal(resolve(legacy).status, "OPEN");
+  assert.equal(resolve({ ...legacy, salesStartAt: legacy.drawDate }).status, "NOT_STARTED");
+  assert.equal(resolve({ ...legacy, salesEndAt: new Date(now).toISOString() }).status, "SALES_ENDED");
+  assert.equal(resolve({ ...legacy, drawDate: new Date(now).toISOString() }).status, "DRAW_TIME_REACHED");
+  assert.equal(resolve({ ...legacy, drawDate: "2026-11-28" }).status, "UNAVAILABLE");
+  assert.equal(resolve({ ...legacy, salesEndAt: undefined }).status, "UNAVAILABLE");
+  assert.equal(resolve({ ...legacy, purchasesBlocked: true }).status, "UNAVAILABLE");
+  assert.equal(resolve({ ...legacy, scheduledDrawAt: null }).status, "UNAVAILABLE");
+  assert.equal(resolve(legacy, { status: "PENDING", opensAt: null, closesAt: null }).status, "UNAVAILABLE");
+  assert.equal(salesWindowMessage(resolve(null)), "Não foi possível confirmar se as vendas estão abertas.");
+  const reported = { status: "NOT_STARTED", opensAt: legacy.drawDate, closesAt: null };
+  assert.deepEqual(resolve(legacy, reported), reported);
+});
+
+test("native resolves missing windows only with live detail for the same campaign", async () => {
+  const observed: string[] = [];
+  const legacy = {
+    id: "campaign-a", slug: "campanha-a", status: "PUBLISHED", purchasesBlocked: false,
+    salesStartAt: "2099-11-28T12:00:00.000Z", salesEndAt: null, drawDate: null,
+  };
+  let detail: typeof legacy | null = legacy;
+  let capacity = availability;
+  const client = {
+    snapshot: () => ({status: "signedIn", user: buyer}),
+    activeSessionRevision: () => 16,
+    publicRequest: async (path: string) => {
+      observed.push(path);
+      if (path.endsWith("/availability")) return capacity;
+      if (!detail) throw new Error("synthetic read failure");
+      return detail;
+    },
+    request: async () => null,
+  } as unknown as ConstructorParameters<typeof BuyerPurchases>[0];
+  const model = new BuyerPurchases(client, buyer.id);
+  assert.equal((await model.availability(legacy.slug)).salesWindow?.status, "NOT_STARTED");
+  assert.equal(observed.length, 2);
+  detail = {...legacy, id: "other"};
+  assert.equal((await model.availability(legacy.slug)).salesWindow?.status, "UNAVAILABLE");
+  detail = null;
+  assert.equal((await model.availability(legacy.slug)).salesWindow?.status, "UNAVAILABLE");
+  capacity = {...availability, salesWindow: {status: "OPEN", opensAt: null, closesAt: null}};
+  const before = observed.length;
+  assert.equal((await model.availability(legacy.slug)).salesWindow?.status, "OPEN");
+  assert.equal(observed.length - before, 1);
+});

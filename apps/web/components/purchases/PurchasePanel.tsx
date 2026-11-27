@@ -47,6 +47,8 @@ export default function PurchasePanel({
   const [maskedEmail, setMaskedEmail] = useState("");
   const idempotencyKey = useRef<string | undefined>(undefined);
   const startPurchaseRef = useRef<() => void>(() => undefined);
+  const latestSalesBlock = useRef(salesBlock);
+  useEffect(() => { latestSalesBlock.current = salesBlock; }, [salesBlock]);
   const accent = campaignAccent(campaign);
 
   useEffect(() => {
@@ -94,6 +96,7 @@ export default function PurchasePanel({
       : quantity >= campaign.minimumPurchase;
 
   async function reserveAuthenticated() {
+    if (latestSalesBlock.current && !idempotencyKey.current) return;
     setLoading(true);
     setError("");
     try {
@@ -312,6 +315,7 @@ export default function PurchasePanel({
   }
 
   async function applyCoupon() {
+    if (latestSalesBlock.current) return;
     const attempt = ++couponRequest.current;
     setCouponMessage("");
     setCouponQuote(undefined);
@@ -580,7 +584,7 @@ export default function PurchasePanel({
             />
             <button
               onClick={() => void applyCoupon()}
-              disabled={!couponCode}
+              disabled={!couponCode || Boolean(salesBlock)}
               className="rounded-xl bg-violet-600 px-4 text-sm font-bold text-white disabled:opacity-40"
             >
               Aplicar

@@ -2,7 +2,10 @@ import type {
   Purchase,
   Ticket,
 } from "../../../../packages/contracts/src/mobile";
-import type { CampaignSalesWindow } from "../../../../packages/contracts/src/campaign-sales-window";
+import {
+  resolveBuyerSalesWindow,
+  type BuyerSalesWindow,
+} from "../../../../packages/contracts/src/campaign-sales-window";
 import { ApiError, type SortexClient } from "../api/client";
 
 export type Availability = {
@@ -12,7 +15,7 @@ export type Availability = {
   reservedNumbers: number;
   soldNumbers: number;
   reservationSeconds: number;
-  salesWindow?: CampaignSalesWindow;
+  salesWindow?: BuyerSalesWindow;
   selectionMode: "MANUAL" | "RANDOM";
   minimumPurchase: number;
   maximumPurchasePerBuyer: number | null;
@@ -170,11 +173,19 @@ export class BuyerPurchases {
   }
 
   availability(slug: string) {
-    return this.scoped(() =>
-      this.client.publicRequest<Availability>(
-        `/public/campaigns/${segment(slug)}/availability`,
-      ),
-    );
+    return this.scoped(async () => {
+      const path = `/public/campaigns/${segment(slug)}`;
+      const capacity = await this.client.publicRequest<Availability>(`${path}/availability`);
+      let legacy: unknown;
+      if (capacity.salesWindow === undefined) {
+        // The earlier endpoint reports inventory only. Read the live campaign,
+        // not the possibly stale screen payload, before offering a new reserve.
+        const detail = await this.client.publicRequest<{ id: string; slug: string } | null>(path)
+          .catch(() => null);
+        if (detail?.id === capacity.campaignId && detail.slug === slug) legacy = detail;
+      }
+      return { ...capacity, salesWindow: resolveBuyerSalesWindow(capacity.salesWindow, legacy) };
+    });
   }
   numbers(slug: string, totalNumbers: number, page: number, search?: number) {
     const end = Math.max(totalNumbers - 1, 0);

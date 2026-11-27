@@ -136,7 +136,7 @@ function ReservationCard({
   const busyRef = useRef(false);
   const lastOrder = useRef<string | null>(null);
   const active = order ? isActiveReservation(order, now) : false;
-  const salesBlock = salesWindowMessage(availability?.salesWindow);
+  const salesBlock = availability?.salesWindow ? salesWindowMessage(availability.salesWindow) : "";
   const mode = availability?.selectionMode;
   const total = availability?.totalNumbers;
   const count = mode === "MANUAL" ? selection.length : parseDigits(quantity);

@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import Card from "@/components/ui/Card";
 import PurchasePanel from "@/components/purchases/PurchasePanel";
-import { salesWindowMessage } from "../../../../packages/contracts/src/campaign-sales-window";
+import { resolveBuyerSalesWindow, salesWindowMessage } from "../../../../packages/contracts/src/campaign-sales-window";
 import type { Campaign, RewardSection } from "@/lib/campaigns/types";
 import { versionedCoverUrl } from "@/lib/campaigns/cover-revision";
 import { mediaUrl } from "./CampaignDashboard";
@@ -281,7 +281,7 @@ export default function PublicCampaignView({
       </main>
     );
 
-  const salesBlock = salesWindowMessage(campaign.salesWindow);
+  const salesBlock = salesWindowMessage(resolveBuyerSalesWindow(campaign.salesWindow, campaign));
   const drawDisplay = displayDrawSchedule(campaign);
   const percent = campaign.totalNumbers
     ? Math.min(100, (campaign.soldNumbers / campaign.totalNumbers) * 100)
@@ -706,7 +706,7 @@ export default function PublicCampaignView({
                         <button
                           type="button"
                           key={combo.id}
-                          disabled={previewMode}
+                          disabled={previewMode || Boolean(salesBlock)}
                           aria-label={`Combo de ${combo.minQuantity} títulos com ${combo.rounds} ${combo.rounds === 1 ? "giro" : "giros"}`}
                           aria-pressed={selectedCombo}
                           onClick={() => {
