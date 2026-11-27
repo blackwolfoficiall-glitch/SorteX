@@ -23,7 +23,7 @@ Controle de revisão dos gates: alterações nestas fontes exigem rever a interp
 
 ## Páginas
 
-**V/F/T** = visual da nova revisão / jornada funcional completa / execução nesta auditoria. `? / ? / não rodado` não significa defeito nem reprovação: verifique no navegador antes de mudar o status no registro manual. O código traz gates aparentes, não substitui os testes de autorização do backend.
+**V/F/T** = visual da nova revisão / jornada funcional completa / execução nesta auditoria. `? / ? / não rodado` não significa defeito nem reprovação: verifique no navegador antes de mudar o status no registro manual. A evidência de um recorte local é parcial: não aprova a jornada integral, a publicação ou o iPhone. O código traz gates aparentes, não substitui os testes de autorização do backend.
 
 | Rota e fonte | Área e gate de origem | Alias puro | Imports locais diretos | Fontes que referenciam formulário, tabela ou sobreposição | V/F/T |
 |---|---|---|---|---|---|
@@ -89,7 +89,7 @@ Controle de revisão dos gates: alterações nestas fontes exigem rever a interp
 | [/dashboard/campanhas/\[id\]/publicada](../../apps/web/app/dashboard/campanhas/%5Bid%5D/publicada/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [CampaignPublishedSuccess](../../apps/web/components/campaigns/CampaignPublishedSuccess.tsx) | — | ? / ? / não rodado |
 | [/dashboard/campanhas/ganhadores](../../apps/web/app/dashboard/campanhas/ganhadores/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [WinnerLookupCenter](../../apps/web/components/campaigns/WinnerLookupCenter.tsx) | — | ? / ? / não rodado |
 | [/dashboard/campanhas/nova](../../apps/web/app/dashboard/campanhas/nova/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [CampaignWizard](../../apps/web/components/campaigns/CampaignWizard.tsx) | [CampaignWizard](../../apps/web/components/campaigns/CampaignWizard.tsx) | ? / ? / não rodado |
-| [/dashboard/campanhas](../../apps/web/app/dashboard/campanhas/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [CampaignDashboard](../../apps/web/components/campaigns/CampaignDashboard.tsx) | — | ? / ? / não rodado |
+| [/dashboard/campanhas](../../apps/web/app/dashboard/campanhas/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [CampaignDashboard](../../apps/web/components/campaigns/CampaignDashboard.tsx) | — | verificado no recorte local / parcial / passou local · [f14ad80](../../apps/web/e2e/campaign-list-premium.spec.ts): lista, filtros, capas reais no banco de teste, isolamento e recuperação; sem executar mutações |
 | [/dashboard/comunicacao](../../apps/web/app/dashboard/comunicacao/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [SmartCommunicationTools](../../apps/web/components/communication/SmartCommunicationTools.tsx) | [page](../../apps/web/app/dashboard/comunicacao/page.tsx), [SmartCommunicationTools](../../apps/web/components/communication/SmartCommunicationTools.tsx) | ? / ? / não rodado |
 | [/dashboard/configuracoes/juridico](../../apps/web/app/dashboard/configuracoes/juridico/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [LegalUserCenter](../../apps/web/components/legal/LegalUserCenter.tsx) | [LegalUserCenter](../../apps/web/components/legal/LegalUserCenter.tsx) | ? / ? / não rodado |
 | [/dashboard/configuracoes](../../apps/web/app/dashboard/configuracoes/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | — | — | ? / ? / não rodado |
@@ -102,15 +102,15 @@ Controle de revisão dos gates: alterações nestas fontes exigem rever a interp
 | [/dashboard/crm/reservas-abandonadas](../../apps/web/app/dashboard/crm/reservas-abandonadas/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [AbandonedReservationsAnalysis](../../apps/web/components/crm/AbandonedReservationsAnalysis.tsx) | — | ? / ? / não rodado |
 | [/dashboard/crm/segmentos](../../apps/web/app/dashboard/crm/segmentos/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [CrmNav](../../apps/web/components/crm/CrmNav.tsx) | [page](../../apps/web/app/dashboard/crm/segmentos/page.tsx) | ? / ? / não rodado |
 | [/dashboard/crm/tarefas](../../apps/web/app/dashboard/crm/tarefas/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [CrmNav](../../apps/web/components/crm/CrmNav.tsx) | [page](../../apps/web/app/dashboard/crm/tarefas/page.tsx) | ? / ? / não rodado |
-| [/dashboard/financeiro](../../apps/web/app/dashboard/financeiro/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [FinanceDashboard](../../apps/web/components/dashboard/finance/FinanceDashboard.tsx) | — | ? / ? / não rodado |
+| [/dashboard/financeiro](../../apps/web/app/dashboard/financeiro/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [FinanceDashboard](../../apps/web/components/dashboard/finance/FinanceDashboard.tsx) | — | verificado no recorte local / parcial / passou local · [4e13760](../../apps/web/e2e/organizer-finance-premium.spec.ts): consulta de saldos, taxas, extrato, filtros, XLS e impressão; sem movimentação ou conciliação externa |
 | [/dashboard/ganhadores](../../apps/web/app/dashboard/ganhadores/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [PrizeTicketsCenter](../../apps/web/components/prizes/PrizeTicketsCenter.tsx) | [PrizeTicketsCenter](../../apps/web/components/prizes/PrizeTicketsCenter.tsx) | ? / ? / não rodado |
 | [/dashboard/ia](../../apps/web/app/dashboard/ia/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [AbandonedReservationsAnalysis](../../apps/web/components/crm/AbandonedReservationsAnalysis.tsx), [AiSortexCenter](../../apps/web/components/growth/AiSortexCenter.tsx) | [AiSortexCenter](../../apps/web/components/growth/AiSortexCenter.tsx) | ? / ? / não rodado |
 | [/dashboard/integracoes](../../apps/web/app/dashboard/integracoes/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [IntegrationsCenter](../../apps/web/components/organizer-platform/IntegrationsCenter.tsx) | [IntegrationsCenter](../../apps/web/components/organizer-platform/IntegrationsCenter.tsx) | ? / ? / não rodado |
 | [/dashboard/mini-campanhas/\[id\]](../../apps/web/app/dashboard/mini-campanhas/%5Bid%5D/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | — | [page](../../apps/web/app/dashboard/mini-campanhas/%5Bid%5D/page.tsx) | ? / ? / não rodado |
 | [/dashboard/mini-campanhas](../../apps/web/app/dashboard/mini-campanhas/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | — | [page](../../apps/web/app/dashboard/mini-campanhas/page.tsx) | ? / ? / não rodado |
-| [/dashboard](../../apps/web/app/dashboard/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [OrganizerDashboard](../../apps/web/components/dashboard/OrganizerDashboard.tsx), [PremiumScope](../../apps/web/components/premium/PremiumScope.tsx) | [DashboardPeriodMetrics](../../apps/web/components/dashboard/DashboardPeriodMetrics.tsx) | ? / ? / não rodado |
+| [/dashboard](../../apps/web/app/dashboard/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [OrganizerDashboard](../../apps/web/components/dashboard/OrganizerDashboard.tsx), [PremiumScope](../../apps/web/components/premium/PremiumScope.tsx) | [DashboardPeriodMetrics](../../apps/web/components/dashboard/DashboardPeriodMetrics.tsx) | verificado no recorte local / parcial / passou local · [db136a8](../../apps/web/e2e-local/run-organizer-dashboard-premium.mjs): Dashboard e navegação, vendas por período, estado vazio e recuperação, temas e foco a 320 px |
 | [/dashboard/pedidos/\[id\]](../../apps/web/app/dashboard/pedidos/%5Bid%5D/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | — | — | ? / ? / não rodado |
-| [/dashboard/pedidos](../../apps/web/app/dashboard/pedidos/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | — | [page](../../apps/web/app/dashboard/pedidos/page.tsx) | ? / ? / não rodado |
+| [/dashboard/pedidos](../../apps/web/app/dashboard/pedidos/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [PremiumScope](../../apps/web/components/premium/PremiumScope.tsx) | [page](../../apps/web/app/dashboard/pedidos/page.tsx) | verificado no recorte local / parcial / passou local · [db9d50c](../../apps/web/e2e-local/run-organizer-orders-premium.mjs): lista, busca, filtros, CSV e diálogo de detalhes; não cobre a página de detalhes separada nem os demais formatos |
 | [/dashboard/personalizacao/dominio](../../apps/web/app/dashboard/personalizacao/dominio/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [PersonalizationCenter](../../apps/web/components/organizer-platform/PersonalizationCenter.tsx) | [PersonalizationCenter](../../apps/web/components/organizer-platform/PersonalizationCenter.tsx) | ? / ? / não rodado |
 | [/dashboard/personalizacao](../../apps/web/app/dashboard/personalizacao/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [PersonalizationCenter](../../apps/web/components/organizer-platform/PersonalizationCenter.tsx) | [PersonalizationCenter](../../apps/web/components/organizer-platform/PersonalizationCenter.tsx) | ? / ? / não rodado |
 | [/dashboard/personalizacao/preview](../../apps/web/app/dashboard/personalizacao/preview/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [PublicCampaignView](../../apps/web/components/campaigns/PublicCampaignView.tsx) | [CampaignPublicChrome](../../apps/web/components/campaigns/CampaignPublicChrome.tsx), [PublicCampaignView](../../apps/web/components/campaigns/PublicCampaignView.tsx), [PurchasePanel](../../apps/web/components/purchases/PurchasePanel.tsx) | ? / ? / não rodado |
@@ -298,7 +298,7 @@ O grafo segue imports estáticos de valor e reexports locais de App Router e com
 | [app/dashboard/mini-campanhas/\[id\]/page.tsx](../../apps/web/app/dashboard/mini-campanhas/%5Bid%5D/page.tsx) | fonte App Router | `form` | — | — | `Link`, `button`, `input` |
 | [app/dashboard/mini-campanhas/page.tsx](../../apps/web/app/dashboard/mini-campanhas/page.tsx) | fonte App Router | `form` | — | — | `a`, `button`, `input`, `select`, `textarea` |
 | [app/dashboard/pedidos/\[id\]/page.tsx](../../apps/web/app/dashboard/pedidos/%5Bid%5D/page.tsx) | fonte App Router | — | — | — | `Link` |
-| [app/dashboard/pedidos/page.tsx](../../apps/web/app/dashboard/pedidos/page.tsx) | fonte App Router | — | — | `OrderDrawer`, `div` | `Link`, `button`, `input`, `select` |
+| [app/dashboard/pedidos/page.tsx](../../apps/web/app/dashboard/pedidos/page.tsx) | fonte App Router | — | `table` | `OrderDrawer`, `dialog` | `Link`, `button`, `input`, `select` |
 | [app/esqueci-senha/page.tsx](../../apps/web/app/esqueci-senha/page.tsx) | fonte App Router | `form` | — | — | `button`, `input` |
 | [app/login/page.tsx](../../apps/web/app/login/page.tsx) | fonte App Router | `LoginForm`, `form` | — | — | `Link`, `button`, `input` |
 | [app/mini-campanhas/\[slug\]/not-found.tsx](../../apps/web/app/mini-campanhas/%5Bslug%5D/not-found.tsx) | fonte App Router | — | — | — | `Link` |
@@ -335,7 +335,7 @@ O grafo segue imports estáticos de valor e reexports locais de App Router e com
 | [components/campaign/purchasesummary.tsx](../../apps/web/components/campaign/purchasesummary.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/campaign/rules.tsx](../../apps/web/components/campaign/rules.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/campaign/winnercard.tsx](../../apps/web/components/campaign/winnercard.tsx) | não encontrado estaticamente | — | — | — | — |
-| [components/campaigns/CampaignDashboard.tsx](../../apps/web/components/campaigns/CampaignDashboard.tsx) | sim | — | — | — | `Button`, `Link`, `button`, `input` |
+| [components/campaigns/CampaignDashboard.tsx](../../apps/web/components/campaigns/CampaignDashboard.tsx) | sim | — | — | — | `Link`, `button`, `input` |
 | [components/campaigns/CampaignPublicChrome.tsx](../../apps/web/components/campaigns/CampaignPublicChrome.tsx) | sim | — | — | `aside`, `section` | `Link`, `a`, `button` |
 | [components/campaigns/CampaignPublicLink.tsx](../../apps/web/components/campaigns/CampaignPublicLink.tsx) | sim | — | — | — | `a`, `button`, `input` |
 | [components/campaigns/CampaignPublishedSuccess.tsx](../../apps/web/components/campaigns/CampaignPublishedSuccess.tsx) | sim | — | — | — | `Link`, `a` |
@@ -544,6 +544,7 @@ Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pel
 - [e2e/automations.spec.ts](../../apps/web/e2e/automations.spec.ts)
 - [e2e/buyer-cover-media.spec.ts](../../apps/web/e2e/buyer-cover-media.spec.ts)
 - [e2e/campaign-lifecycle.spec.ts](../../apps/web/e2e/campaign-lifecycle.spec.ts)
+- [e2e/campaign-list-premium.spec.ts](../../apps/web/e2e/campaign-list-premium.spec.ts)
 - [e2e/campaign-numeric-fields.spec.ts](../../apps/web/e2e/campaign-numeric-fields.spec.ts)
 - [e2e/communication-full.spec.ts](../../apps/web/e2e/communication-full.spec.ts)
 - [e2e/crm-automation-shortcuts.spec.ts](../../apps/web/e2e/crm-automation-shortcuts.spec.ts)
@@ -558,6 +559,7 @@ Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pel
 - [e2e/mvp-organizer-journey.spec.ts](../../apps/web/e2e/mvp-organizer-journey.spec.ts)
 - [e2e/mvp-smoke.spec.ts](../../apps/web/e2e/mvp-smoke.spec.ts)
 - [e2e/operational-final-auth.spec.ts](../../apps/web/e2e/operational-final-auth.spec.ts)
+- [e2e/organizer-finance-premium.spec.ts](../../apps/web/e2e/organizer-finance-premium.spec.ts)
 - [e2e/organizer-home-review.spec.ts](../../apps/web/e2e/organizer-home-review.spec.ts)
 - [e2e/organizer-sidebar.spec.ts](../../apps/web/e2e/organizer-sidebar.spec.ts)
 - [e2e/personalization-persistence.spec.ts](../../apps/web/e2e/personalization-persistence.spec.ts)
@@ -577,3 +579,4 @@ Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pel
 - [e2e-local/buyer-purchase-history.spec.ts](../../apps/web/e2e-local/buyer-purchase-history.spec.ts)
 - [e2e-local/buyer-sales-window.spec.ts](../../apps/web/e2e-local/buyer-sales-window.spec.ts)
 - [e2e-local/run-organizer-dashboard-premium.mjs](../../apps/web/e2e-local/run-organizer-dashboard-premium.mjs)
+- [e2e-local/run-organizer-orders-premium.mjs](../../apps/web/e2e-local/run-organizer-orders-premium.mjs)

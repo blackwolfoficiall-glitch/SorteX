@@ -59,11 +59,16 @@ test("aliases, limites de sessão e UI compartilhada ficam explícitos", () => {
   const row = (prefix) => matrix.split("\n").find((line) => line.startsWith(`| [${prefix}](`));
   assert.match(row("/escolha"), /re-exporta ..\/cadastro\/page/);
   assert.match(row("/criar"), /redireciona → \/dashboard\/campanhas\/nova/);
+  for (const verified of ["/dashboard", "/dashboard/campanhas", "/dashboard/pedidos", "/dashboard/financeiro"]) {
+    assert.match(row(verified), /verificado no recorte local \/ parcial \/ passou local/);
+  }
+
   assert.match(row("/comprador/participar"), /redireciona → \/comprador\/sorteios\?filter=LIVE/);
   assert.match(row("/dashboard/crm/notificacoes"), /redireciona → \/dashboard\/crm/);
   assert.match(row("/admin/login"), /Exceção do proxy e layout/);
   assert.match(row("/admin/taxas"), /FINANCE_WRITE/);
   assert.match(row("/comprador/checkout/\\[id\\]"), /BUYER ou ADMIN/);
+  assert.match(row("/comprador/checkout/\\[id\\]"), /\? \/ \? \/ não rodado/);
   assert.match(row("/dashboard/campanhas/\\[id\\]/editar"), /ORGANIZER.*CampaignWizard/);
   assert.match(row("/api/platform/sortex-ads/confirmed-sales"), /GET.*authenticatedApiFetch.*não rodado/);
 });

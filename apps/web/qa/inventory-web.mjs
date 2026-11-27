@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import ts from "typescript";
+import { pageEvidence } from "./inventory-web-evidence.mjs";
 
 const web = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const repo = path.resolve(web, "../..");
@@ -229,6 +230,20 @@ export function generate() {
   const admin = resolveAdminPermissions();
   const pageTotals = new Map();
   const componentsUsed = new Set();
+  const pagePatterns = new Set(pages.map(({ pattern }) => pattern));
+  const checkedEvidence = new Map();
+  for (const evidence of pageEvidence) {
+    if (
+      !pagePatterns.has(evidence.path) ||
+      checkedEvidence.has(evidence.path) ||
+      !/^apps\/web\/(?:e2e|e2e-local)\/[A-Za-z0-9._-]+$/.test(evidence.source) ||
+      !fs.existsSync(path.join(repo, evidence.source)) ||
+      !/^[a-f0-9]{7,40}$/.test(evidence.revision) ||
+      !evidence.detail ||
+      /[|\r\n]/.test(evidence.detail)
+    ) throw new Error(`Evidência de página inválida: ${evidence.path}`);
+    checkedEvidence.set(evidence.path, evidence);
+  }
   const pageRows = pages.map(({ file, pattern }) => {
     const scope = pageScope(pattern, admin);
     pageTotals.set(scope[0], (pageTotals.get(scope[0]) ?? 0) + 1);
@@ -240,7 +255,11 @@ export function generate() {
       if (source.startsWith("apps/web/components/")) componentsUsed.add(source);
       return forms.length || tables.length || overlays.length ? [links(source, path.basename(source, path.extname(source)))] : [];
     });
-    return `| ${links(file, pattern)} | ${scope.join(" · ")} | ${listed(primaryRedirect(root.src))} | ${listed(local)} | ${listed(touched)} | ? / ? / não rodado |`;
+    const proof = checkedEvidence.get(pattern);
+    const status = proof
+      ? `verificado no recorte local / parcial / passou local · ${links(proof.source, proof.revision)}: ${proof.detail}`
+      : "? / ? / não rodado";
+    return `| ${links(file, pattern)} | ${scope.join(" · ")} | ${listed(primaryRedirect(root.src))} | ${listed(local)} | ${listed(touched)} | ${status} |`;
   });
   const handlerRows = handlers.map(({ file, pattern }) => {
     const { src } = scan(file);
@@ -282,7 +301,7 @@ export function generate() {
     "",
     "## Páginas",
     "",
-    "**V/F/T** = visual da nova revisão / jornada funcional completa / execução nesta auditoria. `? / ? / não rodado` não significa defeito nem reprovação: verifique no navegador antes de mudar o status no registro manual. O código traz gates aparentes, não substitui os testes de autorização do backend.",
+    "**V/F/T** = visual da nova revisão / jornada funcional completa / execução nesta auditoria. `? / ? / não rodado` não significa defeito nem reprovação: verifique no navegador antes de mudar o status no registro manual. A evidência de um recorte local é parcial: não aprova a jornada integral, a publicação ou o iPhone. O código traz gates aparentes, não substitui os testes de autorização do backend.",
     "",
     "| Rota e fonte | Área e gate de origem | Alias puro | Imports locais diretos | Fontes que referenciam formulário, tabela ou sobreposição | V/F/T |",
     "|---|---|---|---|---|---|",

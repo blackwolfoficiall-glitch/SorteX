@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import PremiumScope from "@/components/premium/PremiumScope";
+import styles from "./orders-premium.module.css";
 import {
   CheckCircle2,
   ChevronLeft,
@@ -47,13 +49,6 @@ const dateTime = new Intl.DateTimeFormat("pt-BR", {
   dateStyle: "short",
   timeStyle: "short",
 });
-const initialSummary: OrderSummary = {
-  approvedSales: 0,
-  pendingReservations: 0,
-  ordersToday: 0,
-  periodRevenue: 0,
-  comparison: 0,
-};
 const statusLabels: Record<string, string> = {
   PENDING: "Pendente",
   RESERVED: "Reservado",
@@ -62,15 +57,6 @@ const statusLabels: Record<string, string> = {
   EXPIRED: "Expirado",
   CANCELLED: "Cancelado",
   REFUNDED: "Reembolsado",
-};
-const statusClasses: Record<string, string> = {
-  PENDING: "bg-blue-50 text-blue-700",
-  RESERVED: "bg-amber-50 text-amber-700",
-  AWAITING_PAYMENT: "bg-blue-50 text-blue-700",
-  PAID: "bg-emerald-50 text-emerald-700",
-  EXPIRED: "bg-zinc-100 text-zinc-600",
-  CANCELLED: "bg-red-50 text-red-700",
-  REFUNDED: "bg-violet-50 text-violet-700",
 };
 const methodLabels: Record<string, string> = {
   PIX: "Pix",
@@ -101,59 +87,64 @@ const emptyFilters: Filters = {
   sort: "recent",
 };
 
+type OrderList = Awaited<ReturnType<typeof listOrders>>;
+type OrderResult = { query: string; orders: OrderList } | { query: string; error: string };
+type OrderDrawerState = { loading: true } | { loading: false; order: Record<string, unknown> };
+
 export default function PedidosPage() {
-  const [items, setItems] = useState<OrganizerOrder[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [campaignsUnavailable, setCampaignsUnavailable] = useState(false);
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [page, setPage] = useState(1);
-  const [pages, setPages] = useState(1);
-  const [total, setTotal] = useState(0);
   const [limit, setLimit] = useState(25);
-  const [summary, setSummary] = useState<OrderSummary>(initialSummary);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [selected, setSelected] = useState<Record<string, unknown> | null>(
-    null,
-  );
-  const [drawerLoading, setDrawerLoading] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<OrderResult | null>(null);
+  const [selected, setSelected] = useState<OrderDrawerState | null>(null);
+  const requestId = useRef(0);
   const [message, setMessage] = useState("");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: String(limit),
-        ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)),
-      });
-      const result = await listOrders(`?${params}`);
-      setItems(result.items);
-      setPages(result.pages);
-      setTotal(result.total);
-      setSummary(result.summary ?? initialSummary);
-    } catch (cause) {
-      setError(
-        cause instanceof Error
-          ? cause.message
-          : "Não foi possível carregar os pedidos.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [filters, limit, page]);
+  const params = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)),
+  }).toString();
+  const query = `${params}:${attempt}`;
+  const current = result?.query === query ? result : null;
+  const orders = current && "orders" in current ? current.orders : undefined;
+  const items = orders?.items ?? [];
+  const total = orders?.total;
+  const pages = orders?.pages ?? 0;
+  const summary = orders?.summary;
+  const loading = !current;
+  const error = current && "error" in current ? current.error : "";
+  const refresh = () => setAttempt((value) => value + 1);
 
   useEffect(() => {
+    let active = true;
     void getMyCampaigns()
-      .then(setCampaigns)
-      .catch(() => setCampaigns([]));
+      .then((items) => { if (active) setCampaigns(items); })
+      .catch(() => { if (active) setCampaignsUnavailable(true); });
+    return () => { active = false; };
   }, []);
   useEffect(() => {
-    const timer = setTimeout(() => void load(), filters.search ? 350 : 0);
-    return () => clearTimeout(timer);
-  }, [load, filters.search]);
+    let active = true;
+    const timer = setTimeout(() => {
+      void listOrders(`?${params}`)
+        .then((orders) => { if (active) setResult({ query, orders }); })
+        .catch((cause: unknown) => {
+          if (active) setResult({
+            query,
+            error: cause instanceof Error && cause.message ? cause.message : "Não foi possível carregar os pedidos.",
+          });
+        });
+    }, filters.search ? 350 : 0);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [params, query, filters.search]);
 
   function change(patch: Partial<Filters>) {
+    refresh();
     setPage(1);
     setFilters((current) => ({ ...current, ...patch }));
   }
@@ -167,72 +158,88 @@ export default function PedidosPage() {
     change({ from: iso(start), to: iso(end) });
   }
   async function openDetails(id: string) {
-    setDrawerLoading(true);
-    setSelected({});
+    const key = ++requestId.current;
+    setSelected({ loading: true });
     try {
-      setSelected(await getOrder(id));
+      const order = await getOrder(id);
+      if (key === requestId.current) setSelected({ loading: false, order });
     } catch (cause) {
+      if (key !== requestId.current) return;
       setMessage(
         cause instanceof Error
           ? cause.message
           : "Não foi possível abrir o pedido.",
       );
       setSelected(null);
-    } finally {
-      setDrawerLoading(false);
     }
   }
+  function closeDetails() {
+    requestId.current++;
+    setSelected(null);
+  }
   async function copy(text: string, label: string) {
-    await navigator.clipboard.writeText(text);
-    setMessage(`${label} copiado com sucesso.`);
+    try {
+      await navigator.clipboard.writeText(text);
+      setMessage(`${label} copiado com sucesso.`);
+    } catch {
+      setMessage("Não foi possível copiar. Confira a permissão da área de transferência.");
+    }
   }
 
-  const comparison = summary.comparison;
+  const comparison = summary?.comparison;
+  const summaryValue = (key: keyof OrderSummary, format: (value: number) => string) =>
+    summary ? format(summary[key]) : "—";
   const cards = [
     {
       label: "Vendas aprovadas",
-      value: money.format(summary.approvedSales),
+      value: summaryValue("approvedSales", money.format),
       icon: CheckCircle2,
       tone: "emerald",
+      detail: "Valor bruto dos pedidos pagos",
     },
     {
       label: "Reservas pendentes",
-      value: summary.pendingReservations.toLocaleString("pt-BR"),
+      value: summaryValue("pendingReservations", (value) => value.toLocaleString("pt-BR")),
       icon: Clock3,
       tone: "amber",
+      detail: "Aguardam conclusão",
     },
     {
       label: "Pedidos hoje",
-      value: summary.ordersToday.toLocaleString("pt-BR"),
+      value: summaryValue("ordersToday", (value) => value.toLocaleString("pt-BR")),
       icon: ShoppingBag,
       tone: "blue",
+      detail: "Pelo horário do servidor",
     },
     {
       label: "Receita do período",
-      value: money.format(summary.periodRevenue),
+      value: summaryValue("periodRevenue", money.format),
       icon: CircleDollarSign,
       tone: "violet",
+      detail: "Por data de criação do pedido",
     },
   ];
 
   return (
-    <div className="mx-auto max-w-7xl space-y-6 pb-10">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <PremiumScope className={styles.orders}>
+      <header className={styles.hero}>
         <div>
-          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">
+          <p className={styles.eyebrow}>
             Vendas e reservas
           </p>
-          <h1 className="mt-2 text-3xl font-black">Pedidos</h1>
-          <p className="mt-2 text-zinc-500">
+          <h1 className={styles.title}>Pedidos</h1>
+          <p className={styles.subtitle}>
             Acompanhe cada etapa sem alterar manualmente o status dos
             pagamentos.
           </p>
         </div>
         <div className="flex gap-2">
-          <ExportMenu items={items} />
+          <ExportMenu items={items} enabled={Boolean(orders && items.length)} />
           <button
-            onClick={() => void load()}
-            className="inline-flex h-11 items-center gap-2 rounded-xl border bg-white px-4 font-bold shadow-sm"
+            type="button"
+            onClick={refresh}
+            disabled={loading}
+            className={styles.controlButton}
           >
             <RefreshCcw size={17} />
             Atualizar
@@ -243,62 +250,49 @@ export default function PedidosPage() {
       {message && (
         <div
           role="status"
-          className="flex items-center justify-between rounded-2xl bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-800"
+          className={styles.message}
         >
           <span>{message}</span>
-          <button onClick={() => setMessage("")}>
+          <button type="button" aria-label="Dispensar aviso" className={styles.controlButton} onClick={() => setMessage("")}>
             <X size={16} />
           </button>
         </div>
       )}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map(({ label, value, icon: Icon, tone }) => (
-          <article
-            key={label}
-            className="group rounded-3xl border bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md"
-          >
-            <div className="flex items-start justify-between">
-              <div
-                className={`grid h-11 w-11 place-items-center rounded-2xl ${toneClass(tone)}`}
-              >
-                <Icon size={21} />
-              </div>
-              <span
-                className={`inline-flex items-center gap-1 text-xs font-bold ${comparison < 0 ? "text-red-600" : "text-emerald-600"}`}
-              >
-                {comparison < 0 ? (
-                  <TrendingDown size={14} />
-                ) : (
-                  <TrendingUp size={14} />
-                )}{" "}
-                {comparison >= 0 ? "+" : ""}
-                {comparison.toFixed(1)}%
-              </span>
+      <section className={styles.summary} aria-label="Resumo da operação">
+        <p className={styles.summaryNote}>Resumo da sua conta. Só o intervalo de datas altera a receita do período; a busca e os outros filtros alteram a lista.</p>
+        {cards.map(({ label, value, icon: Icon, tone, detail }) => (
+          <article key={label} className={styles.stat} data-featured={tone === "violet" || undefined}>
+            <span className={styles.icon}><Icon size={20} aria-hidden="true" /></span>
+            <div>
+              <h2>{label}</h2>
+              <strong>{value}</strong>
+              <p>{detail}</p>
+              {tone === "violet" && comparison !== undefined && comparison !== 0 && (
+                <p className={styles.comparison}>
+                  {comparison < 0 ? <TrendingDown size={14} aria-hidden="true" /> : <TrendingUp size={14} aria-hidden="true" />}{" "}
+                  {comparison > 0 ? "+" : ""}{comparison.toFixed(1)}% em relação ao período anterior
+                </p>
+              )}
             </div>
-            <p className="mt-5 text-sm font-semibold text-zinc-500">{label}</p>
-            <strong className="mt-1 block text-2xl font-black">{value}</strong>
-            <p className="mt-2 text-xs text-zinc-400">
-              em relação ao período anterior
-            </p>
           </article>
         ))}
       </section>
 
-      <section className="rounded-3xl border bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex items-center gap-2 text-sm font-black">
-          <SlidersHorizontal size={18} className="text-violet-600" />
+      <section className={styles.panel} aria-labelledby="order-filters">
+        <h2 className={styles.panelTitle} id="order-filters">
+          <SlidersHorizontal size={18} aria-hidden="true" />
           Filtros
-        </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="xl:col-span-2">
+        </h2>
+        <div className={styles.filterGrid}>
+          <div className={styles.searchField}>
             <label htmlFor="orders-search">
               <FilterLabel>Busca</FilterLabel>
             </label>
             <span className="relative block">
               <Search
                 aria-hidden="true"
-                className="absolute left-3 top-3 text-zinc-400"
+                className={styles.searchIcon}
                 size={18}
               />
               <input
@@ -306,14 +300,15 @@ export default function PedidosPage() {
                 type="search"
                 value={filters.search}
                 onChange={(e) => change({ search: e.target.value })}
-                placeholder="Comprador, telefone ou e-mail"
-                className={`${control} pl-10`}
+                placeholder="Nome ou e-mail do comprador"
+                className={`${control} ${styles.searchInput}`}
               />
             </span>
           </div>
-          <label>
+          <label className={styles.campaignField}>
             <FilterLabel>Campanha</FilterLabel>
             <select
+              aria-label="Campanha"
               value={filters.campaignId}
               onChange={(e) => change({ campaignId: e.target.value })}
               className={control}
@@ -329,6 +324,7 @@ export default function PedidosPage() {
           <label>
             <FilterLabel>Status</FilterLabel>
             <select
+              aria-label="Status"
               value={filters.status}
               onChange={(e) => change({ status: e.target.value })}
               className={control}
@@ -341,9 +337,10 @@ export default function PedidosPage() {
               ))}
             </select>
           </label>
-          <label>
+          <label className={styles.methodField}>
             <FilterLabel>Método de pagamento</FilterLabel>
             <select
+              aria-label="Método de pagamento"
               value={filters.method}
               onChange={(e) => change({ method: e.target.value })}
               className={control}
@@ -354,7 +351,7 @@ export default function PedidosPage() {
               <option value="BOLETO">Boleto</option>
             </select>
           </label>
-          <div className="grid gap-3 sm:grid-cols-2 xl:col-span-2">
+          <div className={styles.dateGroup}>
             <label>
               <FilterLabel>Data inicial</FilterLabel>
               <input
@@ -399,6 +396,7 @@ export default function PedidosPage() {
             />
           </label>
         </div>
+        {campaignsUnavailable && <p className={styles.muted} role="status">Filtro por campanha indisponível no momento.</p>}
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <Quick label="Hoje" onClick={() => quick(1)} />
           <Quick label="Ontem" onClick={() => quick(1, "yesterday")} />
@@ -424,20 +422,21 @@ export default function PedidosPage() {
           <button
             onClick={() => {
               setFilters(emptyFilters);
+              refresh();
               setPage(1);
             }}
-            className="ml-auto rounded-full px-3 py-2 text-xs font-bold text-zinc-500 hover:bg-zinc-100"
+            className={styles.controlButton}
           >
             Limpar filtros
           </button>
         </div>
       </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-zinc-500">
-          <b className="text-zinc-900">{total}</b> pedidos encontrados
+      <div className={styles.results}>
+        <p className={styles.muted} aria-live="polite">
+          {total !== undefined ? <><b>{total}</b> {total === 1 ? "pedido encontrado" : "pedidos encontrados"}</> : "Resultados dos pedidos"}
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <select
             aria-label="Ordenação"
             value={filters.sort}
@@ -455,6 +454,7 @@ export default function PedidosPage() {
             value={limit}
             onChange={(e) => {
               setPage(1);
+              refresh();
               setLimit(Number(e.target.value));
             }}
             className={smallControl}
@@ -469,23 +469,26 @@ export default function PedidosPage() {
       </div>
 
       {error ? (
-        <ErrorState message={error} retry={() => void load()} />
+        <ErrorState message={error} retry={refresh} />
       ) : loading ? (
-        <div className="grid h-64 place-items-center">
-          <LoaderCircle className="animate-spin text-violet-600" />
+        <div className={styles.loading} role="status">
+          <LoaderCircle aria-hidden="true" /> Carregando pedidos…
         </div>
       ) : items.length ? (
-        <section className="grid gap-4 lg:grid-cols-2">
-          {items.map((item) => (
-            <OrderCard
-              key={item.id}
-              item={item}
-              open={() => void openDetails(item.id)}
-              copy={copy}
-              setMessage={setMessage}
-            />
-          ))}
-        </section>
+        <div className={styles.collection} aria-label="Pedidos encontrados">
+          <div className={styles.desktopOrders}>
+            <table>
+              <caption className="sr-only">Pedidos encontrados</caption>
+              <thead><tr><th scope="col">Comprador</th><th scope="col">Campanha</th><th scope="col">Pedido e pagamento</th><th scope="col">Valor</th><th scope="col">Ações</th></tr></thead>
+              <tbody>
+                {items.map((item) => <OrderRow key={item.id} item={item} open={() => void openDetails(item.id)} copy={copy} setMessage={setMessage} />)}
+              </tbody>
+            </table>
+          </div>
+          <section className={styles.mobileOrders} aria-label="Lista de pedidos">
+            {items.map((item) => <OrderCard key={item.id} item={item} open={() => void openDetails(item.id)} copy={copy} setMessage={setMessage} />)}
+          </section>
+        </div>
       ) : (
         <EmptyState
           filtered={Object.entries(filters).some(
@@ -494,14 +497,14 @@ export default function PedidosPage() {
         />
       )}
 
-      {!loading && items.length > 0 && (
+      {orders && items.length > 0 && (
         <nav
           aria-label="Paginação"
           className="flex items-center justify-center gap-3"
         >
           <button
             disabled={page <= 1}
-            onClick={() => setPage((value) => value - 1)}
+            onClick={() => { refresh(); setPage((value) => value - 1); }}
             className={pageButton}
           >
             <ChevronLeft size={16} />
@@ -512,7 +515,7 @@ export default function PedidosPage() {
           </span>
           <button
             disabled={page >= pages}
-            onClick={() => setPage((value) => value + 1)}
+            onClick={() => { refresh(); setPage((value) => value + 1); }}
             className={pageButton}
           >
             Próxima
@@ -522,26 +525,59 @@ export default function PedidosPage() {
       )}
       {selected && (
         <OrderDrawer
-          data={selected}
-          loading={drawerLoading}
-          close={() => setSelected(null)}
+          state={selected}
+          close={closeDetails}
         />
       )}
-    </div>
+    </PremiumScope>
   );
 }
 
-function OrderCard({
-  item,
-  open,
-  copy,
-  setMessage,
-}: {
+type OrderViewProps = {
   item: OrganizerOrder;
   open: () => void;
   copy: (text: string, label: string) => Promise<void>;
   setMessage: (value: string) => void;
-}) {
+};
+const orderId = (id: string) => `Pedido #${id.slice(-8).toUpperCase()}`;
+const paymentLabel = (method?: string) => (method && (methodLabels[method] || method)) || "Não iniciado";
+const affiliateLabel = (item: OrganizerOrder) => item.affiliateConversion?.affiliate.name || "Sem afiliado registrado";
+
+function OrderStatus({ status }: { status: string }) {
+  return <span className={styles.badge} data-status={status}>{statusLabels[status] || status}</span>;
+}
+
+function OrderRow(props: OrderViewProps) {
+  const { item, open } = props;
+  return (
+    <tr>
+      <th scope="row">
+        <strong>{item.buyer.name}</strong>
+        <span>{item.buyer.email}</span>
+        <span>{item.buyer.phone || "Telefone não informado"}</span>
+      </th>
+      <td>
+        <strong>{item.campaign.title}</strong>
+        <span>{affiliateLabel(item)}</span>
+      </td>
+      <td>
+        <OrderStatus status={item.status} />
+        <span>{orderId(item.id)}</span>
+        <span>{paymentLabel(item.payments[0]?.method)} · {dateTime.format(new Date(item.createdAt))}</span>
+      </td>
+      <td><strong>{money.format(item.total)}</strong><span>{item.quantity} cotas</span></td>
+      <td>
+        <Action icon={Eye} label="Abrir detalhes" onClick={open} />
+        <details className={styles.rowActions}>
+          <summary>Mais ações</summary>
+          <div><OrderActions {...props} hideOpen /></div>
+        </details>
+      </td>
+    </tr>
+  );
+}
+
+function OrderCard({ item, ...props }: OrderViewProps) {
   const payment = item.payments[0];
   const when = new Date(item.createdAt);
   const initials = item.buyer.name
@@ -551,26 +587,20 @@ function OrderCard({
     .join("")
     .toUpperCase();
   return (
-    <article className="group rounded-3xl border bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-md">
+    <article className={styles.card}>
       <div className="flex items-start gap-3">
-        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-violet-100 font-black text-violet-700">
+        <span className={styles.avatar}>
           {initials}
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <h2 className="truncate font-black">{item.buyer.name}</h2>
-              <p className="text-xs text-zinc-400">
-                Pedido #{item.id.slice(-8).toUpperCase()}
-              </p>
+              <h3 className="font-black">{item.buyer.name}</h3>
+              <p className={styles.muted}>{orderId(item.id)}</p>
             </div>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-black ${statusClasses[item.status] || "bg-zinc-100 text-zinc-700"}`}
-            >
-              {statusLabels[item.status] || item.status}
-            </span>
+            <OrderStatus status={item.status} />
           </div>
-          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-zinc-500">
+          <div className={styles.contacts}>
             <span className="inline-flex items-center gap-1">
               <Phone size={13} />
               {item.buyer.phone || "Não informado"}
@@ -582,77 +612,90 @@ function OrderCard({
           </div>
         </div>
       </div>
-      <div className="mt-5 grid grid-cols-2 gap-3 rounded-2xl bg-zinc-50 p-4 text-sm sm:grid-cols-3">
+      <div className={styles.cardFields}>
         <Metric label="Campanha" value={item.campaign.title} />
         <Metric label="Quantidade" value={`${item.quantity} cotas`} />
         <Metric label="Valor" value={money.format(item.total)} strong />
         <Metric
           label="Pagamento"
-          value={
-            methodLabels[payment?.method] || payment?.method || "Não iniciado"
-          }
+          value={paymentLabel(payment?.method)}
         />
         <Metric label="Data e hora" value={dateTime.format(when)} />
         <Metric
           label="Origem / afiliado"
-          value={item.affiliateConversion?.affiliate.name || "Direto"}
+          value={affiliateLabel(item)}
         />
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Action icon={Eye} label="Abrir detalhes" onClick={open} />
-        <Action
-          icon={Clipboard}
-          label="Copiar pedido"
-          onClick={() => void copy(item.id, "Número do pedido")}
-        />
-        <Action
-          icon={WalletCards}
-          label="Copiar Pix"
-          disabled={payment?.method !== "PIX"}
-          onClick={() =>
-            setMessage(
-              "O código Pix é protegido e fica disponível somente no pagamento do comprador.",
-            )
-          }
-        />
-        <Action icon={FileText} label="Ver comprovante" disabled />
-        <Link
-          href={`/dashboard/comunicacao?contact=${encodeURIComponent(item.buyer.email)}`}
-          className={actionClass}
-        >
-          <Contact size={14} />
-          Entrar em contato
-        </Link>
-        <Action icon={History} label="Histórico" onClick={open} />
-      </div>
+      <div className={styles.cardActions}><OrderActions item={item} {...props} /></div>
     </article>
   );
 }
 
-function OrderDrawer({
-  data,
-  loading,
-  close,
-}: {
-  data: Record<string, unknown>;
-  loading: boolean;
-  close: () => void;
-}) {
-  if (loading)
-    return (
-      <div className="fixed inset-0 z-[70] grid place-items-center bg-black/30">
-        <LoaderCircle className="animate-spin text-white" />
+function OrderActions({ item, open, copy, setMessage, hideOpen = false }: OrderViewProps & { hideOpen?: boolean }) {
+  const payment = item.payments[0];
+  return (
+    <>
+      {!hideOpen && <Action icon={Eye} label="Abrir detalhes" onClick={open} />}
+      <Action icon={Clipboard} label="Copiar pedido" onClick={() => void copy(item.id, "Número do pedido")} />
+      <Action
+        icon={WalletCards}
+        label={payment?.method === "PIX" ? "Pix: código protegido" : "Copiar Pix"}
+        disabled={payment?.method !== "PIX"}
+        onClick={() => setMessage("O código Pix é protegido e fica disponível somente no pagamento do comprador.")}
+      />
+      <Action icon={FileText} label="Ver comprovante" disabled />
+      <Link
+        href={`/dashboard/comunicacao?contact=${encodeURIComponent(item.buyer.email)}`}
+        className={actionClass}
+      >
+        <Contact size={14} aria-hidden="true" /> Entrar em contato
+      </Link>
+      <Action icon={History} label="Histórico" onClick={open} />
+    </>
+  );
+}
+
+function OrderDrawer({ state, close }: { state: OrderDrawerState; close: () => void }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    dialog?.showModal();
+    return () => dialog?.close();
+  }, []);
+  function dismiss() {
+    ref.current?.close();
+    close();
+  }
+
+  return (
+    <dialog
+      ref={ref}
+      className={styles.drawer}
+      aria-label="Detalhes do pedido"
+      onCancel={(event) => { event.preventDefault(); dismiss(); }}
+      onClick={(event) => { if (event.target === event.currentTarget) dismiss(); }}
+    >
+      <div className={styles.drawerContent}>
+        <button type="button" aria-label="Fechar detalhes" className={styles.drawerClose} onClick={dismiss}>
+          <X size={20} aria-hidden="true" />
+        </button>
+        {state.loading ? (
+          <div className={styles.loading} role="status">
+            <LoaderCircle aria-hidden="true" /> Carregando detalhes…
+          </div>
+        ) : <OrderDrawerContents data={state.order} />}
       </div>
-    );
+    </dialog>
+  );
+}
+
+function OrderDrawerContents({ data }: { data: Record<string, unknown> }) {
   const buyer = (data.buyer ?? {}) as Record<string, unknown>;
   const campaign = (data.campaign ?? {}) as Record<string, unknown>;
   const payments = (data.payments ?? []) as Array<Record<string, unknown>>;
-  const tickets = Array.from({
-    length: Number(
-      ((data._count ?? {}) as Record<string, unknown>).tickets || 0,
-    ),
-  });
+  const tickets = Number(((data._count ?? {}) as Record<string, unknown>).tickets || 0);
   const payment = payments[0];
+  const approved = payments.find((entry) => String(entry.status) === "APPROVED");
   const created = new Date(String(data.createdAt));
   const events = payments
     .flatMap((p) => (p.events ?? []) as Array<Record<string, unknown>>)
@@ -662,35 +705,12 @@ function OrderDrawer({
         new Date(String(b.createdAt)).getTime(),
     );
   return (
-    <div
-      className="fixed inset-0 z-[70] bg-black/35"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Detalhes do pedido"
-    >
-      <button
-        aria-label="Fechar detalhes"
-        className="absolute inset-0 h-full w-full cursor-default"
-        onClick={close}
-      />
-      <aside className="absolute inset-y-0 right-0 w-full max-w-xl overflow-y-auto bg-white p-5 shadow-2xl sm:p-7">
-        <header className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-black uppercase tracking-wider text-violet-600">
-              Pedido #{String(data.id).slice(-8).toUpperCase()}
-            </p>
-            <h2 className="mt-2 text-2xl font-black">
-              {String(campaign.title || "Detalhes")}
-            </h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              {String(buyer.name || "")} ·{" "}
-              {money.format(Number(data.total || 0))}
-            </p>
-          </div>
-          <button onClick={close} className="rounded-xl border p-2">
-            <X />
-          </button>
-        </header>
+    <>
+      <header className={styles.drawerHeader}>
+        <p className={styles.eyebrow}>{orderId(String(data.id))}</p>
+        <h2 className={styles.drawerTitle}>{String(campaign.title || "Detalhes")}</h2>
+        <p className={styles.muted}>{String(buyer.name || "")} · {money.format(Number(data.total || 0))}</p>
+      </header>
         <section className="mt-7">
           <h3 className="font-black">Linha do tempo</h3>
           <div className="mt-4 space-y-0">
@@ -702,24 +722,24 @@ function OrderDrawer({
             <Timeline
               label="Pagamento aprovado"
               date={
-                String(payment?.status) === "APPROVED"
-                  ? new Date(String(payment.createdAt))
+                approved?.approvedAt
+                  ? new Date(String(approved.approvedAt))
                   : undefined
               }
             />
             <Timeline
               label="Bilhetes gerados"
-              date={tickets.length ? created : undefined}
+              recorded={tickets ? `${tickets} emitidos (horário não informado)` : undefined}
               last
             />
           </div>
         </section>
-        <section className="mt-7 grid gap-3 rounded-2xl bg-zinc-50 p-4 sm:grid-cols-2">
+        <section className={styles.cardFields}>
           <Metric
             label="Afiliado"
             value={String(
               (data.affiliateConversion as Record<string, unknown> | undefined)
-                ?.affiliate || "Direto",
+                ?.affiliate || "Não registrado",
             )}
           />
           <Metric label="Origem" value="Plataforma SorteX" />
@@ -736,13 +756,13 @@ function OrderDrawer({
                   className="rounded-xl border p-3 text-sm"
                 >
                   <b>{translateEvent(String(event.eventType))}</b>
-                  <span className="mt-1 block text-xs text-zinc-500">
+                  <span className={styles.muted}>
                     {dateTime.format(new Date(String(event.createdAt)))}
                   </span>
                 </div>
               ))
             ) : (
-              <p className="rounded-xl bg-zinc-50 p-4 text-sm text-zinc-500">
+              <p className={styles.muted}>
                 Nenhum evento adicional registrado.
               </p>
             )}
@@ -750,16 +770,15 @@ function OrderDrawer({
         </section>
         <section className="mt-7">
           <h3 className="font-black">Observações</h3>
-          <p className="mt-2 rounded-xl border p-4 text-sm text-zinc-500">
+          <p className={styles.muted}>
             Nenhuma observação registrada para este pedido.
           </p>
         </section>
-      </aside>
-    </div>
+    </>
   );
 }
 
-function ExportMenu({ items }: { items: OrganizerOrder[] }) {
+function ExportMenu({ items, enabled }: { items: OrganizerOrder[]; enabled: boolean }) {
   const [open, setOpen] = useState(false);
   const rows = useMemo(
     () =>
@@ -779,6 +798,7 @@ function ExportMenu({ items }: { items: OrganizerOrder[] }) {
     [items],
   );
   function exportFile(kind: "csv" | "xls") {
+    if (!enabled) return;
     const header = [
       "Pedido",
       "Comprador",
@@ -815,14 +835,18 @@ function ExportMenu({ items }: { items: OrganizerOrder[] }) {
   return (
     <div className="relative">
       <button
+        type="button"
+        disabled={!enabled}
+        aria-expanded={enabled && open}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex h-11 items-center gap-2 rounded-xl bg-zinc-950 px-4 font-bold text-white"
+        className={styles.primary}
       >
         <Download size={17} />
         Exportar
       </button>
-      {open && (
-        <div className="absolute right-0 top-12 z-20 w-44 rounded-2xl border bg-white p-2 shadow-xl">
+      {enabled && open && (
+        <div className={styles.exportMenu}>
+          <p className={styles.muted}>Exportar a página atual</p>
           <button onClick={() => exportFile("csv")} className={exportOption}>
             <FileText size={16} />
             CSV
@@ -848,8 +872,8 @@ function ExportMenu({ items }: { items: OrganizerOrder[] }) {
 }
 function EmptyState({ filtered }: { filtered: boolean }) {
   return (
-    <section className="rounded-3xl border bg-white px-6 py-16 text-center shadow-sm">
-      <span className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-violet-50 text-violet-600">
+    <section className={styles.empty}>
+      <span className={styles.emptyIcon}>
         <PackageOpen size={38} />
       </span>
       <h2 className="mt-6 text-xl font-black">
@@ -857,14 +881,14 @@ function EmptyState({ filtered }: { filtered: boolean }) {
           ? "Nenhum pedido encontrado."
           : "Você ainda não possui pedidos."}
       </h2>
-      <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-zinc-500">
+      <p className={styles.muted}>
         {filtered
           ? "Revise ou limpe os filtros para visualizar outros resultados."
           : "Assim que alguém comprar títulos da sua campanha, eles aparecerão aqui automaticamente."}
       </p>
       <Link
         href="/dashboard/campanhas"
-        className="mt-6 inline-flex h-11 items-center rounded-xl bg-violet-700 px-5 font-bold text-white"
+        className={styles.primary}
       >
         Ir para campanhas
       </Link>
@@ -879,11 +903,11 @@ function ErrorState({
   retry: () => void;
 }) {
   return (
-    <div className="rounded-3xl border border-red-100 bg-red-50 p-8 text-center text-red-700">
-      <p>{message}</p>
+    <div className={styles.empty}>
+      <p className={styles.error} role="alert">{message}</p>
       <button
         onClick={retry}
-        className="mt-4 rounded-xl bg-red-700 px-4 py-2 font-bold text-white"
+        className={styles.controlButton}
       >
         Tentar novamente
       </button>
@@ -893,8 +917,9 @@ function ErrorState({
 function Quick({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="rounded-full border bg-white px-3 py-2 text-xs font-bold text-zinc-600 transition hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700"
+      className={styles.filterChip}
     >
       {label}
     </button>
@@ -902,7 +927,7 @@ function Quick({ label, onClick }: { label: string; onClick: () => void }) {
 }
 function FilterLabel({ children }: { children: ReactNode }) {
   return (
-    <span className="mb-1.5 block text-xs font-bold text-zinc-600">
+    <span className={styles.filterLabel}>
       {children}
     </span>
   );
@@ -920,12 +945,13 @@ function Action({
 }) {
   return (
     <button
+      type="button"
       disabled={disabled}
       onClick={onClick}
       title={disabled ? "Ainda não disponível para este pedido" : undefined}
       className={actionClass}
     >
-      <Icon size={14} />
+      <Icon size={14} aria-hidden="true" />
       {label}
     </button>
   );
@@ -940,13 +966,11 @@ function Metric({
   strong?: boolean;
 }) {
   return (
-    <div className="min-w-0">
-      <span className="block text-[10px] font-black uppercase tracking-wide text-zinc-400">
+    <div className={styles.metric}>
+      <span>
         {label}
       </span>
-      <span
-        className={`mt-1 block truncate text-xs ${strong ? "font-black text-zinc-950" : "font-semibold text-zinc-700"}`}
-      >
+      <span data-strong={strong || undefined}>
         {value}
       </span>
     </div>
@@ -955,39 +979,31 @@ function Metric({
 function Timeline({
   label,
   date,
+  recorded,
   last = false,
 }: {
   label: string;
   date?: Date;
+  recorded?: string;
   last?: boolean;
 }) {
   return (
     <div className="relative flex gap-3 pb-5">
       <span
-        className={`relative z-10 mt-1 h-3 w-3 shrink-0 rounded-full ${date ? "bg-emerald-500" : "bg-zinc-200"}`}
+        className={styles.timelineDot} data-recorded={Boolean(date || recorded)}
       />
       {!last && (
-        <span className="absolute left-[5px] top-4 h-full w-px bg-zinc-200" />
+        <span className={styles.timelineLine} />
       )}
       <div>
-        <b className={`text-sm ${date ? "text-zinc-900" : "text-zinc-400"}`}>
+        <b className="text-sm">
           {label}
         </b>
-        <span className="block text-xs text-zinc-400">
-          {date ? dateTime.format(date) : "Ainda não ocorreu"}
+        <span className={styles.muted}>
+          {date ? dateTime.format(date) : recorded ?? "Sem registro"}
         </span>
       </div>
     </div>
-  );
-}
-function toneClass(tone: string) {
-  return (
-    {
-      emerald: "bg-emerald-50 text-emerald-600",
-      amber: "bg-amber-50 text-amber-600",
-      blue: "bg-blue-50 text-blue-600",
-      violet: "bg-violet-50 text-violet-600",
-    }[tone] || "bg-zinc-50"
   );
 }
 function iso(value: Date) {
@@ -999,13 +1015,8 @@ function translateEvent(value: string) {
     .toLowerCase()
     .replace(/^./, (letter) => letter.toUpperCase());
 }
-const control =
-  "h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-100";
-const smallControl =
-  "h-10 rounded-xl border border-zinc-200 bg-white px-3 text-sm font-semibold";
-const actionClass =
-  "inline-flex items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-600 transition hover:border-violet-300 hover:text-violet-700 disabled:cursor-not-allowed disabled:opacity-40";
-const exportOption =
-  "flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm font-bold hover:bg-zinc-50";
-const pageButton =
-  "inline-flex items-center gap-1 rounded-xl border bg-white px-4 py-2 text-sm font-bold disabled:opacity-40";
+const control = styles.control;
+const smallControl = `${styles.control} ${styles.smallControl}`;
+const actionClass = styles.action;
+const exportOption = styles.exportOption;
+const pageButton = styles.controlButton;

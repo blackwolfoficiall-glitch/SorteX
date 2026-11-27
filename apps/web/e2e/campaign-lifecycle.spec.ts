@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { createSyntheticCampaign } from "./fixtures/synthetic-campaign";
 
 function campaignCard(page: Page, title: string) {
-  return page.locator("div.rounded-3xl").filter({
+  return page.getByRole("article").filter({
     has: page.getByRole("heading", { name: title, exact: true }),
   }).filter({ has: page.getByRole("button", { name: "Duplicar", exact: true }) });
 }
