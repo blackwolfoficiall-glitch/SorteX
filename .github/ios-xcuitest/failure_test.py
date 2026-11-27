@@ -92,6 +92,25 @@ class FailureDiagnostic(unittest.TestCase):
         self.assertEqual(observed_phase({"testRuns": [{}, {}]}), "activities-unreadable")
         self.assertEqual(observed_phase(None), "activities-unreadable")
 
+    def test_campaign_press_focus_are_independent_fixed_observations(self):
+        from failure import CAMPAIGN_FOCUS, CAMPAIGN_PRESS, activity_labels, fixed_observation
+
+        activities = {"activities": [{
+            "title": "sortex-campaign-tab-selected", "childActivities": [
+                {"title": "sortex-campaign-press-observed", "name": PRIVATE},
+                {"title": "sortex-campaign-focus-not-observed"},
+                {"title": "sortex-campaign-focus-observed-" + PRIVATE},
+                {"title": PRIVATE},
+            ],
+        }]}
+        _, seen = activity_labels(activities)
+        self.assertEqual(observed_phase(activities), "campaign-tab-selected")
+        self.assertEqual(fixed_observation(seen, "campaign-press-", CAMPAIGN_PRESS), "observed")
+        self.assertEqual(fixed_observation(seen, "campaign-focus-", CAMPAIGN_FOCUS), "not-observed")
+        self.assertEqual(fixed_observation(seen | {"campaign-press-not-observed"},
+                                          "campaign-press-", CAMPAIGN_PRESS), "unknown")
+        self.assertEqual(fixed_observation(set(), "campaign-focus-", CAMPAIGN_FOCUS), "unknown")
+
     def test_campaign_tab_reports_only_fixed_actionability_results(self):
         swift = (ROOT / "BuyerJourneys.swift").read_text()
         enum = swift.split("private enum CampaignTabFailure", 1)[1].split("\n    }", 1)[0]
@@ -207,8 +226,23 @@ esac
                "ignored-unknown-field": PRIVATE})
         self.assertEqual(report, "sha=" + "a" * 40 + "\nxcui-outcome=failed\nxcui-last-phase=login\n"
                          "xcui-launch-hint=not-applicable\nlogin-api=2xx\nlogin-input=matches\n"
-                         "buyer-home-api=not-seen\ncampaign-list-api=not-seen\ncampaign-detail-api=not-seen\n")
+                         "buyer-home-api=not-seen\ncampaign-list-api=not-seen\ncampaign-detail-api=not-seen\n"
+                         "campaign-press=unknown\ncampaign-focus=unknown\n")
         self.assertTrue((self.base / "queried").exists())
+
+    def test_shell_preserves_navigation_stage_and_redacts_independent_tap_evidence(self):
+        activities = {"testRuns": [{"activities": [{
+            "title": "sortex-campaign-tab-selected",
+            "childActivities": [
+                {"title": "sortex-campaign-press-observed", "value": PRIVATE},
+                {"title": "sortex-campaign-focus-not-observed"},
+                {"title": "sortex-campaign-focus-observed " + PRIVATE},
+            ]
+        }]}]}
+        report = self.run_fake(cases(expected_case()), activities)
+        self.assertIn("xcui-last-phase=campaign-tab-selected\n", report)
+        self.assertIn("campaign-press=observed\n", report)
+        self.assertIn("campaign-focus=not-observed\n", report)
 
     def test_native_campaign_substage_and_only_fixed_read_routes(self):
         activity = {"testRuns": [{"activities": [

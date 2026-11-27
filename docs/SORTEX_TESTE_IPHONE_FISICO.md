@@ -4,6 +4,28 @@ O caminho de homologação do aparelho é um **build local Release**, assinado p
 
 A candidata é a branch `homologacao/web-ios-integrada`, não `feat/mobile-expo` ou `infra/netlify-northflank-neon`. O checkout legado da Fase 1 e outras prévias não são substitutos da API QA. Não publique, não ative serviços pagos e não use dados ou meios de pagamento reais.
 
+## Evidência do simulador: login confirmado, navegação pendente
+
+Em 27/11/2026, a execução XCUITest [46053577454](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/46053577454),
+revisão `f3ddcd49208de761cb49cb9d0a704b97983b4b85`, confirmou credenciais
+sintéticas digitadas nos campos nativos, login HTTP 2xx e Home HTTP 2xx.
+Ela localizou a aba **Campanhas** por identificador único, encontrou um
+ponto para tocar e o gesto retornou, mas não confirmou mudança na seleção.
+Não houve leitura de lista ou detalhe na API. `campaign-tab-selected` é a
+última **etapa iniciada**, não evidência de que a aba ficou selecionada.
+Restauração, saída e revogação dessa jornada não foram alcançadas. Isso não
+identifica uma falha no backend nem comprova um defeito no iPhone físico.
+
+Para a próxima execução autorizada do mesmo cenário: um toque real na aba,
+uma observação independente do recebimento pelo `onPress` JavaScript
+(apenas no simulador isolado com API de loopback e opt-in), da seleção
+nativa e do marcador da tela focada. Nenhum desses sinais dispensa os
+testes de lista/detalhe, reabertura, saída e revogação no PostgreSQL.
+Não se repete o toque se houver falha. O recibo sanitizado distingue
+`campaign-press` de `campaign-focus`, sem reter a hierarquia da interface
+ou dados da conta.
+
+
 ## 1. Preparar no Mac, mesmo antes de a API estar pronta
 
 Requisitos: Node 22.13+, 24.3+ ou outra linha par suportada pelo iniciador; Xcode completo 26.4+ selecionado em **Xcode → Settings → Locations → Command Line Tools**; CocoaPods já instalado; iPhone com iOS 17+ reconhecido pelo Xcode para instalação pelo CoreDevice (`devicectl`). O SDK Expo 58 aceita iOS 16.4+, mas isso não garante suporte ao mesmo iniciador nesses aparelhos. Se o Xcode pedir instalação de componentes, login ou aceite de licença, o proprietário decide e faz isso diretamente. O iniciador não providencia credenciais, não aceita contratos e não compra nada.

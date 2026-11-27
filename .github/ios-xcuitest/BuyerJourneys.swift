@@ -136,19 +136,28 @@ final class BuyerJourneys: XCTestCase {
             XCTAssertFalse(campaignTab.isSelected, "Buyer campaign tab was already selected on Home")
         }
 
+        // Any baseline AX value other than the fixture's idle marker is not evidence.
+        let pressProbeReady = (campaignTab.value as? String) == "sortex-xcui-tab-press-idle"
         XCTContext.runActivity(named: "sortex-campaign-tab-tap") { _ in
             campaignTab.tap()
         }
 
         XCTContext.runActivity(named: "sortex-campaign-tab-selected") { _ in
-            XCTAssertTrue(waitUntil(timeout: 10) { campaignTab.isSelected },
-                          "Native tab tap did not change selection")
+            let selected = waitUntil(timeout: 10) { campaignTab.isSelected }
+            if !selected {
+                observeCampaignTap(pressProbeReady, tab: campaignTab, screen: campaignScreen)
+            }
+            XCTAssertTrue(selected, "Native tab tap did not change selection")
         }
 
         XCTContext.runActivity(named: "sortex-campaign-screen-visible") { _ in
-            XCTAssertTrue(campaignScreen.waitForExistence(timeout: 15), "Buyer campaigns screen did not mount")
-            XCTAssertTrue(waitUntil(timeout: 10) { campaignScreen.isHittable },
-                          "Buyer campaigns screen is not shown")
+            let mounted = campaignScreen.waitForExistence(timeout: 15)
+            let visible = mounted && waitUntil(timeout: 10) { campaignScreen.isHittable }
+            if !visible {
+                observeCampaignTap(pressProbeReady, tab: campaignTab, screen: campaignScreen)
+            }
+            XCTAssertTrue(mounted, "Buyer campaigns screen did not mount")
+            XCTAssertTrue(visible, "Buyer campaigns screen is not shown")
         }
 
         XCTContext.runActivity(named: "sortex-campaign-list") { _ in
@@ -235,6 +244,26 @@ final class BuyerJourneys: XCTestCase {
         if let tab = matches.first(where: { $0.elementType == .other }) { return tab }
         if let only = matches.first, matches.count == 1 { return only }
         throw ElementNotActionable()
+    }
+
+    @MainActor
+    private func observeCampaignTap(_ pressProbeReady: Bool, tab: XCUIElement, screen: XCUIElement) {
+        // No second gesture; the following allowlisted states are observations
+        // only. Never put any field value, identifier dump, or URL in an activity.
+        let pressActivity: String
+        let current = tab.exists ? tab.value as? String : nil
+        if !pressProbeReady {
+            pressActivity = "sortex-campaign-press-unavailable"
+        } else if current == "sortex-xcui-tab-press-observed" {
+            pressActivity = "sortex-campaign-press-observed"
+        } else if current == "sortex-xcui-tab-press-idle" {
+            pressActivity = "sortex-campaign-press-not-observed"
+        } else {
+            pressActivity = "sortex-campaign-press-unavailable"
+        }
+        XCTContext.runActivity(named: pressActivity) { _ in }
+        XCTContext.runActivity(named: screen.exists
+            ? "sortex-campaign-focus-observed" : "sortex-campaign-focus-not-observed") { _ in }
     }
 
     private enum CampaignTabFailure: String {

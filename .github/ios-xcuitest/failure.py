@@ -84,24 +84,31 @@ def result_case(tree):
             else "unclassified"), True
 
 
-def observed_phase(tree):
+CAMPAIGN_PRESS = {"observed", "not-observed", "unavailable"}
+CAMPAIGN_FOCUS = {"observed", "not-observed"}
+
+
+def activity_labels(tree):
     """Match only the exact activity titles we own, never failure text."""
     if not isinstance(tree, dict):
-        return "activities-unreadable"
+        return "activities-unreadable", set()
     runs = tree.get("testRuns")
     # Some versions return a single top-level activity tree.
     if runs is None and isinstance(tree.get("activities"), list):
         runs = [tree]
     if not isinstance(runs, list):
-        return "activities-unreadable"
+        return "activities-unreadable", set()
     if not runs:
-        return "not-observed"
+        return "not-observed", set()
     if len(runs) != 1 or not isinstance(runs[0], dict):
-        return "activities-unreadable"
+        return "activities-unreadable", set()
     activities = runs[0].get("activities", runs[0].get("activityRecords"))
     if not isinstance(activities, list):
-        return "activities-unreadable"
-    known = {"sortex-" + phase: phase for phase in PHASES}
+        return "activities-unreadable", set()
+    allowed = set(PHASES)
+    allowed.update("campaign-press-" + state for state in CAMPAIGN_PRESS)
+    allowed.update("campaign-focus-" + state for state in CAMPAIGN_FOCUS)
+    known = {"sortex-" + label: label for label in allowed}
     seen = set()
     stack = list(activities)
     while stack:
@@ -116,7 +123,21 @@ def observed_phase(tree):
             nested = node.get(key)
             if isinstance(nested, list):
                 stack.extend(nested)
-    return next((phase for phase in reversed(PHASES) if phase in seen), "not-observed")
+    return "not-observed", seen
+
+
+def observed_phase_from_labels(fallback, seen):
+    return next((phase for phase in reversed(PHASES) if phase in seen), fallback)
+
+
+def observed_phase(tree):
+    return observed_phase_from_labels(*activity_labels(tree))
+
+
+def fixed_observation(seen, prefix, states):
+    observed = {state for state in states if prefix + state in seen}
+    return observed.pop() if len(observed) == 1 else "unknown"
+
 
 
 def startup_hint(console):
@@ -167,6 +188,7 @@ def api_observation(log):
 
 def diagnose(bundle, console, api_log):
     phase = "not-observed"
+    seen = set()
     if not bundle.is_dir() or bundle.is_symlink():
         outcome = "no-result-bundle"
     else:
@@ -176,13 +198,16 @@ def diagnose(bundle, console, api_log):
         if known_case:
             activities = json_command([*base, "activities", "--path", str(bundle),
                                        "--test-id", TEST, "--compact"])
-            phase = observed_phase(activities)
+            fallback, seen = activity_labels(activities)
+            phase = observed_phase_from_labels(fallback, seen)
     hint = startup_hint(console) if phase not in PHASES else "not-applicable"
     status, shape, home, campaign_list, campaign_detail = api_observation(api_log)
     return {"xcui-outcome": outcome, "xcui-last-phase": phase, "xcui-launch-hint": hint,
             "login-api": status, "login-input": shape, "buyer-home-api": home,
             "campaign-list-api": campaign_list,
-            "campaign-detail-api": campaign_detail}
+            "campaign-detail-api": campaign_detail,
+            "campaign-press": fixed_observation(seen, "campaign-press-", CAMPAIGN_PRESS),
+            "campaign-focus": fixed_observation(seen, "campaign-focus-", CAMPAIGN_FOCUS)}
 
 
 def main():

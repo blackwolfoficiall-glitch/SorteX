@@ -46,7 +46,7 @@ import { NativeOrganizerDraftPrizes } from "./src/components/NativeOrganizerDraf
 import { NativeOrganizerCampaignLifecycle } from "./src/components/NativeOrganizerCampaignLifecycle";
 import type { OrganizerCampaignState } from "./src/domain/organizer-campaign-lifecycle";
 import { NativeBuyerPrizes } from "./src/buyer/NativeBuyerPrizes";
-import { NativeBuyerCampaignTabButton } from "./src/buyer/NativeBuyerCampaignTabButton";
+import { canObserveNativeBuyerTabPress, NativeBuyerCampaignTabButton } from "./src/buyer/NativeBuyerCampaignTabButton";
 import { BuyerInboxScreen } from "./src/buyer/NativeBuyerInbox";
 import { BuyerFavoritesScreen, NativeBuyerFavoriteToggle } from "./src/buyer/NativeBuyerFavorites";
 import { NativeBuyerOrderHistory } from "./src/buyer/NativeBuyerOrderHistory";
@@ -1142,6 +1142,10 @@ function OrganizerTabs() {
 function MainTabs() {
   const auth = useSyncExternalStore(client.subscribe, client.snapshot);
   if (auth.user?.role === "ORGANIZER") return <OrganizerTabs key={auth.user.id} />;
+  const observeBuyerTabPress = auth.user?.role === "BUYER" && canObserveNativeBuyerTabPress(
+    API_URL, process.env.EXPO_PUBLIC_ALLOW_LOCAL_API === "1",
+    process.env.EXPO_PUBLIC_SORTEX_XCUI_TAB_PRESS_OBSERVATION === "1",
+  );
   return (
     <Tabs.Navigator
       screenOptions={{
@@ -1160,7 +1164,9 @@ function MainTabs() {
           title: "Campanhas",
           tabBarButtonTestID: "sortex-buyer-campaigns-tab",
           ...(Platform.OS === "ios" ? {
-            tabBarButton: (props) => <NativeBuyerCampaignTabButton {...props} />,
+            tabBarButton: (props) => (
+              <NativeBuyerCampaignTabButton {...props} observePress={observeBuyerTabPress} />
+            ),
           } : {}),
         }}
       />

@@ -2,9 +2,9 @@
 
 Este alvo Xcode de automação roda apenas no iPhone virtual de um job público,
 sem build físico, conta Apple ou serviço pago. Ele abre a candidata Release
-real pelo bundle `br.com.sortex.development`, sem Metro, deep link, atalho de
-autenticação ou modificações no código do app. O target só automatiza as
-interfaces nativas, inclusive `textFields` e `secureTextFields`.
+real pelo bundle `br.com.sortex.development`, sem Metro, deep link ou atalho
+de autenticação. O target só automatiza as interfaces nativas, inclusive
+`textFields` e `secureTextFields`.
 
 O workflow `mobile-native-xcuitest.yml` executa inicialmente **apenas a
 pré-checagem do driver** no macOS. Sem inicializar o aparelho virtual,
@@ -65,6 +65,17 @@ detalhe, o prêmio e o regulamento. Quando o caso falha, as leituras da tela
 inicial e da campanha sintética recebem classificações independentes (sem
 URL, parâmetros, contagem, corpo ou status exato). O diagnóstico nunca
 altera a validação do cenário completo nem substitui a consulta no aplicativo.
+
+Se a aba não ficar selecionada ou o cabeçalho focado não aparecer após o
+único toque real, o relatório também pode mostrar `campaign-press` e
+`campaign-focus`. O primeiro observa se o JavaScript recebeu o toque
+através de um valor fixo de acessibilidade que só existe no fixture iOS
+com opt-in explícito, perfil comprador e API local 127.0.0.1:3338. O
+segundo observa o marcador da rota focada, independente da seleção.
+Valor inicial inesperado ou inacessível significa observação indisponível,
+não ausência de toque. Pressão observada não comprova despacho nem leitura.
+O teste não retoca, não navega por outro caminho e não aceita apenas esses
+sinais no lugar do fluxo completo.
 
 Se o fixture ou o lançamento pararem antes de gerar um resultado do Xcode,
 o artefato de falha pode conter apenas o último marco fixo e a próxima
