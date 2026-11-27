@@ -1,0 +1,51 @@
+name: Controle nativo de digitação iOS (sem autenticação)
+on:
+  push:
+    branches: [homologacao/web-ios-integrada]
+    paths: ['.github/ios-xcuitest-input-controls/**', '.github/workflows/mobile-native-input-controls.yml']
+permissions:
+  contents: read
+concurrency:
+  group: sortex-xcuitest-input-control-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  native-input-only:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event_name == 'push' && github.event.repository.private == false && startsWith(github.event.head_commit.message, '[xcui-input-control] ')
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_NO_DOTENV: '1'
+      EXPO_PUBLIC_API_URL: http://127.0.0.1:3338
+      EXPO_PUBLIC_ALLOW_LOCAL_API: '1'
+      EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS: '0'
+      SORTEX_IOS_INPUT_CONTROL: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - name: Verificar contrato de comparação e privacidade
+        run: python3 -B -m unittest discover -s .github/ios-xcuitest-input-controls -p '*_test.py'
+      - name: Preparar somente o aplicativo iOS
+        working-directory: apps/mobile
+        run: |
+          npm ci --no-audit --no-fund
+          npx expo prebuild --platform ios --no-install
+          node scripts/check-native-config.cjs
+      - name: Comparar duas entradas nativas (sem senha ou submissão)
+        shell: bash
+        run: bash .github/ios-xcuitest-input-controls/run.sh
+      - name: Reter somente as categorias de comparação sem conteúdo do campo
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sortex-ios-input-control-${{ github.sha }}
+          path: ${{ runner.temp }}/sortex-native-input-control.txt
+          if-no-files-found: ignore
+          retention-days: 1
