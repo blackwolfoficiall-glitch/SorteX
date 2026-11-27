@@ -87,9 +87,131 @@ async function verifiedCampaigns(
   );
 }
 
+type SyntheticOrderStatus = 'PAID' | 'EXPIRED' | 'CANCELLED';
+
+export type AdvisorSyntheticFinance = Readonly<{
+  historicalPaidOrderCount: number;
+  historicalPaidGrossCents: number;
+  expiredOrderCount: number;
+  expiredOrderGrossCents: number;
+  cancelledOrderCount: number;
+  cancelledOrderGrossCents: number;
+}>;
+
+const expectedFinance = [
+  ...fixtures.map(({ id, paidQuantity, unitPrice, total }) => ({
+    id: `${id}-paid`,
+    campaignId: id,
+    status: 'PAID' as const,
+    quantity: paidQuantity,
+    unitPrice,
+    total,
+    marker: `${id}-historical-test-only`,
+  })),
+  {
+    id: `${scope}-c1-expired`,
+    campaignId: `${scope}-c1`,
+    status: 'EXPIRED',
+    quantity: 2,
+    unitPrice: '2.50',
+    total: '5.00',
+    marker: `${scope}-c1-expired`,
+  },
+  {
+    id: `${scope}-c2-cancelled`,
+    campaignId: `${scope}-c2`,
+    status: 'CANCELLED',
+    quantity: 3,
+    unitPrice: '3.75',
+    total: '11.25',
+    marker: `${scope}-c2-cancelled`,
+  },
+] as const;
+
+async function readSyntheticOrderFinance(
+  tx: Prisma.TransactionClient,
+  organizerId: string,
+): Promise<AdvisorSyntheticFinance | null> {
+  // The reviewed lot created only synthetic historical orders, never a
+  // FinancialAccount, wallet balance, payout or ledger entry. Verify exact
+  // identities and financial facts; source customer IDs stay in this reader.
+  const rows = await tx.purchase.findMany({
+    where: {
+      campaign: campaignIdentity(organizerId),
+      selectionMode: 'MANUAL',
+      discount: 0,
+      promotionId: null,
+      affiliateCode: null,
+      affiliateConversion: { is: null },
+      buyer: {
+        role: 'BUYER',
+        status: 'ACTIVE',
+        isActive: true,
+        deletedAt: null,
+        email: { endsWith: '@example.test', mode: 'insensitive' },
+      },
+      payments: { none: {} },
+      OR: expectedFinance.map(
+        ({ id, campaignId, status, quantity, unitPrice, total, marker }) => ({
+          id,
+          campaignId,
+          status,
+          quantity,
+          unitPrice,
+          subtotal: total,
+          total,
+          idempotencyKey: marker,
+          confirmedAt: status === 'PAID' ? { not: null } : null,
+          cancelledAt: status === 'CANCELLED' ? { not: null } : null,
+        }),
+      ),
+    },
+    select: { status: true, total: true, buyerId: true },
+  });
+  if (
+    rows.length !== expectedFinance.length ||
+    new Set(rows.map((row) => row.buyerId)).size !== 1
+  )
+    return null;
+
+  // Reject a contradictory ledger link to any known order without retrieving
+  // actual wallet or ledger values, descriptions, IDs, fees or metadata.
+  if (
+    await tx.ledgerEntry.count({
+      where: {
+        purchaseId: { in: expectedFinance.map(({ id }) => id) },
+      },
+    })
+  )
+    return null;
+
+  const totals = (status: SyntheticOrderStatus) => {
+    const matching = rows.filter((row) => row.status === status);
+    return {
+      count: matching.length,
+      cents: matching.reduce(
+        (sum, row) => sum + row.total.mul(100).toNumber(),
+        0,
+      ),
+    };
+  };
+  const paid = totals('PAID');
+  const expired = totals('EXPIRED');
+  const cancelled = totals('CANCELLED');
+  return {
+    historicalPaidOrderCount: paid.count,
+    historicalPaidGrossCents: paid.cents,
+    expiredOrderCount: expired.count,
+    expiredOrderGrossCents: expired.cents,
+    cancelledOrderCount: cancelled.count,
+    cancelledOrderGrossCents: cancelled.cents,
+  };
+}
+
 export async function readAdvisorSyntheticSummary(
   prisma: PrismaService,
   organizerId: string,
+  includeFinance = false,
 ) {
   return prisma.$transaction(
     async (tx) => {
@@ -167,6 +289,9 @@ export async function readAdvisorSyntheticSummary(
         abandonedReservations,
         pendingPayments: 0,
         promotions,
+        finance: includeFinance
+          ? await readSyntheticOrderFinance(tx, organizerId)
+          : null,
       };
     },
     { isolationLevel: 'RepeatableRead' },

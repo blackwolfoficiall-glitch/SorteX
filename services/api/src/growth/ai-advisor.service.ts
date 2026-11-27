@@ -233,11 +233,11 @@ export class AiAdvisorService {
       const synthetic = await readAdvisorSyntheticSummary(
         this.prisma,
         user.id,
+        intent === 'FINANCE',
       ).catch(() => null);
       if (synthetic) {
-        // The reviewed fixture did not create CRM contacts, a financial
-        // account, or Ads attribution. Never derive their external context
-        // from the potentially mixed tenant dataset. Model marks them null.
+        // Only the Finance fixed intent reads the additionally verified
+        // historical order amounts. Wallet, CRM and Ads are not egress inputs.
         const generated = await this.models.analyze(user, intent, synthetic);
         if (generated) {
           return { ...fallback, ...generated };

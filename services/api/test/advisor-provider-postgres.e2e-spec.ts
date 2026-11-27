@@ -317,6 +317,23 @@ isolated(
         },
       });
 
+      await prisma.purchase.create({
+        data: {
+          id: 'sortex-review-v1-c2-cancelled',
+          campaignId: ids[1],
+          buyerId: buyer.id,
+          status: 'CANCELLED',
+          selectionMode: 'MANUAL',
+          quantity: 3,
+          unitPrice: '3.75',
+          subtotal: '11.25',
+          total: '11.25',
+          expiresAt: new Date(),
+          cancelledAt: new Date(),
+          idempotencyKey: 'sortex-review-v1-c2-cancelled',
+        },
+      });
+
       // Deliberately place unrelated rows under the same tenant, and a
       // lookalike purchase and promo under an exact audited campaign itself.
       await prisma.campaign.createMany({
@@ -348,6 +365,22 @@ isolated(
           expiresAt: new Date(),
           confirmedAt: new Date(),
           idempotencyKey: 'sortex-review-v1-c1-lookalike-historical-test-only',
+        },
+      });
+      await prisma.purchase.create({
+        data: {
+          id: 'sortex-review-v1-c2-unaudited-cancelled',
+          campaignId: ids[1],
+          buyerId: buyer.id,
+          status: 'CANCELLED',
+          selectionMode: 'MANUAL',
+          quantity: 3,
+          unitPrice: '3.75',
+          subtotal: '11.25',
+          total: '11.25',
+          expiresAt: new Date(),
+          cancelledAt: new Date(),
+          idempotencyKey: 'sortex-review-v1-c2-unaudited-cancelled',
         },
       });
       await prisma.campaignPromotion.create({
@@ -521,12 +554,78 @@ isolated(
       ]);
     });
 
+    it('stays local if an exact Finance identity or fact is modified, or is linked to a ledger', async () => {
+      const [owner, other] = scopes;
+      process.env.SORTEX_ADVISOR_PILOT_ORGANIZER_ID = owner.id;
+      const financeQuestion = 'Como está meu financeiro?';
+      const ask = (token: string) =>
+        chat(token).send({ question: financeQuestion, allowAi: true });
+      const baseline = await today();
+      const initialExchanges = exchanges.length;
+      const expected = { id: 'sortex-review-v1-c2-cancelled' };
+      expectDeterministic(await ask(other.token));
+      await prisma.purchase.update({
+        where: expected,
+        data: { total: '11.26' },
+      });
+      expectDeterministic(await ask(owner.token));
+      await prisma.purchase.update({
+        where: expected,
+        data: { total: '11.25', idempotencyKey: 'unverified-finance' },
+      });
+      expectDeterministic(await ask(owner.token));
+      await prisma.purchase.update({
+        where: expected,
+        data: { idempotencyKey: expected.id, cancelledAt: null },
+      });
+      expectDeterministic(await ask(owner.token));
+
+      const secondFixtureBuyer = await account(UserRole.BUYER);
+      await prisma.purchase.update({
+        where: expected,
+        data: { cancelledAt: new Date(), buyerId: secondFixtureBuyer.id },
+      });
+      expectDeterministic(await ask(owner.token));
+      await prisma.purchase.update({
+        where: expected,
+        data: { buyerId: buyer.id },
+      });
+
+      const financial = await prisma.financialAccount.findUniqueOrThrow({
+        where: {
+          ownerType_ownerId_currency: {
+            ownerType: 'ORGANIZER',
+            ownerId: owner.id,
+            currency: 'BRL',
+          },
+        },
+      });
+      const ledger = await prisma.ledgerEntry.create({
+        data: {
+          accountId: financial.id,
+          campaignId: ids[0],
+          purchaseId: 'sortex-review-v1-c1-paid',
+          type: 'GROSS_SALE',
+          direction: 'CREDIT',
+          status: 'AVAILABLE',
+          amount: '123.45',
+          balanceBefore: 0,
+          balanceAfter: '123.45',
+          reference: 'advisor-http-unapproved-ledger',
+          description: 'non-source test ledger',
+        },
+      });
+      expectDeterministic(await ask(owner.token));
+      await prisma.ledgerEntry.delete({ where: { id: ledger.id } });
+      expect(exchanges).toHaveLength(initialExchanges);
+      expect(await today()).toEqual(baseline);
+    });
+
     it('counts failed provider requests, labels only valid answers Gemini, and stops at per-organizer and shared limits', async () => {
       const [first, second, third, fourth] = scopes;
       process.env.SORTEX_ADVISOR_PILOT_ORGANIZER_ID = first.id;
       for (const [requested, key] of [
         ['Como está meu CRM?', 'crm'],
-        ['Como está meu financeiro?', 'finance'],
         ['Qual a origem das vendas?', 'ads'],
       ]) {
         expectGemini(
@@ -537,6 +636,31 @@ isolated(
         expect(emitted).not.toContain('99771.11');
         expect(emitted).not.toContain('97771.12');
       }
+      expectGemini(
+        await chat(first.token).send({
+          question: 'Como está meu financeiro?',
+          allowAi: true,
+        }),
+      );
+      const financeExchange = exchanges.at(-1)?.body ?? '';
+      const financePayload = providerPayload(financeExchange) as {
+        intent: unknown;
+        finance: unknown;
+      };
+      expect(financePayload.intent).toBe('FINANCE');
+      expect(financePayload.finance).toEqual({
+        basis: 'SYNTHETIC_HISTORICAL_ORDER_GROSS_NOT_BALANCE',
+        currency: 'BRL',
+        historicalPaidOrderCount: 3,
+        historicalPaidGrossCents: 43500,
+        expiredOrderCount: 1,
+        expiredOrderGrossCents: 500,
+        cancelledOrderCount: 1,
+        cancelledOrderGrossCents: 1125,
+      });
+      expect(financeExchange).not.toMatch(
+        /99771\.11|97771\.12|availableBalance|ledgerId|sortex-review-v1-c[123]/,
+      );
       responseStatus = 429;
       expectDeterministic(
         await chat(first.token).send({ question, allowAi: true }),

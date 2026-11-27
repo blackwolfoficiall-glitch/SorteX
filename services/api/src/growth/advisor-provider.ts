@@ -12,7 +12,7 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 const OPENAI_URL = 'https://api.openai.com/v1/responses';
 const ATTESTATION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const INSTRUCTIONS =
-  'Você é o SorteX Advisor. Responda em português brasileiro usando apenas as métricas agregadas observadas. Não invente dados, não prometa desempenho e não execute ações. Indique limitações e sugira só próximos passos para revisão humana.';
+  'Você é o SorteX Advisor. Responda em português brasileiro usando apenas as métricas agregadas observadas. Não invente dados, não prometa desempenho e não execute ações. Valores históricos fictícios em centavos não são saldo, receita líquida, repasse ou resultado operacional real. Indique limitações e sugira só próximos passos para revisão humana.';
 const ANSWER_SCHEMA = {
   type: 'object',
   additionalProperties: false,

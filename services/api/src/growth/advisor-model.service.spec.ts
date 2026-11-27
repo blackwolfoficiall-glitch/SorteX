@@ -246,28 +246,83 @@ describe('Advisor model pilot boundary without external calls', () => {
     );
   });
 
-  it('never forwards unseeded module data and reports the scope unavailable', async () => {
+  it('does not forward unseeded CRM, Ads or inconsistent Finance data', async () => {
     const spy = jest.spyOn(global, 'fetch').mockResolvedValue(response());
-    const { service } = quota();
+    const { service, reserve } = quota();
     const injected = {
       ...mockSummary,
       contacts: 95,
       automations: 81,
-      finance: { internalAvailable: '12.34' },
+      finance: {
+        historicalPaidOrderCount: 3,
+        historicalPaidGrossCents: 999800,
+        expiredOrderCount: 3,
+        expiredOrderGrossCents: 1000,
+        cancelledOrderCount: 1,
+        cancelledOrderGrossCents: 2000,
+        internalAvailable: '12.34',
+      },
       ads: { affiliateOrders: 9 },
     };
-    await service.analyze(organizer, 'FINANCE', injected);
+    await expect(
+      service.analyze(organizer, 'FINANCE', injected),
+    ).resolves.toBeNull();
+    await expect(
+      service.analyze(organizer, 'FINANCE', mockSummary),
+    ).resolves.toBeNull();
+    expect(reserve).not.toHaveBeenCalled();
+    expect(spy).not.toHaveBeenCalled();
     await service.analyze(organizer, 'ADS', injected);
     await service.analyze(organizer, 'CRM', injected);
     const inputs = spy.mock.calls.map(([, options]) =>
       JSON.parse(JSON.parse(String(options?.body)).input),
     );
-    expect(inputs[0].finance).toBeNull();
-    expect(inputs[1].ads).toBeNull();
-    expect(inputs[2].crm).toBeNull();
+    expect(inputs[0].ads).toBeNull();
+    expect(inputs[1].crm).toBeNull();
     expect(JSON.stringify(inputs)).not.toMatch(
       /12\.34|contacts|automations|affiliateOrders/,
     );
+  });
+
+  it('sends only exact Finance history scalars for the fixed intent, never wallet or IDs', async () => {
+    const spy = jest
+      .spyOn(global, 'fetch')
+      .mockImplementation(() => Promise.resolve(response()));
+    const { service } = quota();
+    const summary = {
+      ...mockSummary,
+      finance: {
+        historicalPaidOrderCount: 2,
+        historicalPaidGrossCents: 23400,
+        expiredOrderCount: 3,
+        expiredOrderGrossCents: 12000,
+        cancelledOrderCount: 1,
+        cancelledOrderGrossCents: 1100,
+        internalAvailable: '12.34',
+        ledgerId: 'never-forward',
+      },
+    };
+    await expect(
+      service.analyze(organizer, 'FINANCE', summary),
+    ).resolves.toMatchObject({ mode: 'OPENAI' });
+    await expect(
+      service.analyze(organizer, 'OVERVIEW', summary),
+    ).resolves.toMatchObject({ mode: 'OPENAI' });
+    const input = spy.mock.calls.map(([, options]) =>
+      JSON.parse(JSON.parse(String(options?.body)).input),
+    );
+    expect(input[0].finance).toEqual({
+      basis: 'SYNTHETIC_HISTORICAL_ORDER_GROSS_NOT_BALANCE',
+      currency: 'BRL',
+      historicalPaidOrderCount: 2,
+      historicalPaidGrossCents: 23400,
+      expiredOrderCount: 3,
+      expiredOrderGrossCents: 12000,
+      cancelledOrderCount: 1,
+      cancelledOrderGrossCents: 1100,
+    });
+    expect(input[1]).not.toHaveProperty('finance');
+    expect(JSON.stringify(input)).not.toMatch(/12\.34|ledgerId|never-forward/);
   });
 });
 

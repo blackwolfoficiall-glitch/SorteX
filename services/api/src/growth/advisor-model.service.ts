@@ -6,6 +6,7 @@ import {
   AdvisorProviderRateLimitError,
 } from './advisor-provider';
 import { AiUsageQuotaService } from './ai-usage-quota.service';
+import type { AdvisorSyntheticFinance } from './advisor-synthetic-source';
 
 export type AdvisorIntent =
   'OVERVIEW' | 'RECOVERY' | 'PROMOTIONS' | 'CRM' | 'FINANCE' | 'ADS';
@@ -19,6 +20,7 @@ type AdvisorAggregates = {
   abandonedReservations: number;
   pendingPayments: number;
   promotions: number;
+  finance?: AdvisorSyntheticFinance | null;
 };
 
 export function advisorIntent(question: string): AdvisorIntent | null {
@@ -76,10 +78,45 @@ export class AdvisorModelService {
     const scopes: Record<string, unknown> = {};
     let request: ReturnType<typeof provider.prepare>;
     try {
-      // These modules have no rows in the audited fixture. Distinguish
+      // CRM and paid-media attribution were not seeded. Distinguish
       // unavailable source data from a verified zero without reading them.
       if (intent === 'CRM' || intent === 'RECOVERY') scopes.crm = null;
-      if (intent === 'FINANCE') scopes.finance = null;
+      if (intent === 'FINANCE') {
+        if (!summary.finance) return null;
+        const {
+          historicalPaidOrderCount,
+          historicalPaidGrossCents,
+          expiredOrderCount,
+          expiredOrderGrossCents,
+          cancelledOrderCount,
+          cancelledOrderGrossCents,
+        } = summary.finance;
+        const metrics = {
+          historicalPaidOrderCount,
+          historicalPaidGrossCents,
+          expiredOrderCount,
+          expiredOrderGrossCents,
+          cancelledOrderCount,
+          cancelledOrderGrossCents,
+        };
+        if (
+          Object.values(metrics).some(
+            (value) => !Number.isSafeInteger(value) || value < 0,
+          )
+        )
+          return null;
+        if (
+          historicalPaidOrderCount !== aggregates.approvedSales ||
+          historicalPaidGrossCents !== Math.round(aggregates.revenue * 100) ||
+          expiredOrderCount !== aggregates.abandonedReservations
+        )
+          return null;
+        scopes.finance = {
+          basis: 'SYNTHETIC_HISTORICAL_ORDER_GROSS_NOT_BALANCE',
+          currency: 'BRL',
+          ...metrics,
+        };
+      }
       if (intent === 'ADS') scopes.ads = null;
       request = provider.prepare(
         { source: 'SYNTHETIC_REVIEW_V1', intent, aggregates, ...scopes },
