@@ -41,6 +41,7 @@ import { NativeBuyerPrizes } from "./src/buyer/NativeBuyerPrizes";
 import { BuyerInboxScreen } from "./src/buyer/NativeBuyerInbox";
 import { BuyerFavoritesScreen, NativeBuyerFavoriteToggle } from "./src/buyer/NativeBuyerFavorites";
 import { NativeBuyerOrderHistory } from "./src/buyer/NativeBuyerOrderHistory";
+import { BuyerCampaignTitlesScreen } from "./src/buyer/NativeBuyerCampaignTitles";
 import { buyerHistorySession } from "./src/buyer/order-history";
 import { NativeBuyerDrawResults } from "./src/buyer/NativeBuyerDrawResults";
 import { NativePublicDrawProof } from "./src/components/NativePublicDrawProof";
@@ -617,6 +618,16 @@ function CampaignDetail({ route, navigation }: any) {
             source={cover} title={publicDetail.title} />
         )}
         {publicDetail && <NativeBuyerFavoriteToggle campaignId={publicDetail.id} />}
+        {publicDetail && auth.status === "signedIn" && auth.user?.role === "BUYER" && (
+          <Button secondary title="Meus títulos nesta campanha"
+            onPress={() => navigation.navigate("BuyerCampaignTitles", {
+              campaign: {
+                id: publicDetail.id, title: publicDetail.title,
+                totalNumbers: publicDetail.totalNumbers,
+              },
+            })}
+          />
+        )}
         <View style={s.card}>
           <Text style={s.text}>
             {(organizer ? description || shortDescription : shortDescription || description) ||
@@ -1114,6 +1125,10 @@ export default function App() {
                 {auth.user?.role === "BUYER" && (
                   <Stack.Screen name="BuyerFavorites" component={BuyerFavoritesScreen}
                     options={{ title: "Favoritos" }} />
+                )}
+                {auth.user?.role === "BUYER" && (
+                  <Stack.Screen name="BuyerCampaignTitles" component={BuyerCampaignTitlesScreen}
+                    options={{ title: "Meus títulos" }} />
                 )}
                 <Stack.Screen
                   name="Campaign"
