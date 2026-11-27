@@ -56,10 +56,10 @@ falhar após a prontidão, acrescenta somente categorias fixas: resultado
 do CLI, classe HTTP da última resposta para `POST /auth/login` e se os
 campos do pedido conferem com a fixture. O observador só existe na API
 descartável, não muda a requisição nem a autenticação e nunca registra
-valores, tamanhos, hashes ou identificadores dos campos. A interface
-confirma o e-mail sintético antes e depois de preencher a senha e aguarda
-o botão de envio habilitado pelo estado do formulário, sem ler o campo
-seguro. As categorias de campo ausente distinguem e-mail, senha ou ambos.
+valores, tamanhos, hashes ou identificadores dos campos. A interface usa os IDs dos campos, digita e aguarda o botão de envio
+habilitado pelo estado do formulário, sem ler o campo seguro. O valor AX do
+campo de e-mail não é uma asserção confiável no XCTest: a verificação exige
+exatamente um POST de login aceito com ambos os campos idênticos à fixture. As categorias de campo ausente distinguem e-mail, senha ou ambos.
 `not-seen` indica que não há registro correspondente, não prova que o app
 não enviou a solicitação. O login usa o app já aberto e verificado, sem
 pedir novo lançamento ao Maestro. O resumo também funciona antes de iniciar

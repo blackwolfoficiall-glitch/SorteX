@@ -80,6 +80,11 @@ async function dbOperation() {
     const lines = readFileSync(process.argv[3], 'utf8').split('\n').flatMap((line) => {
       try { return [JSON.parse(line)]; } catch { return []; }
     });
+    const loginInputs = lines.filter((x) => x.event === 'sortex-ios-fixture-login-shape');
+    assert.equal(loginInputs.length, 1, 'Exactly one native login request must be observed.');
+    assert.equal(loginInputs[0].input, 'matches', 'Both native login fields must match the local fixture.');
+    assert.ok(loginInputs[0].status >= 200 && loginInputs[0].status < 300,
+      'Native login must be accepted by the real API.');
     const required = [
       ['POST', '/auth/login'],
       ['GET', '/auth/me'],

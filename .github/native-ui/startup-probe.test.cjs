@@ -24,7 +24,10 @@ test('credentialed flow keeps strict login selectors and only the login phase en
   const flow = readFileSync(resolve(dir, 'buyer-session.yaml'), 'utf8');
   assert.match(flow, /extendedWaitUntil:\s+visible:\s+id: sortex-login-email\s+timeout: 45000/);
   assert.match(flow, /tapOn:\s+id: sortex-login-password(?:\n#[^\n]*)*\n- inputText: \$\{BUYER_PASSWORD\.slice\(0, 1\)\}\n- inputText: \$\{BUYER_PASSWORD\.slice\(1\)\}/);
-  assert.equal(flow.match(/assertVisible:\s+id: sortex-login-email\s+text: /g)?.length, 2);
+  assert.match(flow, /tapOn:\s+id: sortex-login-email(?:\n#[^\n]*)*\n- inputText: s\n- inputText: ortex-ios-ui@example\.test/);
+  const fixture = readFileSync(resolve(dir, 'fixture.cjs'), 'utf8');
+  assert.match(fixture, /assert\.equal\(loginInputs\.length, 1,/);
+  assert.match(fixture, /assert\.equal\(loginInputs\[0\]\.input, 'matches',/);
   assert.match(flow, /extendedWaitUntil:\s+visible:\s+id: sortex-login-submit\s+enabled: true\s+timeout: 5000/);
   assert.match(flow, /tapOn:\s+id: sortex-login-submit\s+enabled: true\n- extendedWaitUntil:\s+visible: "Olá, CompradorIOS"/);
   assert.doesNotMatch(flow, /id: sortex-login-submit\s+text:|optional:|point:/);
