@@ -1,6 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Bell, Check, CheckCheck, CircleAlert, Inbox, LoaderCircle, RefreshCw } from "lucide-react";
+import PremiumScope from "@/components/premium/PremiumScope";
+import styles from "./notifications-premium.module.css";
 import {
   getNotifications,
   readAllNotifications,
@@ -54,78 +57,93 @@ export default function Notifications() {
     };
   }, [update]);
 
+  const unread = items?.filter((item) => !item.readAt).length ?? 0;
+
   return (
-    <section aria-busy={busy} className="mx-auto max-w-3xl p-5 md:py-10">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-3xl font-black">Notificações</h1>
-        {!!items?.length && (
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void update({ all: true })}
-            className="text-sm font-bold text-violet-700 disabled:opacity-50"
-          >
-            Marcar todas como lidas
-          </button>
-        )}
-      </div>
-      <p className="mt-2 text-sm text-zinc-600">
-        100 notificações mais recentes da sua conta.
-      </p>
-      {busy && (
-        <p role="status" className="mt-4 text-sm text-zinc-600">
-          Atualizando notificações…
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="mt-4 text-sm text-red-700">
-          {error}
-        </p>
-      )}
-      <ul className="mt-6 space-y-3">
-        {items?.map((item) => (
-          <li
-            key={item.id}
-            className={`rounded-2xl border p-4 ${item.readAt ? "bg-white" : "border-violet-200 bg-violet-50"}`}
-          >
-            <h2 className="font-bold [overflow-wrap:anywhere]">{item.title}</h2>
-            <p className="mt-1 text-sm text-zinc-600 [overflow-wrap:anywhere]">
-              {item.message}
-            </p>
-            <p className="mt-2 text-xs text-zinc-600">
-              {item.readAt ? "Lida" : "Não lida"} ·{" "}
-              <time dateTime={item.createdAt}>
-                {new Date(item.createdAt).toLocaleString("pt-BR")}
-              </time>
-            </p>
-            {!item.readAt && (
+    <PremiumScope className={styles.scope}>
+      <section aria-busy={busy} aria-labelledby="buyer-notifications-title" className={styles.layout}>
+        <header className={styles.hero}>
+          <div className={styles.identity}>
+            <span className={styles.heroIcon}><Bell size={23} aria-hidden="true" /></span>
+            <div>
+              <p className={styles.eyebrow}>Sua conta</p>
+              <h1 id="buyer-notifications-title" className="sx-premium-title">Notificações</h1>
+              <p className={styles.muted}>100 notificações mais recentes da sua conta.</p>
+            </div>
+          </div>
+          {!!items?.length && (
+            <div className={styles.tools}>
+              <span className={styles.badge}>
+                {unread === 1 ? "1 não lida" : `${unread} não lidas`}
+              </span>
               <button
                 type="button"
                 disabled={busy}
-                aria-label={`Marcar como lida: ${item.title}`}
-                onClick={() => void update({ id: item.id })}
-                className="mt-3 rounded-lg border border-violet-200 px-3 py-2 text-sm font-bold text-violet-700 disabled:opacity-50"
+                onClick={() => void update({ all: true })}
+                className={styles.control}
               >
-                Marcar como lida
+                <CheckCheck size={16} aria-hidden="true" /> Marcar todas como lidas
               </button>
-            )}
-          </li>
-        ))}
-      </ul>
-      {items?.length === 0 && !busy && (
-        <p className="rounded-3xl bg-white p-10 text-center text-zinc-500">
-          Nenhuma notificação.
-        </p>
-      )}
-      {!busy && (
-        <button
-          type="button"
-          onClick={() => void update()}
-          className="mt-4 text-sm font-bold text-violet-700"
-        >
-          {error ? "Tentar novamente" : "Atualizar notificações"}
-        </button>
-      )}
-    </section>
+            </div>
+          )}
+        </header>
+
+        {busy && (
+          <p role="status" className={styles.feedback}>
+            <LoaderCircle className={styles.spinner} size={18} aria-hidden="true" />
+            Atualizando notificações…
+          </p>
+        )}
+        {error && (
+          <p role="alert" className={styles.feedback}>
+            <CircleAlert size={18} aria-hidden="true" /> {error}
+          </p>
+        )}
+        {!!items?.length && (
+          <ul className={styles.list} aria-label="Caixa de notificações" role="list">
+            {items.map((item) => (
+              <li key={item.id} className={styles.notice} data-unread={!item.readAt}>
+                <span className={styles.noticeIcon} aria-hidden="true">
+                  {item.readAt ? <Check size={16} /> : <Bell size={16} />}
+                </span>
+                <div className={styles.noticeBody}>
+                  <h2>{item.title}</h2>
+                  <p className={styles.message}>{item.message}</p>
+                  <p className={styles.metadata}>
+                    <span className={styles.badge}>{item.readAt ? "Lida" : "Não lida"}</span>
+                    <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString("pt-BR")}</time>
+                  </p>
+                  {!item.readAt && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      aria-label={`Marcar como lida: ${item.title}`}
+                      onClick={() => void update({ id: item.id })}
+                      className={styles.control}
+                    >
+                      <Check size={16} aria-hidden="true" /> Marcar como lida
+                    </button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+        {items?.length === 0 && !busy && (
+          <div className={styles.empty}>
+            <Inbox size={27} aria-hidden="true" />
+            <h2 className="sx-premium-section">Nenhuma notificação.</h2>
+          </div>
+        )}
+        {!busy && (
+          <div className={styles.footer}>
+            <button type="button" onClick={() => void update()} className={styles.control}>
+              <RefreshCw size={16} aria-hidden="true" />
+              {error ? "Tentar novamente" : "Atualizar notificações"}
+            </button>
+          </div>
+        )}
+      </section>
+    </PremiumScope>
   );
 }

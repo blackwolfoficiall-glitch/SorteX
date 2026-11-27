@@ -193,4 +193,22 @@ export const pageEvidence = [
     source: "apps/web/e2e-local/run-quick-quantity-contrast.mjs",
     revision: "96e9cd5",
   },
+  {
+    path: "/admin/usuarios",
+    detail: "lista, ordenação, filtros, paginação e permissão de leitura; sem abrir detalhes ou executar ações da conta",
+    source: "apps/web/e2e/admin-users-premium.spec.ts",
+    revision: "d30060a",
+  },
+  {
+    path: "/comprador/checkout/[id]",
+    detail: "reservas sem pagamento, preços, termos, estados e isolamento; sem recarregar status, chamar provedor ou iniciar cobrança",
+    source: "apps/web/e2e-local/run-buyer-checkout-premium.mjs",
+    revision: "0c3dc48",
+  },
+  {
+    path: "/comprador/notificacoes",
+    detail: "caixa isolada por comprador, não lidas, carregamento e erro, foco no celular; sem marcar ou enviar",
+    source: "apps/web/e2e/buyer-notifications-premium.spec.ts",
+    revision: "a09a4fd",
+  },
 ];

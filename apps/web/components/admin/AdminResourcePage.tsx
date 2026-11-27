@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw, Search, ShieldAlert, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw, Search, ShieldAlert, UsersRound, X } from 'lucide-react';
+import PremiumScope from '@/components/premium/PremiumScope';
 import { useAuthorizedUser } from '@/components/auth/RoleGate';
 import { hasAdminPermission } from '@/lib/admin/authorization';
 import type { AdminPermission } from '@/lib/auth/types';
@@ -28,12 +29,12 @@ const configs: Record<OperationalMode, Config> = {
   reports: { title: 'Denúncias', subtitle: 'Análise e resolução rastreável', read: 'SUPPORT_WRITE', write: 'SUPPORT_WRITE', search: 'Motivo, descrição ou entidade', status: ['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'DISMISSED'] },
 };
 
-export default function AdminResourcePage({ mode }: { mode: Mode }) {
+export default function AdminResourcePage({ mode, premiumUsers = false }: { mode: Mode; premiumUsers?: boolean }) {
   if (!(mode in configs)) return <LegacyResource mode={mode} />;
-  return <OperationalResource mode={mode as OperationalMode} />;
+  return <OperationalResource mode={mode as OperationalMode} premiumUsers={premiumUsers && mode === 'users'} />;
 }
 
-function OperationalResource({ mode }: { mode: OperationalMode }) {
+function OperationalResource({ mode, premiumUsers }: { mode: OperationalMode; premiumUsers: boolean }) {
   const config = configs[mode];
   const user = useAuthorizedUser();
   const canWrite = Boolean(user && hasAdminPermission(user, config.write));
@@ -50,8 +51,12 @@ function OperationalResource({ mode }: { mode: OperationalMode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [userListUnavailable, setUserListUnavailable] = useState(false);
+  const userListRequest = useRef(0);
 
   const load = useCallback(async () => {
+    const request = premiumUsers ? ++userListRequest.current : 0;
+    const isCurrent = () => !premiumUsers || request === userListRequest.current;
     setLoading(true);
     setError('');
     try {
@@ -61,20 +66,27 @@ function OperationalResource({ mode }: { mode: OperationalMode }) {
       if (from) query.set('from', new Date(`${from}T00:00:00`).toISOString());
       if (to) query.set('to', new Date(`${to}T23:59:59`).toISOString());
       const result = await api<PageResult>(`${mode}?${query}`);
+      if (!isCurrent()) return;
+      if (premiumUsers) setUserListUnavailable(false);
       setRows(result.data ?? []);
       setPages(result.pagination?.pages || 1);
       setTotal(result.pagination?.total || 0);
     } catch (cause) {
+      if (!isCurrent()) return;
+      if (premiumUsers) setUserListUnavailable(true);
       setError(cause instanceof Error ? cause.message : 'Não foi possível carregar esta área.');
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [from, mode, page, search, sort, status, to]);
+  }, [from, mode, page, premiumUsers, search, sort, status, to]);
 
   useEffect(() => {
     const task = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(task);
-  }, [load]);
+    return () => {
+      window.clearTimeout(task);
+      if (premiumUsers) userListRequest.current += 1;
+    };
+  }, [load, premiumUsers]);
 
   async function openDetail(row: Row) {
     try {
@@ -110,6 +122,109 @@ function OperationalResource({ mode }: { mode: OperationalMode }) {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível enviar a resposta.');
     }
+  }
+
+  if (premiumUsers) {
+    const filtering = Boolean(search.trim() || status || from || to);
+    const statusText = loading ? 'Carregando usuários…'
+      : userListUnavailable ? 'Listagem indisponível.'
+      : `${total.toLocaleString('pt-BR')} ${total === 1 ? 'usuário' : 'usuários'} ${filtering ? 'nos filtros aplicados' : 'no cadastro'}`;
+    return <>
+      <PremiumScope className="sx-admin-users">
+        <main className="sx-au-wrap">
+          <header className="sx-premium-ticket sx-au-hero">
+            <UsersRound aria-hidden="true" size={30} />
+            <div>
+              <p className="sx-au-eyebrow">Administração</p>
+              <h1 className="sx-premium-title">{config.title}</h1>
+              <p>{config.subtitle}</p>
+            </div>
+            <button type="button" onClick={load} disabled={loading} className="sx-premium-button sx-au-refresh">
+              <RefreshCw aria-hidden="true" size={17} /> Atualizar listagem
+            </button>
+          </header>
+          <section className="sx-premium-surface sx-au-filters" aria-labelledby="sx-au-filters">
+            <h2 id="sx-au-filters" className="sx-premium-section">Filtros</h2>
+            <div className="sx-au-fields">
+              <label className="sx-au-search">
+                <span>Pesquisar usuários</span>
+                <span className="sx-au-input">
+                  <Search aria-hidden="true" size={17} />
+                  <input type="search" value={search} aria-describedby="sx-au-search-hint" onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
+                </span>
+              </label>
+              <label>
+                <span>Status</span>
+                <select aria-label="Filtrar status" value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }}>
+                  <option value="">Todos os status</option>
+                  {config.status?.map((item) => <option key={item} value={item}>{userStatuses[item] ?? item}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Ordenação</span>
+                <select aria-label="Ordenar" value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}>
+                  <option value="recent">Mais recentes</option><option value="oldest">Mais antigos</option>
+                </select>
+              </label>
+              <label><span>Data inicial</span><input type="date" value={from} onChange={(event) => { setFrom(event.target.value); setPage(1); }} /></label>
+              <label><span>Data final</span><input type="date" value={to} onChange={(event) => { setTo(event.target.value); setPage(1); }} /></label>
+            </div>
+            <p id="sx-au-search-hint" className="sx-premium-muted">Pesquise por nome, e-mail, CPF, CNPJ ou telefone.</p>
+          </section>
+          <section className="sx-au-results" aria-labelledby="sx-au-results">
+            <header>
+              <h2 id="sx-au-results" className="sx-premium-section">Resultados</h2>
+              <p role="status" className="sx-premium-muted">{statusText}</p>
+            </header>
+            {error && (
+              <div className="sx-premium-surface sx-au-state sx-au-error">
+                <p role="alert">{error}</p>
+                <button type="button" onClick={load} className="sx-premium-button">Tentar novamente</button>
+              </div>
+            )}
+            {notice && <p role="status" className="sx-premium-surface sx-au-state">{notice}</p>}
+            {loading ? (
+              <div aria-hidden="true" className="sx-premium-surface sx-au-state">
+                <LoaderCircle className="sx-au-spinner" size={24} />
+              </div>
+            ) : !userListUnavailable && (rows.length ? (
+              <ul className="sx-au-list" role="list">
+                {rows.map((row) => {
+                  const presenter = present('users', row);
+                  const nextAction = primaryAction('users', presenter.status);
+                  return (
+                    <li key={String(row.id)} className="sx-premium-surface sx-au-row">
+                      <div className="sx-au-identity">
+                        <h3 className="sx-premium-section"><button type="button" className="sx-au-name" onClick={() => void openDetail(row)}>{presenter.title}</button></h3>
+                        {presenter.subtitle && <p className="sx-premium-muted">{presenter.subtitle}</p>}
+                      </div>
+                      <dl className="sx-au-meta">
+                        <div><dt>Perfil</dt><dd>{userRoles[String(row.role)] ?? String(row.role ?? '—')}</dd></div>
+                        <div><dt>Localidade</dt><dd>{[row.city, row.state].filter(Boolean).join(' / ') || '—'}</dd></div>
+                        <div><dt>Status</dt><dd><span className="sx-premium-badge">{userStatuses[presenter.status] ?? presenter.status}</span></dd></div>
+                        <div><dt>Cadastro</dt><dd>{formatDate(row.createdAt ?? row.requestedAt)}</dd></div>
+                      </dl>
+                      <div className="sx-au-actions">
+                        <button type="button" className="sx-premium-button" onClick={() => void openDetail(row)}>Detalhes</button>
+                        {canWrite && nextAction && <button type="button" className="sx-premium-button" onClick={() => void action(String(row.id), nextAction)}>{actionLabel(nextAction)}</button>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : <p className="sx-premium-surface sx-au-state">Nenhum registro encontrado para os filtros informados.</p>)}
+            {!loading && !userListUnavailable && pages > 1 && (
+              <nav aria-label="Paginação" className="sx-au-pages">
+                <button type="button" disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="sx-premium-button">Anterior</button>
+                <span className="sx-premium-muted">Página {page} de {pages}</span>
+                <button type="button" disabled={page === pages} onClick={() => setPage((value) => value + 1)} className="sx-premium-button">Próxima</button>
+              </nav>
+            )}
+          </section>
+        </main>
+      </PremiumScope>
+      {detail && <DetailDrawer mode={mode} data={detail} canWrite={canWrite} close={() => setDetail(null)} action={action} reply={reply} />}
+    </>;
   }
 
   return <main className="p-5 pt-20 lg:p-8"><div className="mx-auto max-w-7xl">
@@ -176,6 +291,13 @@ function availableActions(mode: OperationalMode, status: string): string[] {
 }
 function primaryAction(mode: OperationalMode, status: string) { return availableActions(mode, status)[0]; }
 function actionLabel(action: string) { return ({ APPROVE: 'Aprovar', REJECT: 'Rejeitar', REQUEST_CHANGES: 'Solicitar ajustes', PAUSE: 'Pausar', REACTIVATE: 'Reativar', BLOCK_PURCHASES: 'Bloquear compras', UNBLOCK_PURCHASES: 'Liberar compras', ACTIVATE: 'Ativar', SUSPEND: 'Suspender', BLOCK: 'Bloquear', UNBLOCK: 'Desbloquear', REVOKE_SESSIONS: 'Encerrar sessões', REVIEW: 'Marcar para revisão', RESOLVED: 'Resolver', DISMISSED: 'Descartar', DISPUTED: 'Sinalizar disputa', DELIVERED: 'Confirmar entrega', OPEN: 'Reabrir', IN_PROGRESS: 'Iniciar atendimento', WAITING_CUSTOMER: 'Aguardar cliente', CLOSED: 'Fechar' } as Record<string, string>)[action] ?? action; }
+
+const userStatuses: Readonly<Record<string, string>> = {
+  ACTIVE: 'Ativo', INACTIVE: 'Inativo', SUSPENDED: 'Suspenso', BLOCKED: 'Bloqueado',
+};
+const userRoles: Readonly<Record<string, string>> = {
+  ADMIN: 'Administrador', BUYER: 'Comprador', ORGANIZER: 'Organizador',
+};
 
 function present(mode: OperationalMode, row: Row) {
   const organizer = row.organizer as Row | undefined, buyer = row.buyer as Row | undefined, campaign = row.campaign as Row | undefined;
