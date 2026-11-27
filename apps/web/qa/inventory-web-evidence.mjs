@@ -61,4 +61,22 @@ export const pageEvidence = [
     source: "apps/web/e2e-local/run-organizer-advisor-premium.mjs",
     revision: "fe7cc53",
   },
+  {
+    path: "/dashboard/campanhas/ganhadores",
+    detail: "ganhadores próprios, histórico e prova sintética, zeros e troca segura de campanha; sem executar apuração",
+    source: "apps/web/e2e/winner-center-premium.spec.ts",
+    revision: "0190f04",
+  },
+  {
+    path: "/dashboard/promocoes",
+    detail: "lista, filtros, editor e validação sem gravar, teclado e isolamento; sem criar ou ativar promoção",
+    source: "apps/web/e2e/promotions-premium.spec.ts",
+    revision: "ff07d71",
+  },
+  {
+    path: "/dashboard/afiliados",
+    detail: "comissões e origens com dados fictícios, filtros, falha e isolamento; sem convite, repasse ou transferência",
+    source: "apps/web/e2e-local/run-organizer-affiliates-premium.mjs",
+    revision: "81b5571",
+  },
 ];

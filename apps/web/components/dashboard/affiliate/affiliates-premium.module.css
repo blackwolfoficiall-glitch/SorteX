@@ -1,0 +1,143 @@
+.page {
+  container-type: inline-size;
+  display: grid;
+  gap: clamp(.85rem, 2vw, 1.2rem);
+  min-width: 0;
+  max-width: 91rem;
+  margin-inline: auto;
+  padding-bottom: 2rem;
+  color: var(--sxp-text);
+  overflow-wrap: anywhere;
+}
+.page :is(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 3px;
+}
+.hero {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: .7rem 1rem;
+}
+.hero > div { min-width: 0; flex: 1 1 19rem; }
+.eyebrow { margin: 0 0 .35rem; color: var(--sxp-accent); font-size: .75rem; font-weight: 800; letter-spacing: .045em; text-transform: uppercase; }
+.title, .heading, .card h2 {
+  margin: 0;
+  color: var(--sxp-text);
+  font-family: var(--sxp-font-heading);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -.035em;
+}
+.title { font-size: clamp(1.6rem, 4vw, 2.45rem); }
+.heading, .card h2 { font-size: clamp(1.12rem, 2.4vw, 1.45rem); }
+.copy, .muted { margin: .37rem 0 0; color: var(--sxp-muted); font-size: .86rem; line-height: 1.45; }
+.muted { font-size: .76rem; }
+
+.notice { border: 1px solid var(--sxp-line); border-radius: .9rem; padding: .68rem .85rem; background: var(--sxp-tint); color: var(--sxp-text); font-size: .84rem; }
+
+.sectionPicker { display: grid; gap: .24rem; }
+.sectionNav { display: none; flex-wrap: wrap; gap: .4rem; }
+.sectionNav button, .control, .primary, .field, .rowActions button {
+  min-width: 0;
+  max-width: 100%;
+  min-height: max(2.75rem, var(--sxp-action-height));
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  padding: .52rem .7rem;
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+  font-size: .82rem;
+  line-height: 1.32;
+  font-weight: 700;
+  transition: background-color 130ms ease, border-color 130ms ease;
+}
+.sectionNav button:hover, .control:hover, .rowActions button:hover { border-color: var(--sxp-accent); }
+.primary, .sectionNav button[aria-pressed="true"] { background: #5925b7; color: #fff; border-color: transparent; }
+.primary, .control, .rowActions button { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; }
+.primary:hover { background: #4d229d; }
+.primary:disabled, .control:disabled { opacity: .7; cursor: not-allowed; }
+.primary svg, .rowActions svg { flex: none; }
+.field { display: block; width: 100%; font-weight: 600; margin-top: .28rem; }
+.label, .mobileLabel { display: block; min-width: 0; color: var(--sxp-text); margin-top: .65rem; font-size: .8rem; font-weight: 740; }
+.mobileLabel { margin: 0; }
+.label textarea { min-height: 5rem; resize: vertical; }
+
+.content { min-width: 0; }
+.summary, .card, .row, .empty {
+  min-width: 0;
+  padding: clamp(.76rem, 2.4vw, 1.23rem);
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-panel-radius);
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+  box-shadow: var(--sxp-shadow);
+}
+.summary { display: grid; gap: .7rem; }
+.ticket {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: .5rem;
+  min-width: 0;
+  padding: clamp(.87rem, 2vw, 1.4rem);
+  border-radius: .97rem;
+  background: linear-gradient(145deg, #6124b8, #4529bb 55%, #1943b6);
+  color: #fff;
+}
+.ticket::before, .ticket::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 55%;
+  width: .95rem;
+  height: .95rem;
+  border-radius: 999px;
+  background: var(--sxp-surface);
+  pointer-events: none;
+}
+.ticket::before { inset-inline-start: -.475rem; }
+.ticket::after { inset-inline-end: -.475rem; }
+.ticket p { margin: 0; color: #fff; font-size: .82rem; }
+.ticket > p { max-width: 34ch; font-size: .76rem; }
+.ticket div p { display: flex; align-items: center; gap: .41rem; font-weight: 750; }
+.ticket svg { flex: none; }
+.ticket strong { display: block; margin-top: .36rem; color: #fff; font: 800 clamp(1.6rem, 5vw, 2.7rem)/1.12 var(--sxp-font-heading); font-variant-numeric: tabular-nums; }
+
+.stats, .workGrid, .list { display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: .64rem; margin: 0; }
+.stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.stat { min-width: 0; padding: .62rem; border: 1px solid var(--sxp-line); border-radius: .85rem; background: var(--sxp-tint); }
+.stat dt { margin: 0; color: var(--sxp-muted); font-size: .73rem; font-weight: 690; }
+.stat dd { margin: .25rem 0 0; font-size: clamp(.95rem, 3vw, 1.45rem); font-weight: 800; font-variant-numeric: tabular-nums; }
+.row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem .72rem; }
+.row > div { min-width: 0; }
+.rowActions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.rowActions button { color: var(--sxp-accent); }
+.rowActions button:has(svg):not(:has(svg + span)) { min-width: 2.75rem; }
+.badge { display: inline-block; max-width: 100%; border: 1px solid var(--sxp-line); border-radius: 999px; padding: .28rem .56rem; background: var(--sxp-tint); color: var(--sxp-accent); font-size: .72rem; font-weight: 740; }
+.empty { display: flex; align-items: center; justify-content: center; gap: .52rem; flex-wrap: wrap; min-height: 5.5rem; color: var(--sxp-muted); font-size: .88rem; }
+.empty [role="alert"] { color: var(--sxp-error); font-weight: 770; }
+.spinner { animation: rotate 1s linear infinite; color: var(--sxp-accent); }
+@keyframes rotate { to { transform: rotate(1turn); } }
+
+/* Preserve secondary legacy controls and their behavior within this one surface. */
+.page :is(:global(.text-zinc-500), :global(.text-zinc-600), :global(.text-zinc-700)) { color: var(--sxp-muted); }
+.page :global(.bg-violet-50) { background-color: var(--sxp-tint); }
+.page :global(.text-violet-700) { color: var(--sxp-accent); }
+.page :global(.text-red-600) { color: var(--sxp-error); }
+.page :global(.border) { border-color: var(--sxp-line); }
+
+@container (min-width: 41rem) {
+  .sectionPicker { display: none; }
+  .sectionNav { display: flex; }
+  .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@container (min-width: 58rem) {
+  .workGrid { grid-template-columns: minmax(0, 24rem) minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .page :is(button, a, input, select, textarea) { transition: none; }
+  .page .spinner { animation: none; }
+}

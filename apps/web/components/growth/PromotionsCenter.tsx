@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -28,6 +28,8 @@ import {
   X,
   Zap,
 } from "lucide-react";
+import PremiumScope from "@/components/premium/PremiumScope";
+import "./promotions-premium.css";
 import { getMyCampaigns } from "@/lib/campaigns/client";
 import type { Campaign } from "@/lib/campaigns/types";
 import {
@@ -170,15 +172,6 @@ const campaignStatusLabels: Record<string, string> = {
   FINISHED: "Encerrada",
   CANCELLED: "Cancelada",
 };
-const statusTone: Record<string, string> = {
-  DRAFT: "bg-zinc-100 text-zinc-700",
-  SCHEDULED: "bg-blue-50 text-blue-700",
-  ACTIVE: "bg-emerald-50 text-emerald-700",
-  PAUSED: "bg-amber-50 text-amber-700",
-  ENDED: "bg-zinc-100 text-zinc-600",
-  EXPIRED: "bg-orange-50 text-orange-700",
-  ERROR: "bg-red-50 text-red-700",
-};
 const actionLabels: Record<string, string> = {
   PROMOTION_CREATED: "Estratégia criada",
   PROMOTION_UPDATED: "Estratégia editada",
@@ -232,9 +225,11 @@ const initialForm = (): FormState => ({
 export default function PromotionsCenter() {
   const searchParams = useSearchParams();
   const prefillHandled = useRef(false);
+  const loadVersion = useRef(0);
   const [items, setItems] = useState<Promotion[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [stats, setStats] = useState<Record<string, number>>({});
+  const [stats, setStats] = useState<Record<string, number> | null>(null);
+  const [listTotal, setListTotal] = useState(0);
   const [filters, setFilters] = useState({
     search: "",
     campaignId: "",
@@ -242,6 +237,8 @@ export default function PromotionsCenter() {
     status: "",
   });
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [wizardError, setWizardError] = useState("");
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -259,7 +256,9 @@ export default function PromotionsCenter() {
   const [history, setHistory] = useState<PromotionHistoryItem[]>([]);
 
   async function load() {
+    const version = ++loadVersion.current;
     setLoading(true);
+    setLoadFailed(false);
     setError("");
     try {
       const query = new URLSearchParams(
@@ -272,7 +271,9 @@ export default function PromotionsCenter() {
         getMyCampaigns(),
         promotionDashboard(),
       ]);
+      if (version !== loadVersion.current) return;
       setItems(promotions.items);
+      setListTotal(promotions.total);
       setCampaigns(ownCampaigns);
       setStats(dashboard);
       setForm((current) => ({
@@ -280,14 +281,25 @@ export default function PromotionsCenter() {
         campaignId: current.campaignId || ownCampaigns[0]?.id || "",
       }));
     } catch {
-      setError("Não foi possível carregar as estratégias. Tente novamente.");
+      if (version === loadVersion.current) {
+        setLoadFailed(true);
+        setStats(null);
+      }
     } finally {
-      setLoading(false);
+      if (version === loadVersion.current) setLoading(false);
     }
+  }
+  // Invalidate the request epoch, not a DOM ref. A stale response must not
+  // replace a newer set of filters or hide its loading/error state.
+  function invalidateReads() {
+    loadVersion.current++;
   }
   useEffect(() => {
     const timer = setTimeout(() => void load(), filters.search ? 300 : 0);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      invalidateReads();
+    };
     // A consulta é reagendada intencionalmente quando os filtros mudam.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
@@ -316,6 +328,7 @@ export default function PromotionsCenter() {
         quantity: "1",
         value: Number.isFinite(price) ? String(price) : "",
       });
+      setWizardError("");
       setWizardStep(1);
       setWizardOpen(true);
     }, 0);
@@ -333,31 +346,17 @@ export default function PromotionsCenter() {
     };
     return items.filter((item) => map[section]?.includes(item.status));
   }, [items, section]);
-  const best = useMemo(
-    () =>
-      [...items].sort((a, b) => b.attributedRevenue - a.attributedRevenue)[0],
+  const ranked = useMemo(
+    () => items.filter((item) => item.attributedRevenue > 0)
+      .sort((a, b) => b.attributedRevenue - a.attributedRevenue),
     [items],
   );
-  const conversion =
-    stats.usages &&
-    items.reduce(
-      (sum, item) => sum + (item.config?.views ? Number(item.config.views) : 0),
-      0,
-    )
-      ? (stats.usages /
-          items.reduce(
-            (sum, item) => sum + Number(item.config?.views || 0),
-            0,
-          )) *
-        100
-      : null;
-  const recommendedCampaign = campaigns.find(
-    (campaign) =>
-      campaign.status === "PUBLISHED" &&
-      !items.some(
-        (item) => item.campaign.id === campaign.id && item.status === "ACTIVE",
-      ),
-  );
+  const recommendedCampaign = stats?.active === 0
+    ? campaigns.find((campaign) => campaign.status === "PUBLISHED")
+    : undefined;
+  const hasFilter = Boolean(filters.search || filters.campaignId || filters.type || filters.status);
+  const metric = (key: string) => (stats && Number.isFinite(stats[key]) ? stats[key] : null);
+  const attributedRevenue = metric("revenue");
 
   function chooseStrategy(strategy: Strategy, campaignId?: string) {
     setForm((current) => ({
@@ -368,6 +367,7 @@ export default function PromotionsCenter() {
       name: strategy.name,
     }));
     setEditingId("");
+    setWizardError("");
     setCatalogOpen(false);
     setWizardStep(1);
     setWizardOpen(true);
@@ -375,6 +375,7 @@ export default function PromotionsCenter() {
   function edit(item: Promotion) {
     const config = item.config || {};
     setEditingId(item.id);
+    setWizardError("");
     setForm({
       ...initialForm(),
       name: item.name,
@@ -461,11 +462,11 @@ export default function PromotionsCenter() {
   }
   async function save(status: "DRAFT" | "SCHEDULED" | "ACTIVE") {
     if (!form.name.trim() || !form.campaignId) {
-      setError("Informe o nome e a campanha da estratégia.");
+      setWizardError("Informe o nome e a campanha da estratégia.");
       return;
     }
     setBusyId("save");
-    setError("");
+    setWizardError("");
     try {
       const body = {
         name: form.name,
@@ -506,7 +507,7 @@ export default function PromotionsCenter() {
       setForm({ ...initialForm(), campaignId: campaigns[0]?.id || "" });
       await load();
     } catch {
-      setError(
+      setWizardError(
         "Não foi possível salvar a estratégia. Revise os dados e tente novamente.",
       );
     } finally {
@@ -603,80 +604,62 @@ export default function PromotionsCenter() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1500px] overflow-x-hidden pb-16">
+    <PremiumScope className="sx-promo">
       <header className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">
+          <p className="sx-premium-badge">
             Centro de estratégias de conversão
           </p>
-          <h1 className="mt-2 text-3xl font-black sm:text-4xl">Promoções</h1>
-          <p className="mt-2 max-w-2xl text-zinc-600">
-            Crie estratégias para aumentar conversão, engajamento e volume de
-            vendas.
+          <h1 className="sx-premium-title mt-2">Promoções</h1>
+          <p className="sx-premium-muted mt-2 max-w-2xl">
+            Consulte resultados e organize benefícios promocionais das suas campanhas.
           </p>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
             onClick={() => setCatalogOpen(true)}
-            className="min-h-12 rounded-xl border px-5 font-black transition hover:bg-zinc-50 active:scale-[.98]"
+            className="sx-premium-button"
           >
             Modelos prontos
           </button>
           <button
             onClick={() => setCatalogOpen(true)}
-            className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 font-black text-white transition hover:bg-violet-700 active:scale-[.98]"
+            className="sx-premium-button" data-variant="primary"
           >
-            <Plus size={18} /> Criar estratégia
+            <Plus size={18} aria-hidden="true" /> Criar estratégia
           </button>
         </div>
       </header>
 
-      <section className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-        <Metric icon={Play} label="Em execução" value={stats.active || 0} />
-        <Metric
-          icon={CalendarClock}
-          label="Agendadas"
-          value={stats.scheduled || 0}
-        />
-        <Metric
-          icon={CircleDollarSign}
-          label="Receita atribuída"
-          value={money.format(stats.revenue || 0)}
-        />
-        <Metric icon={Target} label="Utilizações" value={stats.usages || 0} />
-        <Metric
-          icon={BarChart3}
-          label="Conversão atribuída"
-          value={
-            conversion === null ? "Sem dados" : `${conversion.toFixed(1)}%`
-          }
-        />
-        <Metric
-          icon={Trophy}
-          label="Melhor estratégia"
-          value={best?.name || "Sem dados"}
-        />
+      <section className="sx-promo-metrics mt-6" aria-label="Indicadores de promoções">
+        <Metric icon={Play} label="Em execução" value={metric("active") ?? "Indisponível"} />
+        <Metric icon={CalendarClock} label="Agendadas" value={metric("scheduled") ?? "Indisponível"} />
+        <Metric icon={CircleDollarSign} label="Receita atribuída" value={attributedRevenue === null ? "Indisponível" : money.format(attributedRevenue)} />
+        <Metric icon={Target} label="Utilizações" value={metric("usages") ?? "Indisponível"} />
+        <Metric icon={BarChart3} label="Conversão atribuída" value="Sem dados de visualizações" />
+        <Metric icon={Trophy} label="Maior receita na lista" value={!loading && !loadFailed ? ranked[0]?.name ?? "Sem dados" : "Indisponível"} />
       </section>
 
-      <section className="mt-6 overflow-hidden rounded-[2rem] bg-gradient-to-br from-violet-950 via-violet-800 to-fuchsia-700 p-6 text-white shadow-lg md:p-8">
+      {!loading && !loadFailed && (
+      <section className="sx-premium-ticket sx-promo-hero mt-6 p-5 md:p-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-3xl">
             <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-black">
-              <Bot size={15} /> Sugestão da IA SorteX
+              <Bot size={15} aria-hidden="true" /> Sugestão baseada em regras
             </span>
-            <h2 className="mt-4 text-2xl font-black">
+            <h2 className="sx-premium-title mt-4">
               {recommendedCampaign
                 ? `Oportunidade em ${recommendedCampaign.title}`
-                : "Suas estratégias estão sendo acompanhadas"}
+                : "Revise as suas promoções"}
             </h2>
             <p className="mt-2 text-violet-100">
               {recommendedCampaign
-                ? "A campanha está publicada e não possui promoção ativa. Um bônus por quantidade pode ajudar a elevar o ticket médio."
-                : "Não há uma oportunidade crítica baseada nos dados locais neste momento."}
+                ? "Sua conta não possui promoções registradas como ativas. É possível preparar uma estratégia para a campanha publicada, sem ativá-la agora."
+                : "Use os indicadores e os filtros para revisar as estratégias registradas na sua operação."}
             </p>
             <div className="mt-4 flex flex-wrap gap-2 text-xs">
               <span className="rounded-full bg-white/10 px-3 py-1">
-                Evidência: promoções ativas
+                Fonte: promoções da sua conta
               </span>
               <span className="rounded-full bg-white/10 px-3 py-1">
                 Impacto: estimativa, não garantia
@@ -705,8 +688,9 @@ export default function PromotionsCenter() {
           </div>
         </div>
       </section>
+      )}
 
-      <section className="mt-6 rounded-3xl border bg-white p-4 shadow-sm">
+      <section className="sx-premium-surface sx-promo-panel mt-6" aria-label="Filtrar promoções">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
           <label className="relative xl:col-span-2">
             <span className="sr-only">Buscar</span>
@@ -719,12 +703,12 @@ export default function PromotionsCenter() {
               onChange={(event) =>
                 setFilters({ ...filters, search: event.target.value })
               }
-              placeholder="Buscar nome, campanha ou tipo"
+              placeholder="Buscar nome ou campanha"
               className="h-11 w-full rounded-xl border pl-10 pr-3"
             />
           </label>
           <Filter
-            value={filters.campaignId}
+            label="Campanha" value={filters.campaignId}
             onChange={(value) => setFilters({ ...filters, campaignId: value })}
             options={[
               ["", "Todas as campanhas"],
@@ -732,12 +716,12 @@ export default function PromotionsCenter() {
             ]}
           />
           <Filter
-            value={filters.type}
+            label="Tipo de promoção" value={filters.type}
             onChange={(value) => setFilters({ ...filters, type: value })}
             options={[["", "Todos os tipos"], ...Object.entries(typeLabels)]}
           />
           <Filter
-            value={filters.status}
+            label="Status da promoção" value={filters.status}
             onChange={(value) => setFilters({ ...filters, status: value })}
             options={[
               ["", "Todos os status"],
@@ -765,7 +749,7 @@ export default function PromotionsCenter() {
           <select
             value={section}
             onChange={(event) => setSection(event.target.value)}
-            className="h-12 w-full rounded-xl border bg-white px-3"
+            aria-label="Seção de promoções" className="h-12 w-full rounded-xl border bg-white px-3"
           >
             <SectionOptions />
           </select>
@@ -782,7 +766,8 @@ export default function PromotionsCenter() {
             <button
               key={key}
               onClick={() => setSection(key)}
-              className={`rounded-full px-4 py-2 text-sm font-black transition ${section === key ? "bg-zinc-900 text-white" : "border bg-white hover:border-violet-300"}`}
+              aria-pressed={section === key}
+              className="sx-premium-button sx-promo-tab"
             >
               {label}
             </button>
@@ -791,11 +776,14 @@ export default function PromotionsCenter() {
       </nav>
 
       {loading ? (
-        <div className="grid h-64 place-items-center">
-          <LoaderCircle className="animate-spin text-violet-600" />
-        </div>
+        <Loading text="Consultando promoções…" />
+      ) : loadFailed ? (
+        <section className="sx-premium-surface sx-promo-panel sx-promo-empty">
+          <p role="alert">Não foi possível carregar as estratégias.</p>
+          <button type="button" className="sx-premium-button" data-variant="primary" onClick={() => void load()}>Tentar novamente</button>
+        </section>
       ) : visible.length ? (
-        <section className="mt-5 grid gap-4 xl:grid-cols-2">
+        <section className="mt-5 grid gap-4 xl:grid-cols-2" aria-label="Promoções listadas">
           {visible.map((promotion) => (
             <PromotionCard
               key={promotion.id}
@@ -813,17 +801,17 @@ export default function PromotionsCenter() {
         </section>
       ) : (
         <Empty
-          filtered={Boolean(
-            filters.search ||
-            filters.campaignId ||
-            filters.type ||
-            filters.status,
-          )}
+          filtered={hasFilter}
+          sectionOnly={!hasFilter && section !== "all" && items.length > 0}
           create={() => setCatalogOpen(true)}
         />
       )}
 
-      {items.length > 0 && (
+      {!loading && !loadFailed && listTotal > items.length && (
+        <p role="status" className="sx-premium-muted mt-4">Exibindo a primeira página da consulta ({items.length} de {listTotal} registros).</p>
+      )}
+
+      {!loading && !loadFailed && ranked.length > 0 && (
         <section className="mt-10">
           <div className="flex items-end justify-between">
             <div>
@@ -831,13 +819,12 @@ export default function PromotionsCenter() {
                 Dados da sua conta
               </p>
               <h2 className="mt-1 text-2xl font-black">
-                Estratégias com melhor desempenho
+                Maiores receitas atribuídas na lista
               </h2>
             </div>
           </div>
-          <div className="mt-4 overflow-hidden rounded-3xl border bg-white">
-            {[...items]
-              .sort((a, b) => b.attributedRevenue - a.attributedRevenue)
+          <div className="sx-premium-surface mt-4 overflow-hidden">
+            {ranked
               .slice(0, 5)
               .map((item, index) => (
                 <div
@@ -877,6 +864,7 @@ export default function PromotionsCenter() {
           setStep={setWizardStep}
           editing={Boolean(editingId)}
           busy={busyId === "save"}
+          error={wizardError}
           close={() => setWizardOpen(false)}
           save={save}
         />
@@ -889,7 +877,7 @@ export default function PromotionsCenter() {
           close={() => setDetail(null)}
         />
       )}
-    </div>
+    </PremiumScope>
   );
 }
 
@@ -915,19 +903,19 @@ function PromotionCard({
   onDelete: () => void;
 }) {
   return (
-    <article className="rounded-[1.75rem] border bg-white p-5 shadow-sm transition hover:shadow-md md:p-6">
-      <div className="flex items-start justify-between gap-3">
+    <article className="sx-premium-surface sx-promo-panel sx-promo-card">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <span className="text-xs font-black uppercase tracking-wide text-violet-600">
             {typeLabels[promotion.type] || promotion.type}
           </span>
-          <h2 className="mt-1 truncate text-xl font-black">{promotion.name}</h2>
-          <p className="truncate text-sm text-zinc-500">
+          <h2 className="sx-premium-section mt-1">{promotion.name}</h2>
+          <p className="sx-premium-muted">
             {promotion.campaign.title}
           </p>
         </div>
         <span
-          className={`inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-black ${statusTone[promotion.status]}`}
+          className="sx-premium-badge sx-promo-status" data-status={promotion.status}
         >
           <span aria-hidden>
             {promotion.status === "ACTIVE"
@@ -936,19 +924,22 @@ function PromotionCard({
                 ? "Ⅱ"
                 : "○"}
           </span>
-          {statusLabels[promotion.status]}
+          {statusLabels[promotion.status] || "Estado não reconhecido"}
         </span>
       </div>
-      <p className="mt-4 rounded-2xl bg-zinc-50 p-4 text-sm font-medium text-zinc-700">
-        {promotionRule(promotion)}
-      </p>
+      <div className="sx-promo-inset mt-4">
+        <p>{promotionRule(promotion)}</p>
+        {!hasCheckoutBenefit(promotion.type) && (
+          <p className="sx-premium-muted mt-1">Sem benefício automático no checkout.</p>
+        )}
+      </div>
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Info
           label="Utilizações"
           value={`${promotion.usageCount}${promotion.totalLimit ? `/${promotion.totalLimit}` : ""}`}
         />
         <Info
-          label="Receita"
+          label="Receita atribuída"
           value={money.format(promotion.attributedRevenue)}
         />
         <Info label="Período" value={period(promotion)} />
@@ -957,7 +948,7 @@ function PromotionCard({
           value={new Date(promotion.updatedAt).toLocaleDateString("pt-BR")}
         />
       </div>
-      <div className="mt-5 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+      <div className="sx-promo-card-actions mt-5">
         <Action icon={Edit3} label="Editar" onClick={onEdit} disabled={busy} />
         <Action
           icon={Copy}
@@ -996,7 +987,7 @@ function PromotionCard({
           <summary className="flex min-h-10 cursor-pointer list-none items-center justify-center gap-2 rounded-xl border px-3 text-sm font-bold hover:bg-zinc-50">
             <MoreHorizontal size={16} /> Mais
           </summary>
-          <div className="absolute bottom-12 right-0 z-20 w-48 rounded-2xl border bg-white p-2 shadow-xl">
+          <div className="sx-premium-surface sx-promo-more w-full p-2">
             <button
               onClick={onHistory}
               className="flex w-full gap-2 rounded-xl p-2 text-sm font-bold hover:bg-zinc-50"
@@ -1032,12 +1023,12 @@ function Catalog({
   choose: (strategy: Strategy) => void;
 }) {
   return (
-    <Overlay>
+    <Overlay close={close}>
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="catalog-title"
-        className="max-h-[94dvh] w-full overflow-y-auto rounded-t-[2rem] bg-zinc-50 p-5 sm:max-w-6xl sm:rounded-[2rem] sm:p-8"
+        className="sx-premium-surface sx-promo-dialog sx-promo-catalog w-full sm:max-w-6xl"
       >
         <ModalTitle
           id="catalog-title"
@@ -1051,7 +1042,7 @@ function Catalog({
             return (
               <article
                 key={strategy.key}
-                className="flex flex-col rounded-3xl border bg-white p-5 shadow-sm"
+                className="sx-premium-surface sx-promo-panel flex flex-col"
               >
                 <span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-50 text-violet-700">
                   <Icon size={21} />
@@ -1060,7 +1051,7 @@ function Catalog({
                 <p className="mt-2 text-sm text-zinc-600">
                   {strategy.description}
                 </p>
-                {strategy.type !== "PACKAGE" && strategy.type !== "COUPON" && (
+                {!hasCheckoutBenefit(strategy.type) && (
                   <p className="mt-1 text-xs font-bold text-zinc-600">
                     Sem benefício automático no checkout.
                   </p>
@@ -1070,11 +1061,9 @@ function Catalog({
                 </p>
                 <button
                   onClick={() => choose(strategy)}
-                  className="mt-auto pt-5"
+                  className="sx-premium-button sx-promo-catalog-action"
                 >
-                  <span className="block min-h-10 rounded-xl bg-zinc-900 px-4 py-2 font-black text-white transition hover:bg-violet-700 active:scale-[.98]">
-                    Criar
-                  </span>
+                  Criar
                 </button>
               </article>
             );
@@ -1093,6 +1082,7 @@ function Wizard({
   setStep,
   editing,
   busy,
+  error,
   close,
   save,
 }: {
@@ -1103,6 +1093,7 @@ function Wizard({
   setStep: (value: number) => void;
   editing: boolean;
   busy: boolean;
+  error: string;
   close: () => void;
   save: (status: "DRAFT" | "SCHEDULED" | "ACTIVE") => void;
 }) {
@@ -1110,12 +1101,12 @@ function Wizard({
   const strategy =
     strategies.find((item) => item.key === form.strategyKey) || strategies[0];
   return (
-    <Overlay>
+    <Overlay close={close}>
       <section
         role="dialog"
         aria-modal="true"
         aria-labelledby="wizard-title"
-        className="max-h-[96dvh] w-full overflow-y-auto rounded-t-[2rem] bg-white p-5 sm:max-w-4xl sm:rounded-[2rem] sm:p-8"
+        className="sx-premium-surface sx-promo-dialog w-full sm:max-w-4xl"
       >
         <ModalTitle
           id="wizard-title"
@@ -1123,9 +1114,9 @@ function Wizard({
           subtitle={`Etapa ${step} de 7 · ${["Campanha", "Estratégia", "Regras", "Período", "Limites", "Simulação", "Revisão"][step - 1]}`}
           close={close}
         />
-        <div className="mt-5 h-2 overflow-hidden rounded-full bg-zinc-100">
+        <div className="sx-promo-progress mt-5 h-2 overflow-hidden rounded-full" role="progressbar" aria-label="Etapas da estratégia" aria-valuemin={0} aria-valuemax={7} aria-valuenow={step}>
           <div
-            className="h-full rounded-full bg-violet-600 transition-all"
+            className="sx-promo-progress-value h-full rounded-full"
             style={{ width: `${(step / 7) * 100}%` }}
           />
         </div>
@@ -1139,7 +1130,8 @@ function Wizard({
                     type="button"
                     key={item.id}
                     onClick={() => setForm({ ...form, campaignId: item.id })}
-                    className={`rounded-2xl border p-4 text-left ${form.campaignId === item.id ? "border-violet-500 bg-violet-50" : "hover:border-violet-200"}`}
+                    aria-pressed={form.campaignId === item.id}
+                    className="sx-promo-inset sx-promo-campaign text-left"
                   >
                     <b>{item.title}</b>
                     <span className="mt-2 block text-sm text-zinc-500">
@@ -1167,7 +1159,7 @@ function Wizard({
               </span>
               <h3 className="mt-2 text-2xl font-black">{strategy.name}</h3>
               <p className="mt-2 text-zinc-600">{strategy.description}</p>
-              {strategy.type !== "PACKAGE" && strategy.type !== "COUPON" && (
+              {!hasCheckoutBenefit(form.type) && (
                 <p className="mt-2 text-sm font-bold text-zinc-600">
                   Esta estratégia pode ser gerida, mas não concede benefício
                   automático no checkout.
@@ -1251,7 +1243,7 @@ function Wizard({
                 value={campaign?.title || "Não selecionada"}
               />
               <Review label="Estratégia" value={strategy.name} />
-              <Review label="Regra" value={naturalRule(form)} />
+              <Review label="Regra" value={hasCheckoutBenefit(form.type) ? naturalRule(form) : "Sem benefício automático no checkout."} />
               <Review
                 label="Período"
                 value={
@@ -1274,11 +1266,12 @@ function Wizard({
               />
             </div>
           )}
+          {error && <p role="alert" className="sx-promo-feedback mt-4" data-tone="error">{error}</p>}
           <div className="mt-7 flex flex-col-reverse gap-2 sm:flex-row">
             <button
               type="button"
               onClick={() => (step === 1 ? close() : setStep(step - 1))}
-              className="min-h-12 rounded-xl border px-5 font-black"
+              className="sx-premium-button"
             >
               Voltar
             </button>
@@ -1287,7 +1280,7 @@ function Wizard({
                 type="button"
                 disabled={!form.campaignId}
                 onClick={() => setStep(step + 1)}
-                className="min-h-12 rounded-xl bg-violet-600 px-6 font-black text-white disabled:opacity-50 sm:ml-auto"
+                className="sx-premium-button sm:ml-auto" data-variant="primary"
               >
                 Avançar
               </button>
@@ -1297,7 +1290,7 @@ function Wizard({
                   type="button"
                   disabled={busy}
                   onClick={() => void save("DRAFT")}
-                  className="min-h-12 rounded-xl border px-5 font-black sm:ml-auto"
+                  className="sx-premium-button sm:ml-auto"
                 >
                   Salvar como rascunho
                 </button>
@@ -1308,7 +1301,7 @@ function Wizard({
                     confirm("Agendar esta estratégia?") &&
                     void save("SCHEDULED")
                   }
-                  className="min-h-12 rounded-xl border border-blue-200 bg-blue-50 px-5 font-black text-blue-700 disabled:opacity-50"
+                  className="sx-premium-button"
                 >
                   Agendar
                 </button>
@@ -1319,7 +1312,7 @@ function Wizard({
                     confirm("Ativar esta estratégia agora?") &&
                     void save("ACTIVE")
                   }
-                  className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 font-black text-white"
+                  className="sx-premium-button" data-variant="primary"
                 >
                   {busy && <LoaderCircle size={17} className="animate-spin" />}{" "}
                   Ativar promoção
@@ -1449,6 +1442,9 @@ function Simulation({
   form: FormState;
   campaign?: Campaign;
 }) {
+  if (form.type !== "BONUS") {
+    return <p className="sx-promo-inset">Estimativa indisponível para este tipo de estratégia. Revise as regras antes de continuar.</p>;
+  }
   const quantity = Number(form.quantity) || 0,
     benefit = Number(form.benefit) || 0,
     price = campaign?.numberPrice || 0,
@@ -1476,7 +1472,7 @@ function Simulation({
         />
       </div>
       <p className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
-        <b>Estimativa, não garantia.</b> Hipóteses: valor atual da cota, regra
+        <b>Estimativa de execução manual, não garantia.</b> O bônus não é aplicado automaticamente no checkout. Hipóteses: valor atual da cota, regra
         configurada e{" "}
         {form.totalLimit
           ? "limite total informado"
@@ -1500,13 +1496,15 @@ function DetailDrawer({
   close: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[80] flex justify-end bg-zinc-950/50">
+    <Overlay close={close} drawer>
       <aside
         role="dialog"
         aria-modal="true"
-        className="h-full w-full overflow-y-auto bg-white p-6 shadow-2xl sm:max-w-xl"
+        aria-labelledby="promotion-detail-title"
+        className="sx-premium-surface sx-promo-dialog sx-promo-drawer w-full sm:max-w-xl"
       >
         <ModalTitle
+          id="promotion-detail-title"
           title={
             detail.type === "report"
               ? "Relatório da estratégia"
@@ -1633,7 +1631,7 @@ function DetailDrawer({
           </div>
         )}
       </aside>
-    </div>
+    </Overlay>
   );
 }
 
@@ -1647,18 +1645,18 @@ function Metric({
   value: string | number;
 }) {
   return (
-    <div className="min-w-0 rounded-3xl border bg-white p-4 shadow-sm">
-      <Icon size={18} className="text-violet-600" />
+    <div className="sx-premium-surface sx-promo-panel">
+      <Icon size={18} className="sx-promo-accent" aria-hidden="true" />
       <span className="mt-3 block text-xs font-bold text-zinc-500">
         {label}
       </span>
-      <b className="mt-1 block break-words text-xl">{value}</b>
+      <b className="sx-promo-metric-value mt-1 block break-words text-xl">{value}</b>
     </div>
   );
 }
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="min-w-0 rounded-xl bg-zinc-50 p-3">
+    <div className="sx-promo-inset min-w-0 p-3">
       <span className="text-[11px] font-bold text-zinc-500">{label}</span>
       <b className="mt-1 block break-words text-xs">{value}</b>
     </div>
@@ -1679,9 +1677,9 @@ function Action({
     <button
       onClick={onClick}
       disabled={disabled}
-      className="flex min-h-10 items-center justify-center gap-2 rounded-xl border px-3 text-sm font-bold transition hover:border-violet-300 hover:bg-violet-50 active:scale-[.98] disabled:cursor-wait disabled:opacity-50"
+      className="sx-premium-button"
     >
-      <Icon size={16} />
+      <Icon size={16} aria-hidden="true" />
       {label}
     </button>
   );
@@ -1697,18 +1695,20 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 function Filter({
+  label,
   value,
   onChange,
   options,
 }: {
+  label: string;
   value: string;
   onChange: (value: string) => void;
   options: string[][];
 }) {
   return (
     <label>
-      <span className="sr-only">Filtro</span>
       <select
+        aria-label={label}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="h-11 w-full rounded-xl border bg-white px-3"
@@ -1733,8 +1733,8 @@ function Feedback({
 }) {
   return (
     <div
-      role="status"
-      className={`mt-4 flex items-center justify-between gap-3 rounded-2xl p-4 text-sm font-bold ${tone === "success" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-700"}`}
+      role={tone === "error" ? "alert" : "status"}
+      className="sx-promo-feedback mt-4 flex items-center justify-between gap-3" data-tone={tone}
     >
       <span>{children}</span>
       <button onClick={close} aria-label="Fechar mensagem">
@@ -1743,12 +1743,38 @@ function Feedback({
     </div>
   );
 }
-function Overlay({ children }: { children: ReactNode }) {
-  return (
-    <div className="fixed inset-0 z-[70] flex items-end justify-center bg-zinc-950/55 backdrop-blur-sm sm:items-center sm:p-5">
-      {children}
-    </div>
-  );
+function Overlay({ children, close, drawer = false }: {
+  children: ReactNode; close: () => void; drawer?: boolean;
+}) {
+  const overlay = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const target = overlay.current?.querySelector<HTMLElement>("[data-promotion-initial-focus]");
+    target?.focus({ preventScroll: true });
+    return () => {
+      if (previous?.isConnected) previous.focus({ preventScroll: true });
+    };
+  }, []);
+  function keyboard(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    }
+    if (event.key !== "Tab") return;
+    const controls = Array.from(overlay.current?.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], summary',
+    ) ?? []).filter((control) => control.getClientRects().length > 0 && control.tabIndex >= 0);
+    const first = controls[0], last = controls.at(-1);
+    if (event.shiftKey && document.activeElement === first && last) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last && first) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+  return <div ref={overlay} className="sx-promo-overlay" data-drawer={drawer || undefined} onKeyDown={keyboard}>{children}</div>;
 }
 function ModalTitle({
   id,
@@ -1764,15 +1790,15 @@ function ModalTitle({
   return (
     <div className="flex items-start justify-between gap-4">
       <div>
-        <h2 id={id} className="text-2xl font-black">
+        <h2 id={id} className="sx-premium-section">
           {title}
         </h2>
         <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
       </div>
       <button
         onClick={close}
-        aria-label="Fechar"
-        className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-zinc-100 hover:bg-zinc-200"
+        aria-label="Fechar" data-promotion-initial-focus
+        className="sx-premium-button sx-promo-close"
       >
         <X size={18} />
       </button>
@@ -1781,7 +1807,7 @@ function ModalTitle({
 }
 function Review({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-zinc-50 p-4">
+    <div className="sx-promo-inset p-4">
       <span className="text-xs font-bold text-zinc-500">{label}</span>
       <b className="mt-1 block break-words">{value}</b>
     </div>
@@ -1796,28 +1822,30 @@ function Preview({ children }: { children: ReactNode }) {
 }
 function Loading({ text = "Carregando dados reais..." }: { text?: string }) {
   return (
-    <div className="mt-8 flex items-center justify-center gap-2 text-sm text-zinc-500">
-      <LoaderCircle size={17} className="animate-spin" />
+    <div className="sx-premium-muted mt-8 flex items-center justify-center gap-2" role="status">
+      <LoaderCircle size={17} className="sx-promo-spin" aria-hidden="true" />
       {text}
     </div>
   );
 }
 function Empty({
   filtered,
+  sectionOnly,
   create,
 }: {
   filtered: boolean;
+  sectionOnly: boolean;
   create: () => void;
 }) {
   return (
-    <section className="mt-6 rounded-[2rem] border border-dashed bg-white p-10 text-center">
-      <Gift className="mx-auto text-violet-500" size={36} />
+    <section className="sx-premium-surface sx-promo-empty mt-6 text-center" aria-live="polite">
+      <Gift className="sx-promo-accent mx-auto" size={32} aria-hidden="true" />
       <h2 className="mt-4 text-xl font-black">
         {filtered
           ? "Nenhuma promoção encontrada com esses filtros."
-          : "Você ainda não criou nenhuma estratégia."}
+          : sectionOnly ? "Nenhuma estratégia nesta seção." : "Você ainda não criou nenhuma estratégia."}
       </h2>
-      {!filtered && (
+      {!filtered && !sectionOnly && (
         <>
           <p className="mx-auto mt-2 max-w-lg text-zinc-500">
             Escolha um modelo pronto ou crie uma promoção personalizada para
@@ -1825,9 +1853,9 @@ function Empty({
           </p>
           <button
             onClick={create}
-            className="mt-5 rounded-xl bg-violet-600 px-5 py-3 font-black text-white"
+            className="sx-premium-button mt-5" data-variant="primary"
           >
-            Criar estratégia
+            Escolher uma estratégia
           </button>
         </>
       )}
@@ -1877,6 +1905,9 @@ function naturalRule(form: FormState) {
     return `A cada ${form.quantity || 0} títulos, o comprador recebe ${form.benefit || 0} giro(s).`;
   if (form.strategyKey === "CUSTOM" && form.rules) return form.rules;
   return `Ao comprar pelo menos ${form.quantity || 0} títulos, o comprador recebe ${form.benefit || 0} títulos extras.`;
+}
+function hasCheckoutBenefit(type: string) {
+  return type === "PACKAGE" || type === "COUPON";
 }
 function promotionRule(promotion: Promotion) {
   const config = promotion.config || {};
