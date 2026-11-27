@@ -36,9 +36,24 @@ final class BuyerJourneys: XCTestCase {
         XCTContext.runActivity(named: "sortex-email-keyboard") { _ in
             XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), "Email keyboard did not open")
         }
-        XCTContext.runActivity(named: "sortex-email-type") { _ in
-            // XCTest requires the field itself to have keyboard focus.
-            email.typeText(buyer)
+        // Exact native input control (run 46041710655): this chunk sequence
+        // read back correctly on iPhone 17 / iOS 26.5; bulk typing did not.
+        let buyerChunks = ["sortex", "-ios-", "ui@", "example", ".test"]
+        guard buyerChunks.joined() == buyer else { throw InvalidFixtureEmailChunks() }
+        var expectedPrefix = ""
+        for chunk in buyerChunks {
+            XCTContext.runActivity(named: "sortex-email-type") { _ in
+                email.typeText(chunk)
+            }
+            expectedPrefix += chunk
+            // Observe only, as in the input control. Never retry or replace
+            // input, and do not reach the password if any prefix is incorrect.
+            guard waitUntil(timeout: 2, { email.value as? String == expectedPrefix }) else {
+                XCTContext.runActivity(named: "sortex-email-prefix-mismatch") { _ in
+                    XCTFail("Exact fixture email prefix did not match")
+                }
+                return
+            }
         }
         XCTContext.runActivity(named: "sortex-email-readback") { _ in
             // React Native's controlled field can finish its render after the
@@ -231,6 +246,7 @@ final class BuyerJourneys: XCTestCase {
         return .mismatch
     }
 
+    private struct InvalidFixtureEmailChunks: Error {}
     private struct MissingFixturePassword: Error {}
     private struct ElementNotActionable: Error {}
 }

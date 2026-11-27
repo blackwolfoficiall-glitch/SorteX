@@ -11,7 +11,8 @@ sys.dont_write_bytecode = True
 from evidence import TEST
 
 PHASES = (
-    "startup", "email", "email-tap", "email-keyboard", "email-type", "email-readback",
+    "startup", "email", "email-tap", "email-keyboard", "email-type", "email-prefix-mismatch",
+    "email-readback",
     "email-readback-unavailable", "email-readback-label", "email-readback-normalization",
     "email-readback-leading-dropped", "email-readback-trailing-dropped",
     "email-readback-edge-truncated", "email-readback-extra-text", "email-readback-mismatch",

@@ -1,6 +1,8 @@
 """Linux-portable tests for the XCUITest test host's redaction contract."""
 
+import json
 import os
+import re
 from pathlib import Path
 import plistlib
 import subprocess
@@ -236,6 +238,18 @@ esac
         self.assertNotEqual(repeated.returncode, 0)
         self.assertNotIn(DUMMY, repeated.stdout + repeated.stderr)
 
+    def test_full_driver_uses_exact_control_email_chunks(self):
+        swift = (ROOT / "BuyerJourneys.swift").read_text()
+        control = (ROOT.parent / "ios-xcuitest-input-controls/BuyerEmailInputControls.swift").read_text()
+        chunks = re.search(r"let buyerChunks = (\[[^\n]+\])", swift)
+        self.assertIsNotNone(chunks)
+        self.assertIn("for chunk in " + chunks[1], control)
+        synthetic_email = re.search(r'private let buyer = "([^"]+)"', swift)
+        self.assertIsNotNone(synthetic_email)
+        self.assertIn('private let expected = "' + synthetic_email[1] + '"', control)
+        self.assertEqual("".join(json.loads(chunks[1])), synthetic_email[1])
+        self.assertIn("guard buyerChunks.joined() == buyer", swift)
+
     def test_real_ui_required_and_only_safe_summary_uploaded(self):
         spec = ROOT / "SortexFixtureUI.xcodeproj"
         scheme = spec / "xcshareddata/xcschemes/SortexFixtureUITests.xcscheme"
@@ -248,7 +262,8 @@ esac
             self.assertIn(ref.get("BlueprintIdentifier"), pbx)
         self.assertIn("com.apple.product-type.bundle.ui-testing", pbx)
         swift = (ROOT / "BuyerJourneys.swift").read_text()
-        for stage in ("startup", "email-tap", "email-keyboard", "email-type", "email-readback",
+        for stage in ("startup", "email-tap", "email-keyboard", "email-type", "email-prefix-mismatch",
+                      "email-readback",
                       "email-readback-unavailable", "email-readback-label", "email-readback-normalization",
                       "email-readback-leading-dropped", "email-readback-trailing-dropped",
                       "email-readback-edge-truncated", "email-readback-extra-text", "email-readback-mismatch",
@@ -259,7 +274,13 @@ esac
             self.assertIn('"sortex-' + stage + '"', swift)
         email_activity = swift.split('sortex-email-tap', 1)[1].split('sortex-password', 1)[0]
         self.assertEqual(email_activity.count('email.tap()'), 1)
-        self.assertEqual(email_activity.count('email.typeText(buyer)'), 1)
+        self.assertEqual(email_activity.count('email.typeText('), 1)
+        self.assertIn('for chunk in buyerChunks', email_activity)
+        self.assertIn('email.typeText(chunk)', email_activity)
+        self.assertIn('expectedPrefix += chunk', email_activity)
+        self.assertIn('guard waitUntil(timeout: 2, { email.value as? String == expectedPrefix })', email_activity)
+        self.assertIn('XCTFail("Exact fixture email prefix did not match")', email_activity)
+        self.assertNotIn('\\(', email_activity)
         self.assertIn('app.keyboards.firstMatch.waitForExistence(timeout: 8)', email_activity)
         self.assertIn('let matched = waitUntil(timeout: 2)', email_activity)
         self.assertIn('return entered == buyer', email_activity)
