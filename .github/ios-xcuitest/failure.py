@@ -11,7 +11,9 @@ sys.dont_write_bytecode = True
 from evidence import TEST
 
 PHASES = (
-    "startup", "email", "password", "login", "campaign", "campaign-tab",
+    "startup", "email", "email-tap", "email-keyboard", "email-type", "email-readback",
+    "email-readback-unavailable", "email-readback-mismatch", "password", "login",
+    "campaign", "campaign-tab",
     "campaign-home-ready", "campaign-tab-discover", "campaign-tab-actionable",
     "campaign-tab-tap", "campaign-tab-selected", "campaign-screen-visible",
     "campaign-list", "campaign-open", "campaign-detail", "campaign-prize",

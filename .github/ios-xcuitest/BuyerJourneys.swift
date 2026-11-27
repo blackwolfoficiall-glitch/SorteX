@@ -30,12 +30,32 @@ final class BuyerJourneys: XCTestCase {
             XCTAssertTrue(submit.exists, "Native submit control is absent")
         }
 
-        try XCTContext.runActivity(named: "sortex-email") { _ in
+        XCTContext.runActivity(named: "sortex-email-tap") { _ in
             email.tap()
+        }
+        XCTContext.runActivity(named: "sortex-email-keyboard") { _ in
             XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), "Email keyboard did not open")
+        }
+        XCTContext.runActivity(named: "sortex-email-type") { _ in
+            // XCTest requires the field itself to have keyboard focus.
             email.typeText(buyer)
-            // Compare only the disposable email; never print the observed value.
-            XCTAssertTrue(email.value as? String == buyer, "Email entry did not match the fixture")
+        }
+        XCTContext.runActivity(named: "sortex-email-readback") { _ in
+            // Compare only the disposable email; never print the observed value,
+            // its length, or the accessibility tree, even if the value is wrong.
+            let entered = email.value as? String
+            guard entered == buyer else {
+                if entered?.isEmpty != false {
+                    XCTContext.runActivity(named: "sortex-email-readback-unavailable") { _ in
+                        XCTFail("Email field returned no readable value")
+                    }
+                } else {
+                    XCTContext.runActivity(named: "sortex-email-readback-mismatch") { _ in
+                        XCTFail("Email entry did not match the fixture")
+                    }
+                }
+                return
+            }
         }
 
         try XCTContext.runActivity(named: "sortex-password") { _ in

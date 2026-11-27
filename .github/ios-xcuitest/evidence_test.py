@@ -248,11 +248,21 @@ esac
             self.assertIn(ref.get("BlueprintIdentifier"), pbx)
         self.assertIn("com.apple.product-type.bundle.ui-testing", pbx)
         swift = (ROOT / "BuyerJourneys.swift").read_text()
-        for stage in ("startup", "email", "password", "login", "campaign-home-ready",
+        for stage in ("startup", "email-tap", "email-keyboard", "email-type", "email-readback",
+                      "email-readback-unavailable", "email-readback-mismatch",
+                      "password", "login", "campaign-home-ready",
                       "campaign-tab-discover", "campaign-tab-actionable", "campaign-tab-tap",
                       "campaign-tab-selected", "campaign-screen-visible", "campaign-list", "campaign-open", "campaign-detail", "campaign-prize", "campaign-regulation",
                       "signed-in-relaunch", "logout", "signed-out-relaunch"):
             self.assertIn('"sortex-' + stage + '"', swift)
+        email_activity = swift.split('sortex-email-tap', 1)[1].split('sortex-password', 1)[0]
+        self.assertEqual(email_activity.count('email.tap()'), 1)
+        self.assertEqual(email_activity.count('email.typeText(buyer)'), 1)
+        self.assertIn('app.keyboards.firstMatch.waitForExistence(timeout: 8)', email_activity)
+        self.assertIn('guard entered == buyer', email_activity)
+        self.assertNotIn("print(", email_activity)
+        self.assertNotIn("entered.count", email_activity)
+        self.assertNotIn("debugDescription", email_activity)
         self.assertIn('secureTextFields["sortex-login-password"]', swift)
         self.assertIn("pass.typeText(password)", swift)
         self.assertNotIn("pass.value", swift)
