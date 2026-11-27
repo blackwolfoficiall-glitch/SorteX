@@ -1,5 +1,5 @@
 import { RoleGate } from "@/components/auth/RoleGate";
-import Sidebar from "@/components/dashboard/Sidebar";
+import { OrganizerShell } from "@/components/dashboard/Sidebar";
 import { OrganizerOnboardingGate } from "@/components/organizer-platform/OrganizerOnboardingGate";
 import OrganizerApprovalGate from "@/components/organizador/OrganizerApprovalGate";
 import LegalAcceptanceGate from "@/components/legal/LegalAcceptanceGate";
@@ -11,5 +11,14 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <RoleGate allowed={[...organizerRoles]}><OrganizerOnboardingGate><OrganizerApprovalGate><div className="min-h-screen bg-zinc-100"><Sidebar/><main className="px-4 pb-10 pt-20 sm:px-6 lg:ml-72 lg:px-8 lg:pt-8">{children}</main><LegalAcceptanceGate/></div></OrganizerApprovalGate></OrganizerOnboardingGate></RoleGate>;
+  return (
+    <RoleGate allowed={[...organizerRoles]}>
+      <OrganizerOnboardingGate>
+        <OrganizerApprovalGate>
+          <OrganizerShell>{children}</OrganizerShell>
+          <LegalAcceptanceGate />
+        </OrganizerApprovalGate>
+      </OrganizerOnboardingGate>
+    </RoleGate>
+  );
 }

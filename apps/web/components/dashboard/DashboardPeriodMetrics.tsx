@@ -1,5 +1,7 @@
 "use client";
 
+import { Ticket } from "lucide-react";
+import styles from "./organizer-dashboard-premium.module.css";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   DEFAULT_DASHBOARD_PERIOD,
@@ -150,14 +152,20 @@ export default function DashboardPeriodMetrics({
     : null;
 
   return (
-    <div className="min-w-0 rounded-3xl border bg-white p-4 shadow-sm sm:p-6">
-      <h2 className="text-xl font-black">Desempenho de vendas</h2>
-      <p className="mt-1 text-sm text-zinc-500">
-        {legacy
-          ? "Histórico de vendas confirmadas por dias UTC da versão anterior."
-          : "Vendas confirmadas por período (horário de Brasília)."}
-      </p>
-      <div aria-label="Período de vendas" className="mt-3 flex flex-wrap gap-2">
+    <section className={styles.report} aria-labelledby="dashboard-sales-title">
+      <header className={styles.panelHeading}>
+        <div>
+          <p className={styles.eyebrow}>Vendas confirmadas</p>
+          <h2 id="dashboard-sales-title">Desempenho de vendas</h2>
+          <p className={styles.muted}>
+            {legacy
+              ? "Histórico de vendas confirmadas por dias UTC da versão anterior."
+              : "Vendas confirmadas por período (horário de Brasília)."}
+          </p>
+        </div>
+        <span className={styles.panelIcon}><Ticket size={20} aria-hidden="true" /></span>
+      </header>
+      <div role="group" aria-label="Período de vendas" className={styles.filters}>
         {periods.map(([item, label]) => (
           <button
             key={item}
@@ -169,7 +177,7 @@ export default function DashboardPeriodMetrics({
                 retry((value) => value + 1);
               }
             }}
-            className={`rounded-xl px-3 py-2 text-xs font-bold focus-visible:outline-2 focus-visible:outline-violet-700 ${choice === item ? "bg-violet-700 text-white" : "bg-zinc-100"}`}
+            className={styles.filter}
           >
             {label}
           </button>
@@ -178,9 +186,9 @@ export default function DashboardPeriodMetrics({
       {choice === "custom" && (
         <form
           onSubmit={applyCustom}
-          className="mt-4 flex flex-wrap items-end gap-2"
+          className={styles.dates}
         >
-          <label className="text-xs font-bold">
+          <label className={styles.dateLabel}>
             Início
             <input
               type="date"
@@ -189,10 +197,11 @@ export default function DashboardPeriodMetrics({
               value={start}
               required
               onChange={(event) => changeStart(event.target.value)}
-              className="mt-1 block rounded-xl border px-2 py-2"
+              className={styles.dateInput}
+              aria-invalid={invalid || undefined}
             />
           </label>
-          <label className="text-xs font-bold">
+          <label className={styles.dateLabel}>
             Fim
             <input
               type="date"
@@ -201,36 +210,37 @@ export default function DashboardPeriodMetrics({
               value={end}
               required
               onChange={(event) => changeEnd(event.target.value)}
-              className="mt-1 block rounded-xl border px-2 py-2"
+              className={styles.dateInput}
+              aria-invalid={invalid || undefined}
             />
           </label>
           <button
             type="submit"
-            className="rounded-xl bg-violet-700 px-3 py-2 text-xs font-bold text-white"
+            className={styles.primary}
           >
             Aplicar
           </button>
           {invalid && (
-            <p role="alert" className="w-full text-sm text-red-800">
+            <p role="alert" className={styles.invalid}>
               Informe as datas em ordem, sem datas futuras e com até 367 dias.
             </p>
           )}
         </form>
       )}
       {!period ? (
-        <p className="mt-5 text-sm text-zinc-500">
+        <p className={styles.status}>
           Escolha as datas e toque em Aplicar.
         </p>
       ) : !current ? (
-        <p role="status" className="mt-5 text-sm text-zinc-500">
+        <p role="status" className={styles.status}>
           Consultando vendas confirmadas…
         </p>
       ) : current.kind === "error" ? (
-        <div className="mt-5 rounded-xl bg-amber-50 p-3 text-sm text-amber-950">
+        <div className={styles.notice}>
           <p role="alert">{current.message}</p>
           <button
             type="button"
-            className="mt-2 font-bold underline"
+            className={styles.retry}
             onClick={() => retry((value) => value + 1)}
           >
             Tentar novamente
@@ -239,43 +249,48 @@ export default function DashboardPeriodMetrics({
       ) : (
         <>
           {legacy && (
-            <p role="status" className="mt-4 text-sm text-amber-800">
+            <p role="status" className={styles.notice}>
               Na versão anterior, os filtros de receita usam os dias UTC do
               servidor. Títulos, participantes e ticket médio, quando disponíveis,
               são do histórico total, não do período.
             </p>
           )}
-          {rangeCaption && <p className="mt-3 text-xs text-zinc-600">{rangeCaption}</p>}
-          {relevantSales === null ? (
-            <p className="mt-4 text-sm text-zinc-500">
-              Histórico de receita indisponível para esse intervalo.
-            </p>
-          ) : (
-            <>
-              <p className="mt-4 text-xl font-black">{money(relevantSales)}</p>
+          <div className={styles.ticket}>
+            <div className={styles.ticketTitle}>
+              <span><Ticket size={17} aria-hidden="true" /> Total bruto confirmado</span>
+              {rangeCaption && <p>{rangeCaption}</p>}
+            </div>
+            {relevantSales === null ? (
+              <p className={styles.ticketEmpty}>
+                Histórico de receita indisponível para esse intervalo.
+              </p>
+            ) : (
+              <>
+                <p className={styles.ticketAmount}>{money(relevantSales)}</p>
               {chart.some((point) => point.revenue > 0) ? (
                 <div
                   role="img"
                   aria-label={`Receita no intervalo: ${money(relevantSales)}`}
-                  className="mt-4 flex h-44 min-w-0 items-end gap-1 rounded-2xl bg-gradient-to-b from-violet-50/70 to-white px-3 pt-6"
+                  className={styles.chart}
                 >
                   {chart.map((point) => (
                     <div
                       key={point.first}
                       title={`${dateLabel(point.first)} a ${dateLabel(point.last)}: ${money(point.revenue)}`}
-                      className="min-w-0 flex-1 rounded-t-lg bg-gradient-to-t from-violet-700 to-violet-400"
+                      className={styles.chartBar}
                       style={{ height: `${(point.revenue / chartMax) * 100}%` }}
                     />
                   ))}
                 </div>
               ) : (
-                <p className="mt-3 text-sm text-zinc-500">
+                <p className={styles.ticketEmpty}>
                   Sem receita registrada nesse intervalo.
                 </p>
               )}
-            </>
-          )}
-          <dl className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">
+              </>
+            )}
+          </div>
+          <dl className={styles.periodStats}>
             {[
               [
                 "Títulos vendidos",
@@ -294,17 +309,17 @@ export default function DashboardPeriodMetrics({
                 data?.summary.paidOrders.toLocaleString("pt-BR") ?? "—",
               ],
             ].map(([label, value]) => (
-              <div key={label} className="rounded-2xl bg-zinc-50 p-3">
-                <dt className="text-xs text-zinc-600">
+              <div key={label} className={styles.smallMetric}>
+                <dt>
                   {label}{" "}
-                  <span className="block text-zinc-500">({metricScope})</span>
+                  <span className={styles.metricScope}>({metricScope})</span>
                 </dt>
-                <dd className="mt-1 font-black">{value}</dd>
+                <dd>{value}</dd>
               </div>
             ))}
           </dl>
         </>
       )}
-    </div>
+    </section>
   );
 }

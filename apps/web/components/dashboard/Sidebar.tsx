@@ -1,160 +1,358 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Bot, Boxes, ClipboardList, Gift, LayoutDashboard, Megaphone, Menu, MessageCircle, Palette, Plug, Settings, Share2, Ticket, Trophy, UserRound, Users, Wallet, X } from "lucide-react";
-import { authRequest, getCurrentUser } from "@/lib/auth/client";
-import type { AuthUser } from "@/lib/auth/types";
+import type { KeyboardEvent, ReactNode } from "react";
+import {
+  Ellipsis,
+  House,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Sparkles,
+  Ticket,
+  X,
+} from "lucide-react";
+import { useAuthorizedUser } from "@/components/auth/RoleGate";
+import PremiumScope from "@/components/premium/PremiumScope";
+import { authRequest } from "@/lib/auth/client";
 import { getPersonalization } from "@/lib/organizer-platform/client";
+import {
+  organizerActiveRoute,
+  organizerNavigation,
+  organizerPaths,
+} from "./organizer-navigation";
+import "./organizer-navigation.css";
 
-const menu = [
-  [LayoutDashboard, "Dashboard", "/dashboard"],
-  [Ticket, "Campanhas", "/dashboard/campanhas"],
-  [Trophy, "Ganhadores", "/dashboard/campanhas/ganhadores"],
-  [ClipboardList, "Pedidos", "/dashboard/pedidos"],
-  [Boxes, "Mini Campanhas", "/dashboard/mini-campanhas"],
-  [Wallet, "Financeiro", "/dashboard/financeiro"],
-  [Users, "CRM Intelligence", "/dashboard/crm"],
-  [Bot, "IA SorteX", "/dashboard/ia"],
-  [Megaphone, "SorteX Ads", "/dashboard/ads"],
-  [Share2, "Afiliados", "/dashboard/afiliados"],
-  [Gift, "Promoções", "/dashboard/promocoes"],
-  [Trophy, "Cotas premiadas", "/dashboard/ganhadores"],
-  [MessageCircle, "Comunicação", "/dashboard/comunicacao"],
-  [Palette, "Personalização", "/dashboard/personalizacao"],
-  [Plug, "Integrações", "/dashboard/integracoes"],
-  [Settings, "Configurações", "/dashboard/configuracoes"],
-  [UserRound, "Perfil", "/perfil"],
-] as const;
+const desktopWidth = "(min-width: 1024px)";
 
-export default function Sidebar() {
+function useOrganizerOnboarding() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
+  return useSearchParams().get("onboarding") === "1" &&
+    pathname === "/dashboard/personalizacao";
+}
+
+export function OrganizerShell({ children }: { children: ReactNode }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const onboarding = useOrganizerOnboarding();
+  const compact = collapsed && !onboarding;
+  return (
+    <div
+      className="sx-organizer-shell min-h-screen bg-zinc-100"
+      data-sidebar-size={compact ? "compact" : "full"}
+    >
+      <PremiumScope className="sxorg-navigation-theme">
+        <Sidebar
+          collapsed={compact}
+          onToggleCollapse={onboarding ? undefined : () => setCollapsed((value) => !value)}
+        />
+      </PremiumScope>
+      <main id="organizer-main" className="sxorg-main">
+        {children}
+      </main>
+    </div>
+  );
+}
+
+export default function Sidebar({
+  collapsed = false,
+  onToggleCollapse,
+}: {
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+}) {
+  const pathname = usePathname();
   const router = useRouter();
-  const onboarding = pathname === "/dashboard/personalizacao" && searchParams.get("onboarding") === "1";
-  const [open, setOpen] = useState(false);
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [profileImage, setProfileImage] = useState(false);
-  const [publicName, setPublicName] = useState("");
+  const onboarding = useOrganizerOnboarding();
+  const user = useAuthorizedUser();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [brand, setBrand] = useState({
+    profileImage: false,
+    publicName: "",
+  });
   const trigger = useRef<HTMLButtonElement>(null);
   const closeControl = useRef<HTMLButtonElement>(null);
+  const activeRoute = organizerActiveRoute(pathname);
+  const activeTab =
+    pathname === organizerPaths.create ? organizerPaths.create : activeRoute;
 
   useEffect(() => {
-    getCurrentUser().then(setUser).catch(() => undefined);
-    getPersonalization().then(({ brand }) => {
-      setProfileImage(Boolean(brand.profileImageUrl));
-      setPublicName(brand.publicName);
-    }).catch(() => undefined);
+    let active = true;
+    getPersonalization()
+      .then(({ brand }) => {
+        if (active)
+          setBrand({
+            profileImage: Boolean(brand.profileImageUrl),
+            publicName: brand.publicName,
+          });
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
-    if (open) closeControl.current?.focus();
-  }, [open]);
+    if (!moreOpen || onboarding) return;
+    const viewport = window.matchMedia(desktopWidth);
+    const savedOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeControl.current?.focus();
+    const onResize = (event: MediaQueryListEvent) => {
+      if (event.matches) setMoreOpen(false);
+    };
+    viewport.addEventListener("change", onResize);
+    return () => {
+      viewport.removeEventListener("change", onResize);
+      document.body.style.overflow = savedOverflow;
+    };
+  }, [moreOpen, onboarding]);
 
-  function closeMenu(restoreFocus = false) {
-    setOpen(false);
+  function closeMore(restoreFocus = false) {
+    setMoreOpen(false);
     if (restoreFocus) trigger.current?.focus();
   }
 
-  const organizerName = publicName || user?.name || "Organizador";
+  function handleMoreKeys(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeMore(true);
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const controls = event.currentTarget.querySelectorAll<HTMLElement>(
+      "a[href], button:not([disabled])",
+    );
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  }
+
+  async function logout() {
+    await authRequest("/api/auth/logout", { method: "POST" }).catch(
+      () => undefined,
+    );
+    router.replace("/login");
+  }
+
+  const name = brand.publicName || user?.name || "Organizador";
+  const CollapseIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
+  const tabPaths: readonly string[] = [
+    organizerPaths.home,
+    organizerPaths.campaigns,
+    organizerPaths.create,
+    organizerPaths.copilot,
+  ];
 
   return (
     <>
-      <button
-        ref={trigger}
-        aria-label="Abrir menu do organizador"
-        aria-controls="organizer-sidebar"
-        aria-expanded={open}
-        onClick={() => setOpen(true)}
-        className="fixed left-4 top-4 z-40 rounded-xl bg-zinc-950 p-3 text-white shadow-lg lg:hidden"
-      >
-        <Menu aria-hidden="true" />
-      </button>
-      {open && (
-        <div
-          aria-hidden="true"
-          onClick={() => closeMenu(true)}
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-        />
-      )}
       <aside
         id="organizer-sidebar"
         aria-label="Painel do organizador"
-        onKeyDown={(event) => {
-          if (event.key === "Escape" && open) {
-            event.stopPropagation();
-            closeMenu(true);
-          }
-        }}
-        className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[calc(100%_-_2rem)] flex-col overflow-y-auto overscroll-contain border-r border-zinc-800 bg-zinc-950 pb-[env(safe-area-inset-bottom)] text-white motion-safe:transition-transform lg:visible lg:translate-x-0 ${open ? "visible translate-x-0" : "invisible -translate-x-full"}`}
+        className="sxorg-rail"
+        data-collapsed={collapsed}
       >
-        <div className="flex shrink-0 items-center justify-between gap-2 px-4 py-4 sm:px-6">
-          <Link href="/dashboard" onClick={() => closeMenu()} className="text-3xl font-black">
-            Sorte<span className="text-violet-500">X</span>
-          </Link>
-          <button
-            ref={closeControl}
-            aria-label="Fechar menu"
-            onClick={() => closeMenu(true)}
-            className="shrink-0 rounded-lg p-2.5 text-zinc-400 lg:hidden"
+        <div className="sxorg-rail-header">
+          <Link
+            href={organizerPaths.home}
+            aria-label="SorteX"
+            className="sxorg-wordmark"
           >
-            <X aria-hidden="true" />
-          </button>
-        </div>
-        <Link
-          href="/perfil"
-          onClick={() => closeMenu()}
-          className="mx-3 flex shrink-0 items-center gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-3 transition hover:border-violet-500 hover:bg-zinc-800 sm:mx-4 sm:p-4"
-        >
-          {profileImage && user ? (
-            <Image src={`/api/brand-assets/${user.id}/profile`} width={48} height={48} unoptimized alt="Foto do organizador" className="h-12 w-12 shrink-0 rounded-full border border-zinc-700 bg-white object-cover" />
-          ) : (
-            <span aria-hidden="true" className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-violet-600 text-lg font-black">
-              {organizerName.trim().charAt(0).toUpperCase() || "O"}
-            </span>
+            <span className="sxorg-wordmark-icon" aria-hidden="true">X</span>
+            <span className="sxorg-rail-label" aria-hidden="true">Sorte<span>X</span></span>
+          </Link>
+          {onToggleCollapse && (
+            <button
+              type="button"
+              className="sxorg-icon-button"
+              aria-label={collapsed ? "Expandir menu do organizador" : "Recolher menu do organizador"}
+              aria-expanded={!collapsed}
+              aria-controls="organizer-sidebar-content"
+              onClick={onToggleCollapse}
+            >
+              <CollapseIcon size={19} aria-hidden="true" />
+            </button>
           )}
-          <span className="min-w-0">
-            <span className="block text-xs text-zinc-400">Bem-vindo,</span>
-            <span className="mt-0.5 block font-bold [overflow-wrap:anywhere]">{organizerName}</span>
-            {user?.verified && <span className="mt-1 block text-[10px] font-bold text-green-400">Organizador Verificado</span>}
-          </span>
-        </Link>
-        {onboarding ? (
-          <div className="mx-4 mt-4 rounded-2xl border border-violet-500/30 bg-violet-500/10 p-4">
-            <p className="font-bold">Configuração inicial</p>
-            <p className="mt-2 text-sm text-zinc-400">Salve as configurações ou pule por agora para liberar a navegação do painel.</p>
-            <button onClick={async () => {
-              await authRequest("/api/auth/logout", { method: "POST" }).catch(() => undefined);
-              router.replace("/login");
-            }} className="mt-5 w-full rounded-xl border border-zinc-700 px-4 py-3 text-sm font-bold">Sair da conta</button>
-          </div>
-        ) : (
-          <nav aria-label="Menu do organizador" className="space-y-1 px-3 py-4">
-            {menu.map(([Icon, label, href]) => {
-              const active = isActiveRoute(pathname, href);
-              return (
-                <Link
-                  key={label}
-                  href={href}
-                  onClick={() => closeMenu()}
-                  aria-current={active ? "page" : undefined}
-                  className={`flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition sm:px-4 ${active ? "bg-violet-600 text-white" : "text-zinc-300 hover:bg-zinc-800 hover:text-white"}`}
-                >
-                  <Icon size={19} aria-hidden="true" className="shrink-0" />
-                  <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-        )}
+        </div>
+        <div id="organizer-sidebar-content">
+          <Link
+            href={organizerPaths.profile}
+            className="sxorg-profile"
+            aria-label={`Abrir perfil de ${name}`}
+            title={collapsed ? name : undefined}
+          >
+            {brand.profileImage && user ? (
+              <Image
+                src={`/api/brand-assets/${user.id}/profile`}
+                width={40}
+                height={40}
+                unoptimized
+                alt=""
+                className="sxorg-avatar"
+              />
+            ) : (
+              <span aria-hidden="true" className="sxorg-avatar">
+                {name.trim().charAt(0).toUpperCase() || "O"}
+              </span>
+            )}
+            <span className="sxorg-profile-details sxorg-rail-label">
+              <span>Organizador</span>
+              <strong>{name}</strong>
+              {user?.verified && <small>Organizador Verificado</small>}
+            </span>
+          </Link>
+          {onboarding ? (
+            <div className="sxorg-setup sxorg-rail-label">
+              <SetupNotice onLogout={logout} />
+            </div>
+          ) : (
+            <ModuleLinks activeRoute={activeRoute} compact={collapsed} />
+          )}
+        </div>
       </aside>
+      {onboarding ? (
+        <div className="sxorg-mobile-setup">
+          <SetupNotice onLogout={logout} />
+        </div>
+      ) : (
+        <nav
+          aria-label="Navegação rápida do organizador"
+          className="sxorg-mobile-tabs"
+        >
+          <TabLink href={organizerPaths.home} name="Início" icon={House} active={activeTab === organizerPaths.home} />
+          <TabLink href={organizerPaths.campaigns} name="Campanhas" icon={Ticket} active={activeTab === organizerPaths.campaigns} />
+          <TabLink href={organizerPaths.create} name="Criar" icon={Plus} active={activeTab === organizerPaths.create} create />
+          <TabLink href={organizerPaths.copilot} name="Copilot" icon={Sparkles} active={activeTab === organizerPaths.copilot} />
+          <button
+            ref={trigger}
+            type="button"
+            className="sxorg-tab"
+            aria-haspopup="dialog"
+            aria-expanded={moreOpen}
+            aria-controls={moreOpen ? "organizer-more-menu" : undefined}
+            data-current={Boolean(activeRoute) && !tabPaths.includes(activeTab)}
+            onClick={() => setMoreOpen(true)}
+          >
+            <Ellipsis size={20} aria-hidden="true" />
+            <span>Mais</span>
+          </button>
+        </nav>
+      )}
+      {!onboarding && moreOpen && (
+        <div className="sxorg-more-overlay">
+          <div aria-hidden="true" className="sxorg-more-scrim" onClick={() => closeMore(true)} />
+          <section
+            id="organizer-more-menu"
+            aria-labelledby="organizer-more-title"
+            aria-modal="true"
+            role="dialog"
+            className="sxorg-more"
+            onKeyDown={handleMoreKeys}
+          >
+            <div className="sxorg-more-heading">
+              <h2 id="organizer-more-title">Mais opções do organizador</h2>
+              <button
+                type="button"
+                ref={closeControl}
+                className="sxorg-icon-button"
+                aria-label="Fechar menu"
+                onClick={() => closeMore(true)}
+              >
+                <X size={20} aria-hidden="true" />
+              </button>
+            </div>
+            <ModuleLinks activeRoute={activeRoute} onNavigate={() => closeMore()} />
+          </section>
+        </div>
+      )}
     </>
   );
 }
 
-function isActiveRoute(pathname: string, href: string) {
-  if (href === "/dashboard/campanhas" && pathname.startsWith("/dashboard/campanhas/ganhadores")) return false;
-  return href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+function SetupNotice({ onLogout }: { onLogout: () => Promise<void> }) {
+  return (
+    <>
+      <p className="sxorg-setup-title">Configuração inicial</p>
+      <p>Salve as configurações ou pule por agora para liberar a navegação do painel.</p>
+      <button type="button" onClick={() => void onLogout()}>Sair da conta</button>
+    </>
+  );
+}
+
+function ModuleLinks({
+  activeRoute,
+  compact = false,
+  onNavigate,
+}: {
+  activeRoute: string;
+  compact?: boolean;
+  onNavigate?: () => void;
+}) {
+  return (
+    <nav
+      aria-label="Menu do organizador"
+      className="sxorg-module-nav"
+      data-testid="organizer-module-navigation"
+    >
+      {organizerNavigation.map(({ id, label, items }) => (
+        <div key={id} className="sxorg-module-group">
+          <p className="sxorg-group-label" aria-hidden="true">{label}</p>
+          <ul aria-label={label}>
+            {items.map(([Icon, name, href]) => (
+              <li key={href}>
+                <Link
+                  href={href}
+                  onClick={onNavigate}
+                  aria-label={name}
+                  title={compact ? name : undefined}
+                  aria-current={activeRoute === href ? "page" : undefined}
+                  className="sxorg-module-link"
+                >
+                  <Icon size={18} aria-hidden="true" />
+                  <span className="sxorg-rail-label">{name}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+function TabLink({
+  href,
+  name,
+  icon: Icon,
+  active,
+  create = false,
+}: {
+  href: string;
+  name: string;
+  icon: typeof House;
+  active: boolean;
+  create?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-label={create ? "Criar campanha" : undefined}
+      aria-current={active ? "page" : undefined}
+      className={`sxorg-tab${create ? " sxorg-tab-create" : ""}`}
+    >
+      <span className="sxorg-tab-icon">
+        <Icon size={20} aria-hidden="true" />
+      </span>
+      <span>{name}</span>
+    </Link>
+  );
 }

@@ -2,7 +2,7 @@
 
 Gerado por `node apps/web/qa/inventory-web.mjs`. Verificação com `--check`. O relatório orienta a rodada visual, não comprova execução.
 
-**109 páginas, 90 handlers (88 em /api), 8 layouts, 211 arquivos de componentes.**
+**109 páginas, 90 handlers (88 em /api), 8 layouts, 212 arquivos de componentes.**
 Padrões parametrizados: 17 páginas, 50 handlers; destes, 16 catch-all. Grupos reais no inventário: 0.
 Páginas por área: Acesso 13; Admin 26; Afiliado 3; Campanha e prova pública 4; Comprador 13; Conta 2; Diagnóstico 1; Equipe · entrada 2; Institucional/público a revisar 5; Organizador 39; Prévia 1.
 
@@ -12,7 +12,7 @@ Controle de revisão dos gates: alterações nestas fontes exigem rever a interp
 - [next.config.ts](../../apps/web/next.config.ts) · `47f3597a8e3f`
 - [layout.tsx](../../apps/web/app/admin/layout.tsx) · `1f3fd5ec7246`
 - [layout.tsx](../../apps/web/app/comprador/layout.tsx) · `ef68cad9cf95`
-- [layout.tsx](../../apps/web/app/dashboard/layout.tsx) · `5a46851ab558`
+- [layout.tsx](../../apps/web/app/dashboard/layout.tsx) · `b7f943ecf21b`
 - [layout.tsx](../../apps/web/app/organizador/layout.tsx) · `8f3335a8a678`
 - [RoleGate.tsx](../../apps/web/components/auth/RoleGate.tsx) · `daeb30542d0f`
 - [OrganizerApprovalGate.tsx](../../apps/web/components/organizador/OrganizerApprovalGate.tsx) · `5ea877c2df12`
@@ -108,7 +108,7 @@ Controle de revisão dos gates: alterações nestas fontes exigem rever a interp
 | [/dashboard/integracoes](../../apps/web/app/dashboard/integracoes/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [IntegrationsCenter](../../apps/web/components/organizer-platform/IntegrationsCenter.tsx) | [IntegrationsCenter](../../apps/web/components/organizer-platform/IntegrationsCenter.tsx) | ? / ? / não rodado |
 | [/dashboard/mini-campanhas/\[id\]](../../apps/web/app/dashboard/mini-campanhas/%5Bid%5D/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | — | [page](../../apps/web/app/dashboard/mini-campanhas/%5Bid%5D/page.tsx) | ? / ? / não rodado |
 | [/dashboard/mini-campanhas](../../apps/web/app/dashboard/mini-campanhas/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | — | [page](../../apps/web/app/dashboard/mini-campanhas/page.tsx) | ? / ? / não rodado |
-| [/dashboard](../../apps/web/app/dashboard/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [OrganizerDashboard](../../apps/web/components/dashboard/OrganizerDashboard.tsx) | [DashboardPeriodMetrics](../../apps/web/components/dashboard/DashboardPeriodMetrics.tsx) | ? / ? / não rodado |
+| [/dashboard](../../apps/web/app/dashboard/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [OrganizerDashboard](../../apps/web/components/dashboard/OrganizerDashboard.tsx), [PremiumScope](../../apps/web/components/premium/PremiumScope.tsx) | [DashboardPeriodMetrics](../../apps/web/components/dashboard/DashboardPeriodMetrics.tsx) | ? / ? / não rodado |
 | [/dashboard/pedidos/\[id\]](../../apps/web/app/dashboard/pedidos/%5Bid%5D/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | — | — | ? / ? / não rodado |
 | [/dashboard/pedidos](../../apps/web/app/dashboard/pedidos/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | — | [page](../../apps/web/app/dashboard/pedidos/page.tsx) | ? / ? / não rodado |
 | [/dashboard/personalizacao/dominio](../../apps/web/app/dashboard/personalizacao/dominio/page.tsx) | Organizador · Proxy; ORGANIZER; onboarding, aprovação e aviso legal | — | [PersonalizationCenter](../../apps/web/components/organizer-platform/PersonalizationCenter.tsx) | [PersonalizationCenter](../../apps/web/components/organizer-platform/PersonalizationCenter.tsx) | ? / ? / não rodado |
@@ -387,7 +387,7 @@ O grafo segue imports estáticos de valor e reexports locais de App Router e com
 | [components/dashboard/OrganizerDashboard.tsx](../../apps/web/components/dashboard/OrganizerDashboard.tsx) | sim | — | — | — | `Link` |
 | [components/dashboard/RecentCampaigns.tsx](../../apps/web/components/dashboard/RecentCampaigns.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/dashboard/RevenueCard.tsx](../../apps/web/components/dashboard/RevenueCard.tsx) | não encontrado estaticamente | — | — | — | — |
-| [components/dashboard/Sidebar.tsx](../../apps/web/components/dashboard/Sidebar.tsx) | sim | — | — | — | `Link`, `button` |
+| [components/dashboard/Sidebar.tsx](../../apps/web/components/dashboard/Sidebar.tsx) | sim | — | — | `section` | `Link`, `button` |
 | [components/dashboard/SorteXCopilot.tsx](../../apps/web/components/dashboard/SorteXCopilot.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/dashboard/StatsCards.tsx](../../apps/web/components/dashboard/StatsCards.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/dashboard/StatsGrid.tsx](../../apps/web/components/dashboard/StatsGrid.tsx) | não encontrado estaticamente | — | — | — | — |
@@ -437,6 +437,7 @@ O grafo segue imports estáticos de valor e reexports locais de App Router e com
 | [components/dashboard/finance/RevenueGoal.tsx](../../apps/web/components/dashboard/finance/RevenueGoal.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/dashboard/finance/RevenueHistory.tsx](../../apps/web/components/dashboard/finance/RevenueHistory.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/dashboard/financialcard.tsx](../../apps/web/components/dashboard/financialcard.tsx) | não encontrado estaticamente | — | — | — | — |
+| [components/dashboard/organizer-navigation.ts](../../apps/web/components/dashboard/organizer-navigation.ts) | sim | — | — | — | — |
 | [components/dashboard/recentsales.tsx](../../apps/web/components/dashboard/recentsales.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/dashboard/saleschart.tsx](../../apps/web/components/dashboard/saleschart.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/dashboard/statistics.tsx](../../apps/web/components/dashboard/statistics.tsx) | não encontrado estaticamente | — | — | — | — |
@@ -490,7 +491,7 @@ O grafo segue imports estáticos de valor e reexports locais de App Router e com
 | [components/payments/MercadoPagoCardBrick.tsx](../../apps/web/components/payments/MercadoPagoCardBrick.tsx) | sim | — | — | — | — |
 | [components/payments/OrganizerPaymentStats.tsx](../../apps/web/components/payments/OrganizerPaymentStats.tsx) | não encontrado estaticamente | — | — | — | — |
 | [components/payments/PixPaymentView.tsx](../../apps/web/components/payments/PixPaymentView.tsx) | sim | — | — | — | `Button`, `a` |
-| [components/premium/PremiumScope.tsx](../../apps/web/components/premium/PremiumScope.tsx) | não encontrado estaticamente | — | — | — | — |
+| [components/premium/PremiumScope.tsx](../../apps/web/components/premium/PremiumScope.tsx) | sim | — | — | — | — |
 | [components/prizes/PrizeTicketsCenter.tsx](../../apps/web/components/prizes/PrizeTicketsCenter.tsx) | sim | — | — | `Drawer`, `MaterialDrawer`, `aside`, `section` | `Link`, `Select`, `button`, `input`, `select`, `textarea` |
 | [components/public/InstitutionalBackButton.tsx](../../apps/web/components/public/InstitutionalBackButton.tsx) | sim | — | — | — | `button` |
 | [components/public/OrganizerPublicHub.tsx](../../apps/web/components/public/OrganizerPublicHub.tsx) | sim | — | — | — | `Link`, `a`, `button`, `input`, `select` |
@@ -575,3 +576,4 @@ Listado por arquivo, sem executar testes e sem inferir cobertura de uma rota pel
 - [e2e-local/buyer-coupon-journey.spec.ts](../../apps/web/e2e-local/buyer-coupon-journey.spec.ts)
 - [e2e-local/buyer-purchase-history.spec.ts](../../apps/web/e2e-local/buyer-purchase-history.spec.ts)
 - [e2e-local/buyer-sales-window.spec.ts](../../apps/web/e2e-local/buyer-sales-window.spec.ts)
+- [e2e-local/run-organizer-dashboard-premium.mjs](../../apps/web/e2e-local/run-organizer-dashboard-premium.mjs)

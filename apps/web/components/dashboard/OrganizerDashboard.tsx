@@ -6,7 +6,10 @@ import {
   BarChart3,
   Bot,
   CircleDollarSign,
+  ArrowUpRight,
   CreditCard,
+  ListChecks,
+  Radio,
   Gift,
   LoaderCircle,
   Megaphone,
@@ -29,6 +32,7 @@ import Image from "next/image";
 import { getDashboard, type DashboardResponse } from "@/lib/api/dashboard";
 import { useAuthorizedUser } from "@/components/auth/RoleGate";
 import DashboardPeriodMetrics from "./DashboardPeriodMetrics";
+import styles from "./organizer-dashboard-premium.module.css";
 import {
   dashboard as getCrmDashboard,
   type CrmDashboard,
@@ -96,15 +100,18 @@ function DashboardForAccount() {
   );
   if (loading)
     return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <LoaderCircle className="animate-spin text-violet-700" />
+      <div className={styles.dashboard}>
+        <div className={styles.loading} role="status">
+          <LoaderCircle aria-hidden="true" />
+          Carregando painel…
+        </div>
       </div>
     );
   return (
-    <div className="space-y-7">
+    <div className={styles.dashboard}>
       {organizerProfile &&
         organizerProfile.verificationStatus !== "VERIFIED" && (
-          <section className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-950 sm:flex sm:items-center sm:justify-between sm:gap-5">
+          <section className={styles.approval}>
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="font-black">
@@ -114,12 +121,12 @@ function DashboardForAccount() {
                   status={organizerProfile.verificationStatus}
                 />
               </div>
-              <p className="mt-1 text-sm text-amber-900">
+              <p className="mt-1 text-sm">
                 Você já pode configurar sua conta e preparar suas campanhas.
                 Publicações e recebimentos reais serão liberados após a
                 aprovação.
               </p>
-              <p className="mt-1 text-xs text-amber-700">
+              <p className="mt-1 text-xs">
                 Última atualização:{" "}
                 {new Date(organizerProfile.updatedAt).toLocaleString("pt-BR")}
               </p>
@@ -127,160 +134,178 @@ function DashboardForAccount() {
             <div className="mt-4 flex shrink-0 flex-wrap gap-2 sm:mt-0">
               <Link
                 href="/organizador/verificacao"
-                className="rounded-xl bg-amber-900 px-4 py-2.5 text-sm font-bold text-white"
+                className={styles.primary}
               >
                 Acompanhar análise
               </Link>
               <Link
                 href="/organizador/verificacao?edit=1"
-                className="rounded-xl border border-amber-300 bg-white px-4 py-2.5 text-sm font-bold"
+                className={styles.actionButton}
               >
                 Revisar cadastro
               </Link>
             </div>
           </section>
         )}
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-4">
+      <header className={styles.hero}>
+        <div className={styles.heroIdentity}>
           {identity?.brand.profileImageUrl ? (
             <Image
               src={`/api/brand-assets/${identity.id}/profile`}
-              width={64}
-              height={64}
+              width={56}
+              height={56}
               unoptimized
               alt="Foto do organizador"
-              className="h-16 w-16 shrink-0 rounded-full object-cover"
+              className={styles.avatar}
             />
           ) : (
-            <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full bg-violet-700 text-xl font-black text-white">
+            <span aria-hidden="true" className={styles.avatar}>
               {(identity?.brand.publicName || identity?.name || "O")
                 .slice(0, 2)
                 .toUpperCase()}
             </span>
           )}
-          <div className="min-w-0">
-            <p className="text-sm font-bold uppercase tracking-wider text-violet-600">
-              Visão geral
-            </p>
-            <h1 className="mt-1 truncate text-2xl font-black sm:text-3xl">
+          <div>
+            <p className={styles.eyebrow}>Visão geral</p>
+            <h1 className={styles.title}>
               Bem-vindo,{" "}
-              {
-                (
-                  identity?.brand.publicName ||
-                  identity?.name ||
-                  "Organizador"
-                ).split(" ")[0]
-              }{" "}
-              👋
+              {(identity?.brand.publicName || identity?.name || "Organizador").split(" ")[0]}
             </h1>
-            <p className="mt-1 text-zinc-500">
+            <p className={styles.muted}>
               Acompanhe campanhas, clientes e oportunidades em um só lugar.
             </p>
           </div>
         </div>
-        <Link
-          href="/dashboard/campanhas/nova"
-          className="inline-flex items-center gap-2 rounded-2xl bg-violet-700 px-5 py-3 font-bold text-white"
-        >
-          <Plus size={18} /> Criar campanha
+        <Link href="/dashboard/campanhas/nova" className={styles.primary}>
+          <Plus size={19} aria-hidden="true" /> Criar campanha
         </Link>
       </header>
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <Metric
-          title="Saldo arrecadado"
-          value={money(dashboard?.grossRevenue ?? totals.revenue)}
-          icon={CircleDollarSign}
-          featured
-        />
-        <Metric
-          title="Recebido hoje"
-          value={money(dashboard?.revenueToday ?? 0)}
-          icon={TrendingUp}
-        />
-        <Metric
-          title="Receita do mês"
-          value={money(dashboard?.revenueMonth ?? totals.revenue)}
-          icon={BarChart3}
-        />
-        <Metric
-          title="Campanhas ativas"
-          value={String(dashboard?.activeCampaigns ?? published.length)}
-          icon={Ticket}
-        />
-        <Metric
-          title="Cotas vendidas"
-          value={(dashboard?.soldTickets ?? totals.sold).toLocaleString(
-            "pt-BR",
-          )}
-          icon={Gift}
-        />
+      <div className={styles.topGrid}>
+        <DashboardPeriodMetrics snapshot={snapshot} renderedAt={renderedAt} />
+        <section className={styles.panel} aria-labelledby="dashboard-quick-actions">
+          <header className={styles.panelHeading}>
+            <div>
+              <p className={styles.eyebrow}>Sua operação</p>
+              <h2 id="dashboard-quick-actions">Ações rápidas</h2>
+            </div>
+            <span className={styles.panelIcon}><ListChecks size={20} aria-hidden="true" /></span>
+          </header>
+          <div className={styles.quickActions}>
+            {[
+              { key: "create", icon: Plus, label: "Criar campanha", href: "/dashboard/campanhas/nova", hint: "Abrir editor" },
+              { key: "promotion", icon: Gift, label: "Criar promoção", href: "/dashboard/promocoes", hint: "Gerenciar benefícios" },
+              { key: "coupon", icon: Ticket, label: "Criar cupom", href: "/dashboard/promocoes", hint: "Consultar cupons" },
+              { key: "communication", icon: Megaphone, label: "Enviar WhatsApp", href: "/dashboard/comunicacao", hint: "Ver canais e disponibilidade" },
+              { key: "ads", icon: Sparkles, label: "Impulsionar", href: `/dashboard/ads?action=create${published[0] ? `&campaignId=${published[0].id}` : ""}`, hint: "Ads · somente leitura" },
+              { key: "reports", icon: BarChart3, label: "Relatórios", href: "/dashboard/financeiro", hint: "Abrir financeiro" },
+            ].map(({ key, icon: Icon, label, href, hint }) => (
+              <Link
+                key={key}
+                href={href}
+                className={styles.quickAction}
+                aria-label={label}
+                aria-describedby={`dashboard-action-${key}`}
+              >
+                <span className={styles.quickIcon}><Icon size={18} aria-hidden="true" /></span>
+                <span>
+                  <strong>{label}</strong>
+                  <small id={`dashboard-action-${key}`}>{hint}</small>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      <section aria-labelledby="dashboard-overview" className={styles.overview}>
+        <div className={styles.panelHeading}>
+          <div>
+            <p className={styles.eyebrow}>Conta do organizador</p>
+            <h2 id="dashboard-overview">Resumo da operação</h2>
+          </div>
+          <p className={styles.muted}>Hoje e mês seguem o horário do servidor.</p>
+        </div>
+        <div className={styles.metricGrid}>
+          <Metric title="Arrecadação bruta" value={money(dashboard?.grossRevenue ?? totals.revenue)} icon={CircleDollarSign} detail="Não é saldo disponível" />
+          <Metric title="Recebido hoje" value={dashboard ? money(dashboard.revenueToday) : "—"} icon={TrendingUp} detail="Resumo diário do servidor" />
+          <Metric title="Receita do mês" value={dashboard ? money(dashboard.revenueMonth) : "—"} icon={BarChart3} detail="Mês-calendário do servidor" />
+          <Metric title="Campanhas ativas" value={String(dashboard?.activeCampaigns ?? published.length)} icon={Ticket} />
+          <Metric title="Cotas vendidas" value={(dashboard?.soldTickets ?? totals.sold).toLocaleString("pt-BR")} icon={Gift} />
+        </div>
       </section>
       {dashboardError && (
         <p
           role="alert"
-          className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          className={styles.notice}
         >
           {dashboardError} Os demais dados do painel continuam disponíveis.
         </p>
       )}
 
-      <section className="grid gap-5 xl:grid-cols-[1.7fr_1fr]">
-        <DashboardPeriodMetrics snapshot={snapshot} renderedAt={renderedAt} />
-        <div className="space-y-5">
-          <div className="rounded-3xl bg-zinc-950 p-6 text-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-zinc-400">
-                  Integrações de pagamento
-                </p>
-                <h2 className="mt-1 text-xl font-black">Gateways</h2>
-              </div>
-              <CreditCard className="text-violet-400" />
+      <div className={styles.operationalGrid}>
+        <section className={styles.panel}>
+          <header className={styles.panelHeading}>
+            <div>
+              <p className={styles.eyebrow}>Clientes e relacionamento</p>
+              <h2>CRM Inteligente</h2>
             </div>
-            <div className="mt-5 flex justify-between border-t border-zinc-800 pt-4 text-sm">
-              <span>Disponibilidade</span>
-              <strong>Conforme configuração</strong>
-            </div>
-            <Link
-              href="/dashboard/integracoes"
-              className="mt-5 block rounded-xl bg-white py-3 text-center text-sm font-bold text-zinc-950"
-            >
-              Conferir integrações
-            </Link>
+            <span className={styles.panelIcon}><Users size={20} aria-hidden="true" /></span>
+          </header>
+          <dl className={styles.crmMetrics}>
+            <SmallMetric label="Em risco" value={crm?.abandoned ?? "—"} />
+            <SmallMetric label="VIP" value={crm?.vip ?? "—"} />
+            <SmallMetric label="Leads" value={crm?.leads ?? "—"} />
+          </dl>
+          <div className={styles.links}>
+            <ActionButton
+              label="Recuperar clientes"
+              href="/dashboard/crm/contatos?status=INACTIVE&origin=dashboard"
+            />
+            <ActionButton
+              label="Falar com VIPs"
+              href="/dashboard/comunicacao?tab=new&audience=VIP&origin=dashboard"
+            />
+            <ActionButton
+              label="Boas-vindas"
+              href="/dashboard/crm/automacoes?template=welcome&origin=dashboard"
+            />
           </div>
-          <div className="rounded-3xl border bg-white p-6">
-            <h2 className="text-xl font-black">CRM Inteligente</h2>
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <SmallMetric label="Em risco" value={crm?.abandoned ?? "—"} />
-              <SmallMetric label="VIP" value={crm?.vip ?? "—"} />
-              <SmallMetric label="Leads" value={crm?.leads ?? "—"} />
+        </section>
+        <section className={styles.panel}>
+          <header className={styles.panelHeading}>
+            <div>
+              <p className={styles.eyebrow}>Integrações de pagamento</p>
+              <h2>Gateways</h2>
             </div>
-            <div className="mt-4 grid gap-2">
-              <ActionButton
-                label="Recuperar clientes"
-                href="/dashboard/crm/contatos?status=INACTIVE&origin=dashboard"
-              />
-              <ActionButton
-                label="Falar com VIPs"
-                href="/dashboard/comunicacao?tab=new&audience=VIP&origin=dashboard"
-              />
-              <ActionButton
-                label="Boas-vindas"
-                href="/dashboard/crm/automacoes?template=welcome&origin=dashboard"
-              />
+            <span className={styles.panelIcon}><CreditCard size={20} aria-hidden="true" /></span>
+          </header>
+          <p className={styles.muted}>A disponibilidade depende da configuração de cada provedor.</p>
+          <ActionButton label="Conferir integrações" href="/dashboard/integracoes" />
+        </section>
+        <section className={styles.panel}>
+          <header className={styles.panelHeading}>
+            <div>
+              <p className={styles.eyebrow}>Histórico da operação</p>
+              <h2>Atividades recentes</h2>
             </div>
-          </div>
-        </div>
-      </section>
+            <span className={styles.panelIcon}><Radio size={20} aria-hidden="true" /></span>
+          </header>
+          <Empty text="A linha do tempo ainda não está disponível neste painel." />
+        </section>
+      </div>
 
-      <section className="grid gap-5 xl:grid-cols-[1fr_1.7fr]">
-        <div className="rounded-3xl bg-gradient-to-br from-violet-800 to-fuchsia-700 p-6 text-white">
-          <div className="flex items-center gap-3">
-            <Bot />
-            <h2 className="text-xl font-black">Painel IA SorteX</h2>
-          </div>
-          <div className="mt-5 space-y-3">
+      <div className={styles.detailGrid}>
+        <section className={styles.panel}>
+          <header className={styles.panelHeading}>
+            <div>
+              <p className={styles.eyebrow}>Foco e crescimento</p>
+              <h2>Painel IA SorteX</h2>
+            </div>
+            <span className={styles.panelIcon}><Bot size={20} aria-hidden="true" /></span>
+          </header>
+          <p className={styles.muted}>Atalhos para análises e sugestões. Nenhuma recomendação é gerada neste painel.</p>
+          <div className={styles.links}>
             <Insight
               title="Melhor horário para vender"
               text="Disponível após reunir histórico suficiente de vendas."
@@ -310,18 +335,18 @@ function DashboardForAccount() {
               href="/dashboard/ia?analysis=revenue-forecast&origin=dashboard"
             />
           </div>
-        </div>
-        <div className="rounded-3xl border bg-white p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-black">Campanhas ativas</h2>
-            <Link
-              href="/dashboard/campanhas?status=PUBLISHED"
-              className="text-sm font-bold text-violet-700"
-            >
-              Ver todas
+        </section>
+        <section className={styles.panel}>
+          <header className={styles.panelHeading}>
+            <div>
+              <p className={styles.eyebrow}>Gestão de campanhas</p>
+              <h2>Campanhas ativas</h2>
+            </div>
+            <Link href="/dashboard/campanhas?status=PUBLISHED" className={styles.textLink}>
+              Ver todas <ArrowUpRight aria-hidden="true" size={16} />
             </Link>
-          </div>
-          <div className="mt-5 space-y-4">
+          </header>
+          <div className={styles.links}>
             {published.map((campaign) => (
               <CampaignRow
                 key={campaign.id}
@@ -331,122 +356,61 @@ function DashboardForAccount() {
             ))}
             {!published.length && <Empty text="Nenhuma campanha publicada." />}
           </div>
-        </div>
-      </section>
-
-      <section className="grid gap-5 lg:grid-cols-2">
-        <div className="rounded-3xl border bg-white p-6">
-          <h2 className="text-xl font-black">Atividades recentes</h2>
-          <div className="mt-5">
-            <Empty text="As próximas compras, PIX aprovados, afiliados e impulsionamentos aparecerão aqui." />
-          </div>
-        </div>
-        <div className="rounded-3xl border bg-white p-6">
-          <h2 className="text-xl font-black">Ações rápidas</h2>
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {[
-              [Plus, "Criar campanha", "/dashboard/campanhas/nova"],
-              [Gift, "Criar promoção", "/dashboard/promocoes"],
-              [Megaphone, "Enviar WhatsApp", "/dashboard/comunicacao"],
-              [Ticket, "Criar cupom", "/dashboard/promocoes"],
-              [
-                Sparkles,
-                "Impulsionar",
-                `/dashboard/ads?action=create${published[0] ? `&campaignId=${published[0].id}` : ""}`,
-              ],
-              [BarChart3, "Relatórios", "/dashboard/financeiro"],
-            ].map(([Icon, label, href]) => (
-              <Link
-                key={String(label)}
-                href={String(href)}
-                className="rounded-2xl bg-zinc-50 p-4 text-sm font-bold hover:bg-violet-50 hover:text-violet-700"
-              >
-                <Icon size={20} className="mb-3" />
-                {String(label)}
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
+        </section>
+      </div>
     </div>
   );
 }
 
-function Metric({
-  title,
-  value,
-  icon: Icon,
-  featured = false,
-}: {
+function Metric({ title, value, icon: Icon, detail }: {
   title: string;
   value: string;
   icon: typeof Users;
-  featured?: boolean;
+  detail?: string;
 }) {
   return (
-    <div
-      className={`rounded-3xl p-5 shadow-sm ${featured ? "bg-gradient-to-br from-violet-700 to-purple-600 text-white sm:col-span-2 xl:col-span-1" : "border bg-white"}`}
-    >
-      <Icon className={featured ? "text-violet-200" : "text-violet-700"} />
-      <p
-        className={`mt-5 text-sm ${featured ? "text-violet-100" : "text-zinc-500"}`}
-      >
-        {title}
-      </p>
-      <p className="mt-1 text-2xl font-black">{value}</p>
+    <div className={styles.metricCard}>
+      <span className={styles.panelIcon}><Icon size={18} aria-hidden="true" /></span>
+      <dl>
+        <dt>{title}</dt>
+        <dd>{value}</dd>
+        {detail && <dd className={styles.metricDetail}>{detail}</dd>}
+      </dl>
     </div>
   );
 }
-function SmallMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number;
-}) {
+function SmallMetric({ label, value }: {label: string; value: string | number}) {
   return (
-    <div className="rounded-2xl bg-zinc-50 p-3">
-      <p className="text-xs text-zinc-500">{label}</p>
-      <p className="mt-1 font-black">{value}</p>
+    <div className={styles.smallMetric}>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
     </div>
   );
 }
 function ActionButton({ label, href }: { label: string; href: string }) {
   return (
-    <Link
-      href={href}
-      className="rounded-xl border px-3 py-2 text-left text-sm font-bold hover:border-violet-300 hover:bg-violet-50"
-    >
-      {label}
+    <Link href={href} className={styles.actionButton}>
+      {label}<ArrowUpRight aria-hidden="true" size={16} />
     </Link>
   );
 }
-function Insight({
-  title,
-  text,
-  href,
-}: {
-  title: string;
-  text: string;
-  href: string;
-}) {
+function Insight({ title, text, href }: {title: string; text: string; href: string}) {
   return (
     <Link
       href={href}
       aria-label={`${title}: abrir análise na IA SorteX`}
-      className="block rounded-2xl bg-white/10 p-4 outline-none transition hover:bg-white/20 active:scale-[.99] focus-visible:ring-2 focus-visible:ring-white"
+      className={styles.insight}
     >
-      <p className="font-bold">{title}</p>
-      <p className="mt-1 text-sm text-violet-100">{text}</p>
+      <span>
+        <strong>{title}</strong>
+        <small>{text}</small>
+      </span>
+      <ArrowUpRight aria-hidden="true" size={18} />
     </Link>
   );
 }
 function Empty({ text }: { text: string }) {
-  return (
-    <div className="rounded-2xl bg-zinc-50 p-6 text-center text-sm text-zinc-500">
-      {text}
-    </div>
-  );
+  return <p className={styles.empty}>{text}</p>;
 }
 function CampaignRow({
   campaign,
@@ -467,7 +431,7 @@ function CampaignRow({
       )
     : null;
   return (
-    <div className="grid gap-4 rounded-2xl border p-4 sm:grid-cols-[72px_1fr_auto] sm:items-center">
+    <div className={styles.campaign}>
       {campaign.coverImageUrl ? (
         <Image
           src={versionedCoverUrl(ownedMediaUrl(campaign.coverImageUrl), campaign.coverImageRevision)}
@@ -475,29 +439,24 @@ function CampaignRow({
           width={64}
           height={64}
           unoptimized
-          className="h-16 w-16 rounded-xl object-cover"
+          className={styles.campaignImage}
         />
       ) : (
-        <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-violet-100">
-          <Ticket className="text-violet-500" />
+        <div className={styles.campaignImage}>
+          <Ticket aria-hidden="true" />
         </div>
       )}
-      <div>
-        <h3 className="font-black">{campaign.title}</h3>
-        <p className="mt-1 text-xs text-zinc-500">
+      <div className={styles.campaignDetails}>
+        <h3>{campaign.title}</h3>
+        <p className={styles.muted}>
           {campaign.soldNumbers} cotas vendidas · {money(campaign.grossRevenue)}{" "}
           · {days === null ? "Sem data" : `${days} dias restantes`}
         </p>
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-100">
-          <div
-            className="h-full bg-violet-600"
-            style={{ width: `${percent}%` }}
-          />
-        </div>
+        <progress aria-label="Percentual de cotas vendidas" value={percent} max={100} className={styles.progress} />
       </div>
       <Link
         href={`/dashboard/campanhas/${campaign.id}/editar`}
-        className="rounded-xl bg-zinc-950 px-4 py-2 text-center text-xs font-bold text-white"
+        className={styles.actionButton}
       >
         Gerenciar
       </Link>

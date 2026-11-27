@@ -1,5 +1,6 @@
+import PremiumScope from "@/components/premium/PremiumScope";
 import OrganizerDashboard from "@/components/dashboard/OrganizerDashboard";
 
 export default function DashboardPage() {
-  return <OrganizerDashboard />;
+  return <PremiumScope><OrganizerDashboard /></PremiumScope>;
 }
