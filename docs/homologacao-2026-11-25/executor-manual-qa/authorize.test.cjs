@@ -7,7 +7,7 @@ const { pins } = require('../../../services/api/scripts/release-draw-window-qa.c
 
 const repository = 'blackwolfoficiall-glitch/SorteX';
 const branch = 'homologacao/web-ios-integrada';
-const path = '.github/workflows/release-draw-window-qa.yml';
+const path = '.github/workflows/redeploy-isolated-web-ios.yml';
 const now = Date.parse('2026-11-27T03:00:00Z');
 const plan = {
   QA_MODE: 'plan',

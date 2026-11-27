@@ -13,7 +13,7 @@ const pins = Object.freeze({
   baseSha: '48eeb85830c2dddab048796d7859200e65cc73f9',
   deployment: '13',
   // Retest and explicitly review any replacement before repinning.
-  candidateSha: '09a0f9ac2d18d3369c464cfa7fec8a8b5f6745be',
+  candidateSha: 'd4e499e29c76a11f4275c2be8d34e6a4a616cb70',
   migration: '20261126230000_explicit_campaign_draw_timezone',
   digest: '2192bdf90202d7ab60e7d92ccdc0e474fa900a4b6914c77fa4f4e8a102cb6618',
   first21: 'd7dfe3b4f3d0d0951b1e4e38a72c33de6585c625f8553f498355488c85cf896b',

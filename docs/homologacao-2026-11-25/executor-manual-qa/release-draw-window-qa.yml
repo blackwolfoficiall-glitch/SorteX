@@ -1,5 +1,5 @@
-# Offline review draft. Not installed in .github/workflows.
-name: Migração manual SorteX QA (janela de vendas)
+# Manual-only QA runner; do not add a push or pull_request trigger.
+name: Migrar e atualizar a API SorteX somente no QA isolado
 
 on:
   workflow_dispatch:
@@ -91,7 +91,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: 09a0f9ac2d18d3369c464cfa7fec8a8b5f6745be
+          ref: d4e499e29c76a11f4275c2be8d34e6a4a616cb70
           path: qa-pinned-candidate
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -102,7 +102,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "09a0f9ac2d18d3369c464cfa7fec8a8b5f6745be"
+          test "$(git rev-parse HEAD)" = "d4e499e29c76a11f4275c2be8d34e6a4a616cb70"
           test -z "$(git status --porcelain --untracked-files=no)"
           test ! -e dist/neon/sortex-api.zip
           [[ ! -v SORTEX_QA_DATABASE_URL && ! -v SORTEX_QA_NEON_API_KEY && ! -v DATABASE_URL ]]

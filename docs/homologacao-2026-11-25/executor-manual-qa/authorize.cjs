@@ -2,11 +2,11 @@
 
 // Preparation for the offline Actions draft. This file cannot migrate, deploy
 // or read QA credentials; its only external operations are pinned GitHub GETs.
-const candidate = '09a0f9ac2d18d3369c464cfa7fec8a8b5f6745be';
+const candidate = 'd4e499e29c76a11f4275c2be8d34e6a4a616cb70';
 const confirmation = 'QA-13+21-to-22+' + candidate;
 const repository = 'blackwolfoficiall-glitch/SorteX';
 const branch = 'homologacao/web-ios-integrada';
-const workflowPath = '.github/workflows/release-draw-window-qa.yml';
+const workflowPath = '.github/workflows/redeploy-isolated-web-ios.yml';
 const maxAge = 30 * 60 * 1000;
 const runNumber = /^[1-9][0-9]{0,14}$/;
 const unsafe = () => { throw Error('QA manual recusado: confira escopo, confirmação ou recibo.'); };

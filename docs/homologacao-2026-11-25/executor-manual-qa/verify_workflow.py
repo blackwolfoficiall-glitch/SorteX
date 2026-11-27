@@ -48,7 +48,7 @@ assert auth["steps"][-1]["if"] == "inputs.mode == 'apply'"
 assert auth["steps"][-1]["env"]["QA_ACTIONS_READ_TOKEN"] == "${{ github.token }}"
 steps = execute["steps"]
 assert steps[0]["with"]["fetch-depth"] == "0"
-assert steps[1]["with"]["ref"] == "09a0f9ac2d18d3369c464cfa7fec8a8b5f6745be"
+assert steps[1]["with"]["ref"] == "d4e499e29c76a11f4275c2be8d34e6a4a616cb70"
 build, recheck, release = steps[-3:]
 assert recheck["if"] == "inputs.mode == 'apply'"
 assert recheck["env"]["QA_ACTIONS_READ_TOKEN"] == "${{ github.token }}"
@@ -60,5 +60,5 @@ assert {k for k, v in release["env"].items() if "secrets." in v} == {
     "SORTEX_QA_DATABASE_URL", "SORTEX_QA_NEON_API_KEY",
 }
 assert 'node services/api/scripts/release-draw-window-qa.cjs "--$QA_MODE"' in release["run"]
-assert not (repo / ".github/workflows/release-draw-window-qa.yml").exists()
-print("Executor offline: YAML, gatilhos, escopo, pinagem, credenciais e comandos verificados.")
+assert (repo / ".github/workflows/redeploy-isolated-web-ios.yml").read_bytes() == (here / "release-draw-window-qa.yml").read_bytes()
+print("Executor manual: YAML, gatilhos, escopo, pinagem, credenciais e comandos verificados.")

@@ -1,57 +1,143 @@
-name: Atualizar código da API isolada SorteX
+# Manual-only QA runner; do not add a push or pull_request trigger.
+name: Migrar e atualizar a API SorteX somente no QA isolado
+
 on:
-  push:
-    branches: [homologacao/web-ios-integrada]
-    paths: [.github/workflows/redeploy-isolated-web-ios.yml]
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Operação (plano ou aplicação protegida)
+        required: true
+        default: plan
+        type: choice
+        options: [plan, apply]
+      plan_run_id:
+        description: ID de plano bem-sucedido deste mesmo fluxo (somente apply)
+        type: string
+        required: false
+      quiet_window:
+        description: Confirme que a prévia encerrou e ninguém está testando QA
+        type: boolean
+        default: false
+      confirmation:
+        description: Frase de confirmação exata do procedimento (somente apply)
+        type: string
+        required: false
+
 permissions:
   contents: read
+
 concurrency:
   group: sortex-web-ios-qa-bootstrap
   cancel-in-progress: false
+
 jobs:
-  update:
-    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event.repository.private == false
-    environment: sortex-web-ios-qa
+  authorize:
+    if: >-
+      github.repository == 'blackwolfoficiall-glitch/SorteX' &&
+      github.ref == 'refs/heads/homologacao/web-ios-integrada' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.run_attempt == '1' &&
+      github.event.repository.private == false
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      SORTEX_QA_CODE_SHA: 48eeb85830c2dddab048796d7859200e65cc73f9
-      SORTEX_QA_BASE_SHA: 950214d6030ab89728888fcbcd216f248e40d3cf
-      SORTEX_QA_BASE_DEPLOYMENT: "12"
-      SORTEX_QA_EXPECTED_STORAGE: private-neon-s3
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
+          ref: ${{ github.sha }}
           persist-credentials: false
-      - uses: actions/checkout@v4
-        with:
-          ref: 48eeb85830c2dddab048796d7859200e65cc73f9
-          path: validated-candidate
-          persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
-      - run: node --test services/api/scripts/redeploy-isolated-qa.test.cjs
-      - name: Compilar apenas a revisão aprovada em CI, sem conexão ao banco QA
-        working-directory: validated-candidate/services/api
+      - name: Conferir modo, revisão e escopo
         env:
-          DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_build
+          QA_MODE: ${{ inputs.mode }}
+          QA_PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+          QA_QUIET_WINDOW: ${{ inputs.quiet_window }}
+          QA_CONFIRMATION: ${{ inputs.confirmation }}
+        run: node docs/homologacao-2026-11-25/executor-manual-qa/authorize.cjs --input
+      - name: Conferir primeiro plano concluído na mesma revisão
+        if: inputs.mode == 'apply'
+        env:
+          QA_MODE: ${{ inputs.mode }}
+          QA_PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+          QA_QUIET_WINDOW: ${{ inputs.quiet_window }}
+          QA_CONFIRMATION: ${{ inputs.confirmation }}
+          QA_ACTIONS_READ_TOKEN: ${{ github.token }}
+        run: node docs/homologacao-2026-11-25/executor-manual-qa/authorize.cjs --plan-receipt
+
+  execute:
+    name: ${{ inputs.mode == 'plan' && 'QA read-only plan' || 'QA apply' }}
+    needs: authorize
+    if: >-
+      github.repository == 'blackwolfoficiall-glitch/SorteX' &&
+      github.ref == 'refs/heads/homologacao/web-ios-integrada' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.run_attempt == '1' &&
+      github.event.repository.private == false
+    environment: sortex-web-ios-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: d4e499e29c76a11f4275c2be8d34e6a4a616cb70
+          path: qa-pinned-candidate
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Compilar somente a candidata pinada, sem segredos do ambiente QA
+        working-directory: qa-pinned-candidate/services/api
+        shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$SORTEX_QA_CODE_SHA"
-          npm ci --include=dev --no-audit --no-fund
-          npx --no-install prisma generate
-          npm run build:neon
-      - name: Atualizar somente a função QA existente sem migrar banco ou ativar pagamentos
-        working-directory: validated-candidate/services/api
+          test "$(git rev-parse HEAD)" = "d4e499e29c76a11f4275c2be8d34e6a4a616cb70"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          test ! -e dist/neon/sortex-api.zip
+          [[ ! -v SORTEX_QA_DATABASE_URL && ! -v SORTEX_QA_NEON_API_KEY && ! -v DATABASE_URL ]]
+          build_home="$(mktemp -d)"
+          trap 'rm -rf -- "$build_home"' EXIT
+          clean() {
+            env -i PATH="$PATH" HOME="$build_home" CI=true LANG=C.UTF-8 \
+              DATABASE_URL=postgresql://validation:validation@127.0.0.1:5432/sortex_build "$@"
+          }
+          clean npm ci --include=dev --no-audit --no-fund
+          clean npx --no-install prisma generate
+          clean npm run build:neon
+          test -s dist/neon/sortex-api.zip
+          test -z "$(git status --porcelain --untracked-files=no)"
+      - name: Revalidar a validade do plano depois da aprovação e do build
+        if: inputs.mode == 'apply'
         env:
+          QA_MODE: ${{ inputs.mode }}
+          QA_PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+          QA_QUIET_WINDOW: ${{ inputs.quiet_window }}
+          QA_CONFIRMATION: ${{ inputs.confirmation }}
+          QA_ACTIONS_READ_TOKEN: ${{ github.token }}
+        run: node docs/homologacao-2026-11-25/executor-manual-qa/authorize.cjs --plan-receipt
+      - name: Executar plano ou aplicação somente no QA protegido
+        shell: bash
+        env:
+          QA_MODE: ${{ inputs.mode }}
+          QA_PLAN_RUN_ID: ${{ inputs.plan_run_id }}
+          QA_QUIET_WINDOW: ${{ inputs.quiet_window }}
+          QA_CONFIRMATION: ${{ inputs.confirmation }}
           QA_ENABLE: ${{ vars.SORTEX_QA_BOOTSTRAP }}
+          SORTEX_QA_RELEASE_CONFIRM: ${{ inputs.confirmation }}
+          SORTEX_QA_DATABASE_URL: ${{ secrets.SORTEX_QA_DATABASE_URL }}
           SORTEX_QA_NEON_API_KEY: ${{ secrets.SORTEX_QA_NEON_API_KEY }}
-        run: node "$GITHUB_WORKSPACE/services/api/scripts/redeploy-isolated-qa.cjs"
-  hosted-parity:
-    needs: update
-    uses: ./.github/workflows/sortex-hosted-qa-smoke.yml
-    with:
-      expected-api-sha: 48eeb85830c2dddab048796d7859200e65cc73f9
-      check-draft-cover: true
+        run: |
+          set -euo pipefail
+          node docs/homologacao-2026-11-25/executor-manual-qa/authorize.cjs --input
+          node services/api/scripts/release-draw-window-qa.cjs "--$QA_MODE" "$GITHUB_WORKSPACE/qa-pinned-candidate"
