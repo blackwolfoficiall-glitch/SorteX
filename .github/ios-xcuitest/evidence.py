@@ -42,6 +42,12 @@ def selected_target(spec):
     return targets[0]
 
 
+def valid_string_map(value):
+    return isinstance(value, dict) and all(
+        isinstance(key, str) and isinstance(item, str) for key, item in value.items()
+    )
+
+
 def validate_target(target):
     checks = [
         (target.get("BlueprintName", TARGET) == TARGET, "blueprint"),
@@ -49,7 +55,7 @@ def validate_target(target):
         (known_path(target.get("TestHostPath"), TARGET + "-Runner.app", ".app") == "expected-path", "host-path"),
         (not target.get("SkipTestIdentifiers", []), "skip-tests"),
         (not target.get("UseDestinationArtifacts", False), "destination-artifacts"),
-        (not target.get("UITargetAppEnvironmentVariables", {}), "app-environment"),
+        (valid_string_map(target.get("UITargetAppEnvironmentVariables", {})), "app-environment"),
         (not target.get("UITargetAppCommandLineArguments", []), "app-arguments"),
     ]
     env = target.get("EnvironmentVariables", {})
@@ -107,12 +113,16 @@ def describe_shape(spec):
         facts["test-host"] = known_path(target.get("TestHostPath"), TARGET + "-Runner.app", ".app")
         for label, key in (
             ("app-target", "UITargetAppPath"),
-            ("app-environment", "UITargetAppEnvironmentVariables"),
             ("app-arguments", "UITargetAppCommandLineArguments"),
             ("host-environment", "EnvironmentVariables"),
             ("host-testing-environment", "TestingEnvironmentVariables"),
         ):
             facts[label] = "present" if target.get(key) else "empty-or-missing"
+        app_env = target.get("UITargetAppEnvironmentVariables", {})
+        facts["app-environment"] = (
+            ("sanitizable" if app_env else "empty-or-missing")
+            if valid_string_map(app_env) else "malformed"
+        )
         validate_target(target)
         facts["readiness"] = "passed"
     except ValueError as error:
@@ -131,6 +141,10 @@ def configure(spec, app, password):
         raise ValueError("app-target")
     target = selected_target(spec)
     validate_target(target)
+    # The standalone Xcode target may supply a default app environment. Do not
+    # merge or forward any entries, even if a name looks safe. The app remains
+    # a black-box test subject and receives the password only by UI input.
+    target["UITargetAppEnvironmentVariables"] = {}
     env = target.setdefault("EnvironmentVariables", {})
     env[PASSWORD_KEY] = password
     # The stand-alone test target doesn't build the app. This is the exact,

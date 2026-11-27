@@ -51,7 +51,7 @@ class EvidenceGuards(unittest.TestCase):
             doc = {TARGET: t} if v == 1 else v2(t)
             self.assertEqual(configure(doc, self.app, DUMMY), doc)
             self.assertEqual(t["EnvironmentVariables"], {PASSWORD_KEY: DUMMY})
-            self.assertNotIn("UITargetAppEnvironmentVariables", t)
+            self.assertEqual(t["UITargetAppEnvironmentVariables"], {})
             self.assertNotIn("UITargetAppCommandLineArguments", t)
             self.assertEqual(t["UITargetAppPath"], str(self.app))
             self.assertEqual(t["SystemAttachmentLifetime"], "keepNever")
@@ -61,7 +61,11 @@ class EvidenceGuards(unittest.TestCase):
 
     def test_rejects_altered_test_specification_or_fixture(self):
         for wrong in (
-            {"UITargetAppEnvironmentVariables": {"OTHER": DUMMY}},
+            {"UITargetAppEnvironmentVariables": {"OTHER": [DUMMY]}},
+            {"UITargetAppEnvironmentVariables": {"OTHER": 7}},
+            {"UITargetAppEnvironmentVariables": {7: DUMMY}},
+            {"UITargetAppEnvironmentVariables": []},
+            {"UITargetAppEnvironmentVariables": None},
             {"UITargetAppCommandLineArguments": [DUMMY]},
             {"TestHostPath": "other.app"},
             {"UseDestinationArtifacts": True},
@@ -84,7 +88,10 @@ class EvidenceGuards(unittest.TestCase):
             ({"TestBundlePath": "/" + DUMMY + ".xctest"}, "bundle-path", "test-bundle", "other-product"),
             ({"TestBundlePath": TARGET + ".xctest"}, "bundle-path", "test-bundle", "expected-basename"),
             ({"TestHostPath": "/" + DUMMY + ".app"}, "host-path", "test-host", "other-product"),
-            ({"UITargetAppEnvironmentVariables": {DUMMY: DUMMY}}, "app-environment", "app-environment", "present"),
+            ({"UITargetAppEnvironmentVariables": {DUMMY: DUMMY}}, "passed", "app-environment", "sanitizable"),
+            ({"UITargetAppEnvironmentVariables": {DUMMY: [DUMMY]}}, "app-environment", "app-environment", "malformed"),
+            ({"UITargetAppEnvironmentVariables": {DUMMY: DUMMY}, "UITargetAppCommandLineArguments": [DUMMY]},
+             "app-arguments", "app-environment", "sanitizable"),
             ({"UITargetAppCommandLineArguments": [DUMMY]}, "app-arguments", "app-arguments", "present"),
             ({"EnvironmentVariables": {PASSWORD_KEY: DUMMY}}, "host-environment", "host-environment", "present"),
         ):
@@ -103,6 +110,47 @@ class EvidenceGuards(unittest.TestCase):
         self.assertEqual(configs["readiness"], "configuration-count")
         self.assertEqual(describe_shape({"__xctestrun_metadata__": {"FormatVersion": 3}})["format"], "unsupported")
         self.assertEqual(describe_shape({TARGET: target()})["format"], "v1")
+
+    def test_xcode_v1_app_env_is_discarded_before_writing_private_spec(self):
+        env_key = "SYNTHETIC_XCODE_DEFAULT_KEY"
+        env_value = "SYNTHETIC_XCODE_DEFAULT_VALUE"
+        original = self.base / "generated.xctestrun"
+        destination = self.base / "fixture-private.xctestrun"
+        raw = plistlib.dumps({
+            TARGET: target() | {
+                "UITargetAppPath": "",
+                "UITargetAppEnvironmentVariables": {
+                    env_key: env_value, PASSWORD_KEY: "DO_NOT_FORWARD_APP_VALUE"
+                },
+                "UITargetAppCommandLineArguments": [],
+                "EnvironmentVariables": {"HOST_SETTING": "KEEP"},
+                "TestingEnvironmentVariables": {"DYLD_FRAMEWORK_PATH": "__TESTROOT__"},
+            },
+        }, fmt=plistlib.FMT_BINARY)
+        original.write_bytes(raw)
+        inspect = subprocess.run([sys.executable, str(ROOT / "evidence.py"), "inspect", str(original)],
+                                 text=True, capture_output=True)
+        self.assertEqual(inspect.returncode, 0)
+        self.assertIn("format=v1", inspect.stdout)
+        self.assertIn("app-environment=sanitizable", inspect.stdout)
+        self.assertIn("readiness=passed", inspect.stdout)
+        self.assertNotIn(env_key, inspect.stdout + inspect.stderr)
+        self.assertNotIn(env_value, inspect.stdout + inspect.stderr)
+        self.assertFalse(destination.exists())
+        prepare = subprocess.run([sys.executable, str(ROOT / "evidence.py"), "prepare",
+                                  str(original), str(destination), str(self.app)],
+                                 input=DUMMY, text=True, capture_output=True)
+        self.assertEqual(prepare.returncode, 0)
+        self.assertEqual(prepare.stdout + prepare.stderr, "")
+        private = destination.read_bytes()
+        spec = plistlib.loads(private)[TARGET]
+        for dropped in (env_key, env_value, "DO_NOT_FORWARD_APP_VALUE"):
+            self.assertNotIn(dropped.encode(), private)
+            self.assertNotIn(dropped, inspect.stdout + inspect.stderr)
+        self.assertEqual(original.read_bytes(), raw)
+        self.assertEqual(spec["UITargetAppEnvironmentVariables"], {})
+        self.assertEqual(spec["EnvironmentVariables"], {"HOST_SETTING": "KEEP", PASSWORD_KEY: DUMMY})
+        self.assertEqual(spec["TestingEnvironmentVariables"], {"DYLD_FRAMEWORK_PATH": "__TESTROOT__"})
 
     def test_inspect_never_writes_spec_or_echoes_paths(self):
         original = self.base / "generated.xctestrun"
@@ -139,7 +187,9 @@ esac
 ''')
         fake.chmod(0o700)
         fixture = self.base / "sample.xctestrun"
-        raw = plistlib.dumps(v2(target() | {"UITargetAppPath": "/" + DUMMY}))
+        raw = plistlib.dumps({TARGET: target() | {
+            "UITargetAppPath": "", "UITargetAppEnvironmentVariables": {DUMMY: DUMMY}
+        }})
         fixture.write_bytes(raw)
         env = {"PATH": str(binpath) + os.pathsep + os.environ["PATH"], "RUNNER_OS": "macOS",
                "GITHUB_REPOSITORY": "blackwolfoficiall-glitch/SorteX",
@@ -156,6 +206,7 @@ esac
         report = (self.base / "sortex-xcuitest-driver-preflight.txt").read_text()
         self.assertIn("readiness=passed", report)
         self.assertIn("Xcode 27.2", report)
+        self.assertIn("app-environment=sanitizable", report)
         self.assertNotIn("unsafe extra line", report)
         self.assertNotIn(DUMMY, report)
         self.assertEqual(fixture.read_bytes(), raw)
