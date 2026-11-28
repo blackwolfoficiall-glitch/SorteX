@@ -51,13 +51,22 @@ function validateRange(start: unknown, end: unknown, today: string): Period | nu
     stamp(end) - stamp(start) <= 366 * DAY_MS ? { start, end } : null;
 }
 
-/** Old /dashboard rows were grouped by UTC, not Brasília. Use its own clock. */
-export function legacyUtcRange(generatedAt: unknown, preset: PeriodKey, custom: Period | null): Period | null {
+/** Follow the clock of the authenticated response, never the phone or a guessed rebucket. */
+export function dashboardReferenceDay(generatedAt: unknown, legacy: boolean): string | null {
   if (typeof generatedAt !== "string") return null;
   const generated = Date.parse(generatedAt);
   if (!Number.isFinite(generated) || new Date(generated).toISOString() !== generatedAt) return null;
-  const utcToday = isoDay(generated);
-  return preset === "custom" ? validateRange(custom?.start, custom?.end, utcToday) : periodFor(preset, utcToday);
+  return legacy ? isoDay(generated) : dayInSaoPaulo(generatedAt);
+}
+
+export function selectedDashboardRange(preset: PeriodKey, custom: Period | null, today: string): Period | null {
+  return preset === "custom" ? validateRange(custom?.start, custom?.end, today) : periodFor(preset, today);
+}
+
+/** Old /dashboard rows were grouped by UTC, not Brasília. Use its own clock. */
+export function legacyUtcRange(generatedAt: unknown, preset: PeriodKey, custom: Period | null): Period | null {
+  const today = dashboardReferenceDay(generatedAt, true);
+  return today ? selectedDashboardRange(preset, custom, today) : null;
 }
 
 export function legacyHistoryCovers(generatedAt: unknown, period: Period) {
@@ -133,7 +142,10 @@ export function chartBucketsFor(history: DayRevenue[] | undefined, period: Perio
   for (const row of history) {
     if (row.date >= period.start && row.date <= period.end) {
       const day = (stamp(row.date) - start) / DAY_MS;
-      buckets[Math.floor(day * count / days)]!.cents += Math.round(row.revenue * 100);
+      const bucket = buckets[Math.floor(day * count / days)]!;
+      const cents = Math.round(row.revenue * 100);
+      if (!Number.isSafeInteger(bucket.cents + cents)) return [];
+      bucket.cents += cents;
     }
   }
   return buckets.map(({ first, last, cents }) => ({ first, last, revenue: cents / 100 }));

@@ -15,7 +15,7 @@ import { NativeOrganizerDashboardCalendar } from "./NativeOrganizerDashboardCale
 import { calendarDayAllowed, dashboardCalendarLimits, type CalendarDates, type CalendarField } from "./dashboard-calendar";
 import { OrganizerIcon, type OrganizerIconName } from "./OrganizerIcons";
 import { organizerChartBounds, organizerRevenueGeometry } from "./premium-chart";
-import { DEFAULT_DASHBOARD_PERIOD, chartBucketsFor, dayInSaoPaulo, legacyHistoryCovers, legacyUtcRange, loadDashboardPeriod, parseCustomPeriod, periodFor,
+import { DEFAULT_DASHBOARD_PERIOD, chartBucketsFor, dashboardReferenceDay, legacyHistoryCovers, loadDashboardPeriod, parseCustomPeriod, selectedDashboardRange,
   type Period, type PeriodDashboard, type PeriodKey, type RevenueBucket } from "./dashboard-period";
 
 type Actions = {
@@ -29,7 +29,7 @@ type Actions = {
   onDraw: () => void;
   onShare: () => void;
 };
-const date = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" });
+const date = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
 const count = new Intl.NumberFormat("pt-BR");
 const dateLabel = (day: string) => day.split("-").reverse().join("/");
 const campaignStatus: Record<DashboardCampaign["status"], string> = {
@@ -45,23 +45,21 @@ export function OrganizerDashboardHome({ greeting, initial, ...actions }: Action
   useSyncExternalStore(client.subscribe, client.activeSessionRevision);
   const session = organizerDashboardSession(client);
   const t = usePremiumTheme();
+  if (!session) return null;
   return (
     <PremiumPage>
       <View style={styles.hero}>
         <View style={styles.header}>
           <Text accessibilityLabel="SorteX" style={[styles.logo, { color: t.text }]}>Sorte<Text style={{ color: t.accent }}>X</Text></Text>
-          <HeaderAction title="Notificações" hint="Consultar a disponibilidade das notificações do organizador" onPress={actions.onNotifications} />
+          <HeaderAction title="Notificações" hint="Abre notificações" onPress={actions.onNotifications} />
           <HeaderAction title="Perfil" initial={initial} onPress={actions.onProfile} />
-        </View>
-        <View style={[styles.badge, { backgroundColor: t.tint }]}>
-          <Text style={[premiumTypography.label, { color: t.accent, fontSize: 12 }]}>Ambiente de homologação</Text>
         </View>
         <View>
           <Text accessibilityRole="header" style={[premiumTypography.title, { color: t.text }]}>{greeting}</Text>
           <Text style={[premiumTypography.body, { color: t.muted, marginTop: 3 }]}>Acompanhe sua operação em um só lugar.</Text>
         </View>
       </View>
-      {focused && session && (
+      {focused && (
         <DashboardContent key={`${session.organizerId}:${session.revision}`} session={session} {...actions} />
       )}
     </PremiumPage>
@@ -69,7 +67,7 @@ export function OrganizerDashboardHome({ greeting, initial, ...actions }: Action
 }
 
 type State = { kind: "loading" | "error" } | { kind: "ok"; data: Dashboard };
-type PeriodState = { kind: "loading" | "error" | "legacy" } | { kind: "ok"; data: PeriodDashboard };
+type PeriodState = { kind: "error" } | { kind: "ok"; data: PeriodDashboard };
 
 function DashboardContent({ session: { organizerId, revision }, ...actions }: Actions & { session: DashboardSession }) {
   const [state, setState] = useState<State>({ kind: "loading" });
@@ -80,6 +78,7 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
   const [customError, setCustomError] = useState(false);
   const [periodState, setPeriodState] = useState<{ key: string; result: PeriodState } | null>(null);
   const [periodRetry, setPeriodRetry] = useState(0);
+  const [legacyAt, setLegacyAt] = useState<string>();
   const request = useRef<symbol | null>(null);
   const load = useCallback(async () => {
     if (request.current) return;
@@ -102,41 +101,49 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
   }, [load]);
 
   const dashboard = state.kind === "ok" ? state.data : null;
-  const today = dashboard ? dayInSaoPaulo(dashboard.generatedAt) : null;
+  const generatedAt = dashboard?.generatedAt;
+  // Remember a confirmed 404 for this snapshot, so selecting another preset
+  // doesn't briefly revert the UTC calendar or retry an unsupported endpoint.
+  const useLegacy = !!generatedAt && legacyAt === generatedAt;
+  const today = dashboardReferenceDay(generatedAt, useLegacy);
   const calendarLimits = calendar && today ? dashboardCalendarLimits(calendar, inputs, today) : null;
-  const period = today ? (selected === "custom" ? custom : periodFor(selected, today)) : null;
+  const period = today ? selectedDashboardRange(selected, custom, today) : null;
   const start = period?.start, end = period?.end;
-  const key = start && end ? `${dashboard?.generatedAt}:${start}:${end}:${periodRetry}` : null;
+  const key = !useLegacy && generatedAt && start && end ? `${generatedAt}:${start}:${end}:${periodRetry}` : null;
 
   useEffect(() => {
-    if (!key || !start || !end) return;
+    if (!key || !start || !end || !generatedAt) return;
     let active = true;
     void loadDashboardPeriod(client, { organizerId, revision }, { start, end }).then((result) => {
-      if (active && result.kind !== "stale") setPeriodState({ key, result });
+      if (!active || result.kind === "stale") return;
+      if (result.kind === "legacy") setLegacyAt(generatedAt);
+      else setPeriodState({ key, result });
     }).catch(() => {
       if (active) setPeriodState({ key, result: { kind: "error" } });
     });
     return () => { active = false; };
-  }, [key, start, end, organizerId, revision]);
+  }, [key, start, end, generatedAt, organizerId, revision]);
 
-  const current = periodState?.key === key ? periodState?.result : undefined;
-  const useLegacy = current?.kind === "legacy";
-  const displayRange = useLegacy
-    ? legacyUtcRange(dashboard?.generatedAt, selected, custom)
-    : current?.kind === "ok" ? current.data.period : null;
-  const legacyHistory = useLegacy && displayRange && legacyHistoryCovers(dashboard?.generatedAt, displayRange)
-    ? dashboard?.revenueHistory : undefined;
-  const history = current?.kind === "ok" ? current.data.revenueHistory : legacyHistory;
+  const current = key && periodState?.key === key ? periodState.result : undefined;
+  const displayRange = useLegacy ? period : current?.kind === "ok" ? current.data.period : null;
+  const history = current?.kind === "ok" ? current.data.revenueHistory :
+    useLegacy && displayRange && legacyHistoryCovers(generatedAt, displayRange) ? dashboard?.revenueHistory : undefined;
   const buckets = chartBucketsFor(history, displayRange);
   const chart = buckets.length ? buckets.map(({ revenue }) => revenue) : null;
-  const revenue = current?.kind === "ok" ? current.data.summary.grossRevenue :
-    useLegacy && chart ? chart.reduce((sum, value) => sum + Math.round(value * 100), 0) / 100 : undefined;
-  const rangeCaption = displayRange
-    ? `Intervalo: ${dateLabel(displayRange.start)} a ${dateLabel(displayRange.end)} · ${useLegacy ? "UTC" : "Brasília"}`
-    : null;
-  const summary = current?.kind === "ok" ? current.data.summary : useLegacy ? dashboard?.summary : null;
-  // Legacy dashboard summary has no period paid-order count; it must not be estimated from revenue.
-  const paidOrders = current?.kind === "ok" ? current.data.summary.paidOrders : undefined;
+  const recordedDays = displayRange && history?.some(({ date }) => date >= displayRange.start && date <= displayRange.end);
+  const summary = current?.kind === "ok" ? current.data.summary : null;
+  const legacyCents = useLegacy && chart ? chart.reduce((sum, value) => sum + Math.round(value * 100), 0) : undefined;
+  const revenue = summary?.grossRevenue ??
+    (legacyCents !== undefined && Number.isSafeInteger(legacyCents) ? legacyCents / 100 : undefined);
+  const dateRange = displayRange ? dateLabel(displayRange.start) === dateLabel(displayRange.end)
+    ? dateLabel(displayRange.start)
+    : `${dateLabel(displayRange.start)} a ${dateLabel(displayRange.end)}` : null;
+  const rangeCaption = dateRange ? `${dateRange} · ${useLegacy ? "Horário UTC" : "Horário de Brasília"}` : null;
+  const chartMessage = !period ? "Escolha as datas do período." :
+    current?.kind === "error" ? "Não foi possível carregar este período." :
+    useLegacy ? (chart ? "Nenhum valor de venda registrado neste período." : "Histórico indisponível para estas datas.") :
+    !current ? "Carregando vendas…" :
+    summary?.paidOrders === 0 ? "Nenhuma venda confirmada neste período." : "Gráfico indisponível para estas datas.";
   const t = usePremiumTheme();
 
   return (
@@ -146,7 +153,7 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
       )}
       {state.kind === "error" && (
         <View style={[styles.surface, { backgroundColor: t.surface, borderColor: t.line }]}>
-          <Text accessibilityRole="alert" style={[premiumTypography.body, { color: t.text }]}>Não foi possível carregar o painel. Nenhum total foi exibido.</Text>
+          <Text accessibilityRole="alert" style={[premiumTypography.body, { color: t.text }]}>Não foi possível carregar o painel agora.</Text>
           <PremiumButton title="Tentar novamente" onPress={() => void load()} />
         </View>
       )}
@@ -194,7 +201,8 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
                   }
                   setCalendar(null);
                 }} />}
-              {customError && <Text accessibilityRole="alert" style={{ color: t.text }}>Selecione duas datas, em ordem, até hoje e em um intervalo de até 367 dias.</Text>}
+              {useLegacy && <Text style={[premiumTypography.body, { color: t.muted }]}>As datas do histórico seguem o horário UTC.</Text>}
+              {customError && <Text accessibilityRole="alert" style={[premiumTypography.body, { color: t.text }]}>Escolha a data inicial e a final. A data final deve ser igual ou posterior à inicial, com até 367 dias no intervalo.</Text>}
               <PremiumButton title="Aplicar período" onPress={() => {
                 const result = today ? parseCustomPeriod(dateLabel(inputs.start), dateLabel(inputs.end), today) : null;
                 setCustom(result);
@@ -214,29 +222,26 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
               <View pointerEvents="none" style={[styles.notchRight, { backgroundColor: t.bg }]} />
               <View style={styles.ticketLabelRow}>
                 <OrganizerIcon name="ticket" color={t.white} size={19} />
-                <Text style={styles.ticketCaption}>Total bruto confirmado · {filters.find(([filter]) => filter === selected)?.[1]}</Text>
+                <Text style={styles.ticketCaption}>Vendas brutas · {filters.find(([filter]) => filter === selected)?.[1]}</Text>
               </View>
               {rangeCaption && <Text style={styles.ticketMuted}>{rangeCaption}</Text>}
               <Text accessibilityRole="header" style={styles.ticketValue}>{revenue === undefined ? "—" : money(revenue)}</Text>
-              {chart ? <RevenueChart values={chart} /> :
-                <Text style={styles.ticketMuted}>{!period ? "Selecione um período." :
-                  current?.kind === "error" ? "Não foi possível carregar o período." :
-                  current?.kind === "legacy" ? "Histórico indisponível para este período." :
-                  !current ? "Carregando período…" : "Evolução não disponível para este período."}</Text>}
-              {useLegacy && <Text style={styles.ticketMuted}>Na versão anterior, os filtros de receita usam os dias UTC do servidor.</Text>}
-              {current?.kind === "error" && <PremiumButton title="Tentar carregar período novamente" onPress={() => setPeriodRetry((value) => value + 1)} />}
-              <View style={styles.ticketRule} />
-              {useLegacy && <Text style={styles.ticketMuted}>Títulos, participantes e ticket médio abrangem todo o histórico, não o período.</Text>}
-              <View style={styles.ticketMetrics}>
-                <TicketMetric label="Títulos" value={summary ? count.format(summary.soldTickets) : "—"} />
-                <TicketMetric label="Participantes" value={summary ? count.format(summary.participants) : "—"} />
-                <TicketMetric label="Ticket médio" value={summary?.averageTicket === undefined ? "—" : money(summary.averageTicket)} />
-                <TicketMetric label="Pedidos pagos" value={paidOrders === undefined ? "—" : count.format(paidOrders)} />
-              </View>
+              {chart && recordedDays ? <RevenueChart values={chart} /> : <Text style={styles.ticketMuted}>{chartMessage}</Text>}
+              {current?.kind === "error" && <PremiumButton title="Tentar novamente" onPress={() => setPeriodRetry((value) => value + 1)} />}
+              {summary && (
+                <>
+                  <View style={styles.ticketRule} />
+                  <View style={styles.ticketMetrics}>
+                    <TicketMetric label="Títulos vendidos" value={count.format(summary.soldTickets)} />
+                    <TicketMetric label="Participantes" value={count.format(summary.participants)} />
+                    <TicketMetric label="Ticket médio" value={money(summary.averageTicket)} />
+                    <TicketMetric label="Pedidos pagos" value={count.format(summary.paidOrders)} />
+                  </View>
+                </>
+              )}
             </View>
           </View>
-          <Text style={[premiumTypography.body, { color: t.muted }]}>Valor bruto de pedidos pagos. Não representa saldo disponível ou repasse.</Text>
-          {chart && displayRange && (
+          {chart && recordedDays && displayRange && (
             <RevenueChartValues key={`${displayRange.start}:${displayRange.end}:${useLegacy}`}
               buckets={buckets} zone={useLegacy ? "UTC" : "Brasília"} />
           )}
@@ -246,7 +251,7 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
         <Text accessibilityRole="header" style={[premiumTypography.section, { color: t.text }]}>Ações rápidas</Text>
         <View style={styles.quickRow}>
           <QuickAction title="Criar" icon="plus" onPress={actions.onCreate} />
-          <QuickAction title="Sortear" icon="trophy" hint="Consultar disponibilidade da apuração" onPress={actions.onDraw} />
+          <QuickAction title="Sortear" icon="trophy" hint="Abre a apuração" onPress={actions.onDraw} />
           <QuickAction title="Divulgar" icon="link" onPress={actions.onShare} />
         </View>
       </View>
@@ -257,7 +262,7 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
           <Text style={[premiumTypography.label, { color: "#DCCFFF" }]}>Copilot</Text>
         </View>
         <Text accessibilityRole="header" style={[premiumTypography.section, { color: t.white }]}>Assistente da sua operação</Text>
-        <Text style={[premiumTypography.body, { color: "#EBE4FF" }]}>Consulte o estado da IA SorteX e as análises disponíveis. Nenhuma ação é executada automaticamente.</Text>
+        <Text style={[premiumTypography.body, { color: "#EBE4FF" }]}>Consulte as análises disponíveis para suas campanhas.</Text>
         <PremiumButton title="Abrir Copilot" filled onPress={actions.onCopilot} />
       </View>
       {dashboard && (
@@ -265,8 +270,17 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
           <View style={[styles.surface, { backgroundColor: t.surface, borderColor: t.line }]}>
             <Text accessibilityRole="header" style={[premiumTypography.section, { color: t.text }]}>Visão geral</Text>
             <Text style={[premiumTypography.body, { color: t.text }]}>{count.format(dashboard.campaigns.length)} campanhas · {count.format(dashboard.summary.activeCampaigns)} ativas</Text>
+            {useLegacy && (
+              <View style={[styles.lifetime, { borderColor: t.line }]}>
+                <Text accessibilityRole="header" style={[premiumTypography.label, { color: t.text }]}>Desde o início</Text>
+                <Text style={[premiumTypography.body, { color: t.muted }]}>Títulos vendidos: {count.format(dashboard.summary.soldTickets)}</Text>
+                <Text style={[premiumTypography.body, { color: t.muted }]}>Participantes: {count.format(dashboard.summary.participants)}</Text>
+                {dashboard.summary.averageTicket !== undefined &&
+                  <Text style={[premiumTypography.body, { color: t.muted }]}>Ticket médio: {money(dashboard.summary.averageTicket)}</Text>}
+              </View>
+            )}
             <PremiumButton title="Minhas campanhas" onPress={actions.onCampaigns} />
-            <PremiumButton title="Consultar financeiro e extrato" onPress={actions.onFinance} />
+            <PremiumButton title="Financeiro e extrato" onPress={actions.onFinance} />
           </View>
           <Text accessibilityRole="header" style={[premiumTypography.section, { color: t.text }]}>Campanhas recentes</Text>
           {!dashboard.campaigns.length && <Text style={{ color: t.muted }}>Você ainda não tem campanhas.</Text>}
@@ -274,12 +288,12 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
             <View style={[styles.surface, { backgroundColor: t.surface, borderColor: t.line }]} key={campaign.id}>
               <Text accessibilityRole="header" style={[premiumTypography.label, { color: t.text }]}>{campaign.title}</Text>
               <Text style={[premiumTypography.body, { color: t.muted }]}>
-                {campaign.publicationBlocked ? "Publicação bloqueada" : campaignStatus[campaign.status]} · {campaign.soldNumbers} de {campaign.totalNumbers} títulos registrados como vendidos
+                {campaign.publicationBlocked ? "Publicação bloqueada" : campaignStatus[campaign.status]} · {campaign.soldNumbers} de {campaign.totalNumbers} títulos vendidos
               </Text>
               <PremiumButton title="Ver campanha" onPress={() => actions.onCampaign(campaign)} />
             </View>
           ))}
-          <Text style={{ color: t.muted }}>Atualizado em {date.format(new Date(dashboard.generatedAt))}</Text>
+          <Text style={[premiumTypography.body, { color: t.muted }]}>Atualizado em {date.format(new Date(dashboard.generatedAt))} (Brasília)</Text>
           <PremiumButton title="Atualizar painel" onPress={() => void load()} />
         </>
       )}
@@ -336,7 +350,7 @@ function RevenueChartValues({ buckets, zone }: { buckets: RevenueBucket[]; zone:
       </Pressable>
       {expanded && (
         <View nativeID={listID} style={styles.chartValuesList}>
-          <Text style={[premiumTypography.body, { color: t.muted }]}>Fuso das datas: {zone}</Text>
+          <Text style={[premiumTypography.body, { color: t.muted }]}>{zone === "UTC" ? "Horário UTC" : "Horário de Brasília"}</Text>
           {buckets.map(({ first, last, revenue }) => {
             const label = first === last ? dateLabel(first) : `${dateLabel(first)} a ${dateLabel(last)}`;
             return (
@@ -378,7 +392,7 @@ function QuickAction({ title, hint, icon, onPress }: { title: string; hint?: str
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityHint={hint} onPress={onPress}
       style={({ pressed }) => [styles.quickAction, { opacity: pressed ? 0.7 : 1,
-        flexBasis: fontScale > 1.3 || width < 330 ? "45%" : "22%" }]}>
+        flexBasis: fontScale > 1.3 || width < 330 ? "45%" : "28%" }]}>
       <View style={[styles.quickIcon, premiumShadow, { borderColor: t.line, backgroundColor: t.surface }]}>
         <OrganizerIcon name={icon} color={t.accent} size={23} />
       </View>
@@ -388,7 +402,7 @@ function QuickAction({ title, hint, icon, onPress }: { title: string; hint?: str
 }
 
 const styles = StyleSheet.create({
-  hero: { gap: 9 },
+  hero: { gap: 12 },
   header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 3 },
   logo: { flex: 1, fontSize: 26, fontWeight: "900", letterSpacing: -1.2 },
   headerButton: { width: 44, height: 44, borderRadius: 14, borderWidth: 1, overflow: "hidden",
@@ -397,7 +411,6 @@ const styles = StyleSheet.create({
   salesHeading: { flexDirection: "row", alignItems: "center", gap: 8 },
   salesHeadingText: { flex: 1, minWidth: 0, gap: 3 },
   headingIcon: { width: 41, height: 41, borderRadius: 14, justifyContent: "center", alignItems: "center" },
-  badge: { alignSelf: "flex-start", borderRadius: 30, paddingVertical: 5, paddingHorizontal: 11 },
   ticketShell: { borderRadius: 26 },
   ticket: { borderRadius: 26, padding: 20, gap: 9, overflow: "hidden" },
   notchLeft: { position: "absolute", top: "56%", left: -9, width: 18, height: 18, borderRadius: 9 },
@@ -414,9 +427,10 @@ const styles = StyleSheet.create({
   ticketMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   metric: { gap: 2, flexBasis: "45%", flexGrow: 1, minWidth: 0, borderRadius: 10, padding: 7, backgroundColor: "#FFFFFF20" },
   metricValue: { color: "#FFFFFF", fontSize: 16, fontWeight: "800" },
-  filters: { borderWidth: 1, borderRadius: 16, padding: 4, gap: 4, flexDirection: "row", flexWrap: "wrap" },
-  filter: { minHeight: 44, paddingHorizontal: 7, borderRadius: 10, justifyContent: "center", flexGrow: 1 },
+  filters: { borderWidth: 1, borderRadius: 16, padding: 5, gap: 5, flexDirection: "row", flexWrap: "wrap" },
+  filter: { minHeight: 44, paddingHorizontal: 9, borderRadius: 10, justifyContent: "center", flexGrow: 1 },
   surface: { borderWidth: 1, borderRadius: 18, padding: 14, gap: 8 },
+  lifetime: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 8, gap: 3 },
   dateButton: { minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, justifyContent: "center" },
   quickSection: { borderWidth: 1, borderRadius: 19, padding: 12, gap: 10 },
   quickRow: { flexDirection: "row", justifyContent: "space-between", flexWrap: "wrap", gap: 7 },

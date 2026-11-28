@@ -166,6 +166,8 @@ test("old organizer response is discarded after logout even after signing in as 
 import {
   DEFAULT_DASHBOARD_PERIOD,
   chartBucketsFor,
+  dashboardReferenceDay,
+  selectedDashboardRange,
   chartFor,
   dayInSaoPaulo,
   legacyHistoryCovers,
@@ -385,9 +387,49 @@ test("botões Data inicial e Data final abrem calendário pt-BR no painel sem co
   assert.match(screen, /accessibilityHint="Abre o calendário" onPress=\{\(\) => setCalendar\(field\)\}/);
   assert.match(screen, /calendar && calendarLimits && <NativeOrganizerDashboardCalendar key=\{calendar\}/);
   assert.match(screen, /parseCustomPeriod\(dateLabel\(inputs.start\), dateLabel\(inputs.end\), today\)/);
-  assert.match(screen, /selected === "custom" \? custom : periodFor\(selected, today\)/);
+  assert.match(screen, /selectedDashboardRange\(selected, custom, today\)/);
   assert.match(calendar, /<Modal visible[\s\S]*accessibilityViewIsModal/);
   assert.match(calendar, /DateTimeFormat\("pt-BR", \{ dateStyle: "full", timeZone: "UTC" \}\)/);
   assert.match(calendar, /accessibilityState=\{\{ disabled: !enabled, selected: isSelected \}\}/);
   assert.match(calendar, /usePremiumTheme\(\)/);
+});
+
+test("preset and custom dates follow the confirmed dashboard contract on the UTC/Brasília boundary", () => {
+  const snapshot = "2026-11-28T02:59:59.000Z";
+  const legacyDay = dashboardReferenceDay(snapshot, true)!;
+  const brasilia = dashboardReferenceDay(snapshot, false)!;
+  assert.equal(legacyDay, "2026-11-28");
+  assert.equal(brasilia, "2026-11-27");
+  assert.equal(dashboardReferenceDay("2026-11-28T03:00:00.000Z", false), "2026-11-28");
+  assert.equal(dashboardReferenceDay("2026-11-28T03:00:00", false), null);
+  assert.deepEqual(selectedDashboardRange("week", null, brasilia), { start: "2026-11-21", end: "2026-11-27" });
+  assert.deepEqual(selectedDashboardRange("month", null, legacyDay), { start: "2026-10-30", end: "2026-11-28" });
+  assert.deepEqual(selectedDashboardRange("year", null, legacyDay), { start: "2025-12-01", end: "2026-11-28" });
+  const legacyToday = { start: legacyDay, end: legacyDay };
+  const calendarUTC = dashboardCalendarLimits("end", { start: "", end: "" }, legacyDay)!;
+  const calendarBR = dashboardCalendarLimits("end", { start: "", end: "" }, brasilia)!;
+  assert.equal(calendarDayAllowed(legacyDay, calendarUTC), true);
+  assert.equal(calendarDayAllowed(legacyDay, calendarBR), false);
+  assert.deepEqual(selectedDashboardRange("custom", legacyToday, legacyDay), legacyToday);
+  assert.equal(selectedDashboardRange("custom", legacyToday, brasilia), null);
+  const history = [{ date: brasilia, revenue: 23.15 }, { date: legacyDay, revenue: 0.21 }];
+  assert.deepEqual(chartFor(history, legacyUtcRange(snapshot, "today", null)!), [0.21]);
+});
+
+test("dashboard does not render missing history, unsupported numbers or personal actions outside a session", () => {
+  const screen = readFileSync(new URL("../src/organizer/NativeOrganizerDashboard.tsx", import.meta.url), "utf8");
+  const layout = readFileSync(new URL("../src/organizer/NativeOrganizerNavigation.tsx", import.meta.url), "utf8");
+  assert.match(screen, /if \(!session\) return null;[\s\S]*<PremiumPage>/);
+  assert.match(screen, /const key = !useLegacy/);
+  assert.match(screen, /const summary = current\?\.kind === "ok" \? current\.data\.summary : null/);
+  assert.match(screen, /\{useLegacy && \([\s\S]*Desde o início/);
+  assert.match(screen, /chart && recordedDays \? <RevenueChart/);
+  assert.match(screen, /title="Financeiro e extrato"/);
+  assert.doesNotMatch(screen, /title="Sacar"|Ambiente de homologação/);
+  assert.match(screen, /backgroundColor: t\.surface, borderColor: t\.line/);
+  assert.match(layout, /paddingBottom: Math\.max\(6, insets\.bottom\)/);
+  const bounds = { start: "2026-11-01", end: "2026-11-30" };
+  const maxUnit = Number.MAX_SAFE_INTEGER / 100;
+  assert.deepEqual(chartBucketsFor([{ date: "2026-11-01", revenue: maxUnit },
+    { date: "2026-11-02", revenue: maxUnit }], bounds), []);
 });
