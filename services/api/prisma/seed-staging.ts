@@ -48,8 +48,62 @@ function assertSafeTarget() {
   return password;
 }
 
+async function seedPublicBrowserRewards(organizerId: string) {
+  const now = Date.now();
+  await prisma.campaign.upsert({
+    where: { slug: 'premiacoes-publicas-teste-browser' },
+    update: {},
+    create: {
+      organizerId,
+      title: '[HOMOLOGAÇÃO] Premiações públicas sintéticas',
+      slug: 'premiacoes-publicas-teste-browser',
+      category: CampaignCategory.CASH,
+      status: CampaignStatus.PUBLISHED,
+      mainPrizeName: 'Prêmio exclusivamente sintético',
+      numberPrice: '0.10',
+      minimumPurchase: 10,
+      totalNumbers: 1000,
+      soldNumbers: 50,
+      drawBasis: DrawBasis.MANUAL_RESULT,
+      salesStartAt: new Date(now - 86400000),
+      drawDate: new Date(now + 7 * 86400000),
+      // Keep the ordinary pilot campaign first for existing consumer cases.
+      publishedAt: new Date(now - 86400000),
+      milestonePrizes: {
+        create: [
+          { name: 'Meta sintética 50%', percentage: 50 },
+          { name: 'Meta sintética 25%', percentage: 25 },
+        ],
+      },
+      customization: {
+        create: {
+          organizerId,
+          useOrganizerDefaults: false,
+          configuration: {
+            logoUrl: '/sortex-og.png',
+            roulette: {
+              enabled: true,
+              rules: [{ id: 'combo-sintetico', minQuantity: 100, rounds: 1 }],
+              items: [{ id: 'item-sintetico', probability: 100, quantity: 5 }],
+            },
+          },
+        },
+      },
+    },
+  });
+}
+
 async function main() {
-  const password = await bcrypt.hash(assertSafeTarget(), 12);
+  const seedPassword = assertSafeTarget();
+  const includePublicBrowserRewards =
+    process.env.SEED_PUBLIC_BROWSER_REWARDS === 'true';
+  if (includePublicBrowserRewards) {
+    const host = new URL(process.env.DATABASE_URL!).hostname;
+    if (!['127.0.0.1', 'localhost', '[::1]'].includes(host)) {
+      throw new Error('Fixture de navegador permitida apenas em banco local.');
+    }
+  }
+  const password = await bcrypt.hash(seedPassword, 12);
   const users: ReadonlyArray<readonly [string, string, UserRole]> = [
     ['admin@sortex.example.invalid', 'Admin Homologação', UserRole.ADMIN],
     [
@@ -92,9 +146,15 @@ async function main() {
   for (const [index, user] of [organizer, organizer2].entries()) {
     await prisma.organizerProfile.upsert({
       where: { userId: user.id },
-      update: { verificationStatus: VerificationStatus.VERIFIED },
+      update: {
+        verificationStatus: VerificationStatus.VERIFIED,
+        onboardingStatus: 'COMPLETE',
+        planSelectedAt: new Date(),
+      },
       create: {
         userId: user.id,
+        onboardingStatus: 'COMPLETE',
+        planSelectedAt: new Date(),
         fullName: `Responsável Teste ${index + 1}`,
         cpf: `0000000000${index + 1}`,
         phone: `55000000000${index + 1}`,
@@ -105,6 +165,26 @@ async function main() {
       },
     });
   }
+
+  // CRM's manual run requires a real sandbox subscription. Never relax that
+  // check in the application to accommodate a local browser fixture.
+  const periodStart = new Date();
+  const periodEnd = new Date(periodStart.getTime() + 30 * 86400000);
+  await prisma.subscription.upsert({
+    where: { id: 'seed-organizer-crm-sandbox' },
+    update: { currentPeriodStart: periodStart, currentPeriodEnd: periodEnd },
+    create: {
+      id: 'seed-organizer-crm-sandbox',
+      organizerId: organizer.id,
+      plan: 'BASIC',
+      sandboxMode: true,
+      autoRenew: false,
+      status: 'TRIAL',
+      monthlyPrice: 0,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd,
+    },
+  });
 
   const campaign = await prisma.campaign.upsert({
     where: { slug: 'campanha-piloto-homologacao' },
@@ -343,6 +423,8 @@ async function main() {
       message: 'Notificação exclusiva de homologação.',
     },
   });
+  if (includePublicBrowserRewards)
+    await seedPublicBrowserRewards(organizer2.id);
   console.info('Seed de homologação concluído para contas example.invalid.');
 }
 

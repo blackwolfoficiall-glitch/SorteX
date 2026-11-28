@@ -1090,6 +1090,7 @@ model Campaign {
   numberSelectionMode            NumberSelectionMode       @default(RANDOM)
   drawDate                       DateTime?
   drawTime                       String?
+  drawTimeZone                   String?
   drawBasis                      DrawBasis                 @default(LOTERIA_FEDERAL)
   drawRuleTemplateId             String?
   customDrawRule                 Json?
@@ -2492,6 +2493,7 @@ model LotteryDraw {
   fifthPrize         String
   sourceUrl          String?
   sourceDocumentHash String?
+  sourcePrizes       Json?
   sourceType         LotterySourceType        @default(MANUAL)
   status             LotteryDrawStatus        @default(DRAFT)
   notes              String?
@@ -2524,6 +2526,7 @@ model CampaignDraw {
   confirmedByUserId       String?
   confirmedAt             DateTime?
   auditHash               String             @unique
+  auditHashVersion        String?
   previousAuditHash       String?
   notes                   String?
   createdAt               DateTime           @default(now())
@@ -3256,4 +3259,16 @@ model Notification {
   user      User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
+}
+
+// Only aggregate reservation counters, not prompts, provider data, or output.
+model AiUsageDailyQuota {
+  day          DateTime @db.Date
+  scope        String
+  scopeId      String
+  requestCount Int
+  inputUnits   Int
+  outputUnits  Int
+
+  @@id([day, scope, scopeId])
 }

@@ -127,7 +127,12 @@ describe('PurchasesService', () => {
         update: jest.fn(),
       },
       campaignPromotion: { findMany: jest.fn(), update: jest.fn() },
-      promotionUsage: { create: jest.fn(), count: jest.fn() },
+      promotionUsage: {
+        create: jest.fn(),
+        count: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      payment: { findFirst: jest.fn() },
       promotionCoupon: { findFirst: jest.fn(), update: jest.fn() },
       purchase: {
         findUnique: jest.fn(),
@@ -195,6 +200,39 @@ describe('PurchasesService', () => {
     expect(prisma.campaign.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { reservedNumbers: { increment: 2 } } }),
     );
+  });
+
+  it('permite cotar e reservar no dia civil do sorteio antes do horário anunciado', async () => {
+    jest.useFakeTimers({ now: new Date('2026-11-28T15:00:00.000Z') });
+    try {
+      prisma.campaign.findUnique.mockResolvedValue(
+        campaign({
+          drawDate: new Date('2026-11-28'),
+          drawTime: '20:00',
+          drawTimeZone: 'America/Sao_Paulo',
+          salesEndAt: null,
+        }),
+      );
+      prisma.ticket.findMany.mockResolvedValue([]);
+      prisma.purchase.create.mockResolvedValue(purchase());
+      prisma.purchase.findUniqueOrThrow.mockResolvedValue(purchase());
+      const input = { campaignId: 'campaign-1', quantity: 2 };
+      await expect(
+        service.quoteCoupon(buyer, { ...input, couponCode: '' }),
+      ).resolves.toMatchObject({ total: 0.2 });
+      await expect(service.reserveRandom(buyer, input)).resolves.toMatchObject({
+        status: PurchaseStatus.AWAITING_PAYMENT,
+      });
+      jest.setSystemTime(new Date('2026-11-28T23:00:00.000Z'));
+      await expect(
+        service.quoteCoupon(buyer, { ...input, couponCode: '' }),
+      ).rejects.toThrow('O sorteio desta campanha já ocorreu.');
+      await expect(service.reserveRandom(buyer, input)).rejects.toThrow(
+        'O sorteio desta campanha já ocorreu.',
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('permite que um administrador autenticado reserve títulos', async () => {
@@ -269,6 +307,11 @@ describe('PurchasesService', () => {
   it('aplica promoção ativa e calcula desconto', async () => {
     const promotion = {
       id: 'promo-1',
+      type: 'PACKAGE',
+      status: 'ACTIVE',
+      deletedAt: null,
+      totalLimit: null,
+      usageCount: 0,
       numberQuantity: 10,
       packagePrice: new Prisma.Decimal(0.7),
       isActive: true,

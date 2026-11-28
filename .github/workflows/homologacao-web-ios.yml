@@ -1,0 +1,326 @@
+name: Homologação Web + iOS (HTTP isolado)
+
+on:
+  push:
+    branches: [homologacao/web-ios-integrada]
+  pull_request:
+    branches: [infra/netlify-northflank-neon]
+    paths:
+      - .github/workflows/homologacao-web-ios.yml
+      - .github/qa/**
+      - apps/web/**
+      - apps/mobile/**
+      - packages/contracts/**
+      - packages/design-tokens/**
+      - services/api/**
+
+permissions:
+  contents: read
+
+jobs:
+  parity:
+    if: github.event.repository.private == false
+    name: API e paridade HTTP (sem deploy nem iPhone)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: sortex_ci
+          POSTGRES_PASSWORD: ci-isolated-only
+          POSTGRES_DB: sortex_homologacao_local
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U sortex_ci -d sortex_homologacao_local"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_homologacao_local
+      SORTEX_HOMOLOGATION_API_URL: http://127.0.0.1:3338
+      API_INTERNAL_URL: http://127.0.0.1:3338
+      API_URL: http://127.0.0.1:3338
+      WEB_URL: http://127.0.0.1:4408
+      APP_URL: http://127.0.0.1:4408
+      SORTEX_PARITY_API: http://127.0.0.1:3338
+      SORTEX_PARITY_WEB: http://127.0.0.1:4408
+      EMAIL_DELIVERY_MODE: disabled
+      NEXT_TELEMETRY_DISABLED: "1"
+      EXPO_NO_TELEMETRY: "1"
+      PAYMENT_ENV: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            services/api/package-lock.json
+            apps/web/package-lock.json
+            apps/mobile/package-lock.json
+      - name: Verificar a barreira da prévia privada (sem abrir túnel)
+        run: node --test .github/qa/sortex-pin-preview.test.mjs
+      - name: Aplicar migrações e testar a API
+        working-directory: services/api
+        run: |
+          npm ci --no-audit --no-fund
+          npx --no-install prisma generate
+          npx --no-install prisma migrate deploy
+          npm test -- --runInBand
+          npm run build
+      - name: Exercitar reservas, pagamentos simulados e apuração no PostgreSQL descartável
+        working-directory: services/api
+        env:
+          APP_ENV: staging
+          PRISMA_USE_PG_ADAPTER: "true"
+          INTEGRATIONS_MODE: sandbox
+          FEATURE_REAL_PAYMENTS: "false"
+          FEATURE_PAYOUTS: "false"
+          SORTEX_PAYMENTS_TEST_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_payments_test_ci
+          SORTEX_DRAW_AUDIT_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_draw_audit_ci
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JWT_ACCESS_SECRET="$(openssl rand -hex 40)"
+          export JWT_REFRESH_SECRET="$(openssl rand -hex 40)"
+          node <<'JS'
+          const { Client } = require('pg');
+          (async () => {
+            const db = new Client({ connectionString: process.env.DATABASE_URL });
+            await db.connect();
+            try {
+              await db.query('CREATE DATABASE sortex_payments_test_ci');
+              await db.query('CREATE DATABASE sortex_draw_audit_ci');
+            } finally {
+              await db.end();
+            }
+          })().catch((error) => { console.error(error.message); process.exitCode = 1; });
+          JS
+          DATABASE_URL="$SORTEX_PAYMENTS_TEST_DATABASE_URL" npx --no-install prisma migrate deploy
+          DATABASE_URL="$SORTEX_DRAW_AUDIT_DATABASE_URL" npx --no-install prisma migrate deploy
+          npm run test:e2e -- --runInBand payments-postgres draw-audit
+      - name: Conferir extração elegível do prêmio por meta (PostgreSQL descartável)
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_MILESTONE_DRAW_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_milestone_test_ci
+          PRISMA_USE_PG_ADAPTER: "true"
+          FEATURE_REAL_PAYMENTS: "false"
+          FEATURE_REAL_DRAWS: "false"
+          CAIXA_FEDERAL_IMPORT_ENABLED: "false"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$SORTEX_MILESTONE_DRAW_E2E_DATABASE_URL" != 'postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_milestone_test_ci' ]]; then
+            echo 'O cenário de prêmio por meta exige o banco descartável local.' >&2
+            exit 64
+          fi
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_milestone_test_ci
+          DATABASE_URL="$SORTEX_MILESTONE_DRAW_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          npm run test:e2e -- --runInBand --runTestsByPath test/milestone-extraction-postgres.e2e-spec.ts
+      - name: Conferir atribuição privada de pedidos pagos no Ads (PostgreSQL descartável)
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_ADS_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_ads_ci
+          PRISMA_USE_PG_ADAPTER: "true"
+          INTEGRATIONS_MODE: sandbox
+          FEATURE_REAL_PAYMENTS: "false"
+          FEATURE_PAYOUTS: "false"
+          FEATURE_EXTERNAL_CRM: "false"
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${POSTGRES_CONTAINER:-}" || "${SORTEX_ADS_E2E_DATABASE_URL:-}" != 'postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_ads_ci' ]]; then
+            echo 'O cenário de atribuição do Ads exige o banco descartável local do job.' >&2
+            exit 64
+          fi
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_ads_ci
+          DATABASE_URL="$SORTEX_ADS_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          result_file="$(mktemp "$RUNNER_TEMP/sortex-ads-attribution.XXXXXX")"
+          trap 'rm -f -- "$result_file"' EXIT
+          npm run test:e2e -- --runInBand --runTestsByPath test/ads-confirmed-sales-postgres.e2e-spec.ts --json --outputFile="$result_file"
+          node - "$result_file" <<'JS'
+          const { readFileSync } = require('node:fs');
+          const { resolve } = require('node:path');
+          const result = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          const suite = result.testResults.find((row) =>
+            row.name === resolve('test/ads-confirmed-sales-postgres.e2e-spec.ts'),
+          );
+          const attribution = suite?.assertionResults.find((row) =>
+            row.fullName === 'Ads confirmed sales with HTTP and disposable PostgreSQL counts only scoped PAID purchases once; ignores client sales and preserves unknown origin',
+          );
+          if (!result.success || result.numPendingTests !== 0 || attribution?.status !== 'passed') {
+            console.error('O cenário autenticado de atribuição do Ads não passou ou foi ignorado.');
+            process.exitCode = 1;
+          }
+          JS
+      - name: Conferir saldo e extrato somente para o próprio organizador (PostgreSQL descartável)
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_FINANCE_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_finance_ci
+          PRISMA_USE_PG_ADAPTER: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_finance_ci
+          DATABASE_URL="$SORTEX_FINANCE_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          npm run test:e2e -- --runInBand --runTestsByPath test/organizer-finance-snapshot.e2e-spec.ts
+      - name: Conferir caixa de notificações privada (PostgreSQL descartável)
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_INBOX_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_inbox_ci
+          PRISMA_USE_PG_ADAPTER: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_inbox_ci
+          DATABASE_URL="$SORTEX_INBOX_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          npm run test:e2e -- --runInBand --runTestsByPath test/buyer-inbox.e2e-spec.ts
+      - name: Conferir favoritos privados e sem compartilhamento com CRM (PostgreSQL descartável)
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_FAVORITES_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_favorites_ci
+          PRISMA_USE_PG_ADAPTER: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_favorites_ci
+          DATABASE_URL="$SORTEX_FAVORITES_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          npm run test:e2e -- --runInBand --runTestsByPath test/buyer-favorites.e2e-spec.ts
+      - name: Conferir indicadores privados do painel do organizador (PostgreSQL descartável)
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_DASHBOARD_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_dashboard_ci
+          PRISMA_USE_PG_ADAPTER: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_dashboard_ci
+          DATABASE_URL="$SORTEX_DASHBOARD_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          npm run test:e2e -- --runInBand --runTestsByPath test/organizer-dashboard-postgres.e2e-spec.ts
+      - name: Validar Advisor fictício e limites compartilhados (sem provedor externo)
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_ADVISOR_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_advisor_ci
+          SORTEX_AI_QUOTA_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_ai_quota_ci
+          PRISMA_USE_PG_ADAPTER: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_advisor_ci
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_ai_quota_ci
+          DATABASE_URL="$SORTEX_ADVISOR_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          DATABASE_URL="$SORTEX_AI_QUOTA_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          npm run test:e2e -- --runInBand --runTestsByPath test/advisor-provider-postgres.e2e-spec.ts test/ai-usage-quota-postgres.e2e-spec.ts
+      - name: Validar permissões administrativas e revogação isoladas (cenário 9)
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_ADMIN_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_admin_ci
+        run: |
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_admin_ci
+          DATABASE_URL="$SORTEX_ADMIN_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          npm run test:e2e -- --runInBand --runTestsByPath test/admin-authorization-postgres.e2e-spec.ts
+      - name: Validar persistência e privacidade de documentos em armazenamento local
+        working-directory: services/api
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          SORTEX_STORAGE_E2E_DATABASE_URL: postgresql://sortex_ci:ci-isolated-only@127.0.0.1:5432/sortex_storage_ci
+          PRISMA_USE_PG_ADAPTER: "true"
+        run: |
+          docker exec "$POSTGRES_CONTAINER" createdb -U sortex_ci sortex_storage_ci
+          DATABASE_URL="$SORTEX_STORAGE_E2E_DATABASE_URL" npx --no-install prisma migrate deploy
+          npm run test:e2e -- --runInBand --runTestsByPath test/private-document-storage.e2e-spec.ts
+      - name: Testar configuração e build do site
+        working-directory: apps/web
+        run: |
+          npm ci --no-audit --no-fund
+          node --test lib/api-upstream.test.mjs
+          npm run build
+          npm run test:auth:http
+      - name: Validar cliente móvel
+        working-directory: apps/mobile
+        run: |
+          npm ci --no-audit --no-fund
+          npm run typecheck
+          node --import tsx --test tests/*.test.ts
+      - name: Exercitar os dois clientes no mesmo banco descartável
+        shell: bash
+        run: |
+          set -euo pipefail
+          export JWT_ACCESS_SECRET="$(openssl rand -hex 40)"
+          export JWT_REFRESH_SECRET="$(openssl rand -hex 40)"
+          export ORGANIZER_UPLOAD_DIR="$RUNNER_TEMP/sortex-storage"
+          mkdir -p "$ORGANIZER_UPLOAD_DIR"
+          export SORTEX_PUBLISHED_OWNER_EMAIL="sortex-published-owner-$(openssl rand -hex 6)@example.test"
+          export SORTEX_PUBLISHED_OTHER_EMAIL="sortex-published-other-$(openssl rand -hex 6)@example.test"
+          export SORTEX_PUBLISHED_OWNER_PASSWORD="$(openssl rand -hex 30)"
+          export SORTEX_PUBLISHED_OTHER_PASSWORD="$(openssl rand -hex 30)"
+          (
+            cd services/api
+            node <<'JS'
+          const { PrismaClient } = require('@prisma/client');
+          const { PrismaPg } = require('@prisma/adapter-pg');
+          const { hash } = require('bcrypt');
+          const url = new URL(process.env.DATABASE_URL);
+          if (url.protocol !== 'postgresql:' || url.hostname !== '127.0.0.1' ||
+              url.port !== '5432' || url.username !== 'sortex_ci' ||
+              url.pathname !== '/sortex_homologacao_local' || url.search || url.hash) {
+            throw new Error('O cenário de publicação exige o banco descartável local.');
+          }
+          const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: url.href }) });
+          (async () => {
+            for (const [actor, cpf, status] of [
+              ['OWNER', '00000000000', 'VERIFIED'], ['OTHER', '00000000001', 'PENDING'],
+            ]) {
+              const email = process.env[`SORTEX_PUBLISHED_${actor}_EMAIL`];
+              const password = process.env[`SORTEX_PUBLISHED_${actor}_PASSWORD`];
+              await prisma.user.create({ data: {
+                name: 'Organizador sintético', email, password: await hash(password, 10), role: 'ORGANIZER',
+                organizerProfile: { create: { fullName: 'Organizador sintético', cpf, phone: '71999990000', verificationStatus: status } },
+              } });
+            }
+          })().catch(() => { console.error('Falhou a criação das identidades sintéticas.'); process.exitCode = 1; })
+            .finally(() => prisma.$disconnect());
+          JS
+          )
+          (
+            cd services/api
+            exec env NODE_ENV=development APP_ENV=staging STORAGE_DRIVER=filesystem PORT=3338 \
+              APP_VERSION="$GITHUB_SHA" node dist/src/main.js
+          ) >"$RUNNER_TEMP/sortex-api.log" 2>&1 &
+          api_pid=$!
+          (
+            cd apps/web
+            exec node_modules/.bin/next start --hostname 127.0.0.1 --port 4408
+          ) >"$RUNNER_TEMP/sortex-web.log" 2>&1 &
+          web_pid=$!
+          trap 'kill "$api_pid" "$web_pid" 2>/dev/null || true' EXIT
+          wait_ready() {
+            local base="$1" pid="$2" service="$3"
+            for attempt in {1..40}; do
+              if ! kill -0 "$pid" 2>/dev/null; then
+                echo "$service encerrou antes de ficar pronto. Confira suas opções de inicialização."
+                return 1
+              fi
+              if curl --max-time 3 --fail --silent "$base/health/ready" >/dev/null; then return 0; fi
+              sleep 1
+            done
+            echo "$service não ficou pronto no prazo."
+            return 1
+          }
+          wait_ready "$SORTEX_PARITY_API" "$api_pid" "API"
+          wait_ready "$SORTEX_PARITY_WEB/api" "$web_pid" "Site"
+          export SORTEX_FEDERAL_PARITY_MODE=local-synthetic-only
+          export SORTEX_FEDERAL_PARITY_FIXTURE="$RUNNER_TEMP/sortex-federal-parity.json"
+          trap 'rm -f -- "$SORTEX_FEDERAL_PARITY_FIXTURE"; kill "$api_pid" "$web_pid" 2>/dev/null || true' EXIT
+          (cd services/api && node scripts/seed-public-draw-parity.cjs)
+          cd apps/mobile
+          node --import tsx scripts/test-web-ios-parity.ts
+          node --import tsx scripts/test-published-campaign-parity.ts
+          node --import tsx scripts/test-public-draw-parity.ts

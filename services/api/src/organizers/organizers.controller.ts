@@ -86,6 +86,8 @@ export class OrganizersController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const file = await this.organizersService.getDocumentFile(documentId, user);
+    response.setHeader('Cache-Control', 'private, no-store');
+    response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Content-Type', file.mimeType);
     response.setHeader(
       'Content-Disposition',

@@ -1,0 +1,123 @@
+.scope {
+  width: 100%;
+  min-width: 0;
+  border-radius: 1.5rem;
+}
+.scope [data-plan-view] {
+  max-width: 80rem;
+  min-width: 0;
+  margin-inline: auto;
+  padding: clamp(0.65rem, 2vw, 1.35rem);
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  overflow-wrap: anywhere;
+}
+.scope :is([data-plan-header], [data-plan-current], [data-plan-card]) {
+  min-width: 0;
+  padding: clamp(1rem, 2.6vw, 1.5rem);
+  border: 1px solid var(--sxp-line);
+  border-radius: 1.25rem;
+  box-shadow: var(--sxp-shadow);
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+}
+.scope [data-plan-current] {
+  border-color: var(--sxp-accent);
+}
+.scope [data-plan-muted] {
+  color: var(--sxp-muted);
+}
+.scope :is([data-plan-icon], [data-plan-eyebrow]) {
+  color: var(--sxp-accent);
+}
+.scope [data-plan-feature] {
+  color: var(--sxp-success);
+}
+.scope [data-plan-cycle] {
+  display: grid;
+  gap: 0.25rem;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border-color: var(--sxp-line);
+  background: var(--sxp-bg);
+  overflow: hidden;
+}
+.scope [data-plan-cycle]:focus-within {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 3px;
+}
+.scope select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  margin-left: 0;
+  color: var(--sxp-text);
+}
+.scope [data-plan-card="active"] {
+  border-color: var(--sxp-accent);
+}
+.scope [data-plan-consumption] {
+  background: var(--sxp-tint);
+  text-align: start;
+}
+.scope [data-plan-grid] {
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 42rem) {
+  .scope [data-plan-grid] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 74rem) {
+  .scope [data-plan-grid] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.badge {
+  display: inline-block;
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.2rem 0.5rem;
+  margin: 0.4rem 0;
+  border-radius: 0.9rem;
+  color: var(--sxp-accent);
+  background: var(--sxp-tint);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.scope button {
+  min-height: 2.75rem;
+  height: auto;
+  max-width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--sxp-line);
+  color: var(--sxp-text);
+  background: var(--sxp-bg);
+}
+.scope [data-plan-card] button:not(:disabled) {
+  color: var(--sxp-white);
+  background: var(--sxp-gradient);
+}
+.scope button:disabled {
+  color: var(--sxp-muted);
+  background: var(--sxp-tint);
+}
+.scope button:focus-visible {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 3px;
+}
+.scope [data-plan-notice] {
+  border: 1px solid var(--sxp-line);
+  background: var(--sxp-surface);
+}
+.scope [data-plan-notice="success"] {
+  color: var(--sxp-success);
+}
+.scope [data-plan-notice="error"] {
+  color: var(--sxp-error);
+}
+.loading {
+  padding: 1rem;
+  color: var(--sxp-muted);
+}

@@ -21,6 +21,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { AffiliatesService } from './affiliates.service';
 import {
+  AcceptAffiliateInviteDto,
   AffiliatePayoutDto,
   CreateAffiliateLinkDto,
   CreateAffiliateProgramDto,
@@ -137,6 +138,15 @@ export class AffiliatesController {
     @Param('id') id: string,
   ) {
     return this.service.resendInvite(u, id);
+  }
+  @Post('affiliates/invite/accept')
+  @Roles(UserRole.BUYER, UserRole.ORGANIZER)
+  async acceptFromBody(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: AcceptAffiliateInviteDto,
+  ) {
+    const { status } = await this.service.acceptInvite(user, dto.code);
+    return { status };
   }
   @Post('affiliates/invite/:code/accept')
   @Roles(UserRole.BUYER, UserRole.ORGANIZER)

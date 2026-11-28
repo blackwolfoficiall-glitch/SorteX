@@ -1,0 +1,188 @@
+/* Fonts are self-hosted; notices and exact upstream assets are in public/fonts/sortex. */
+/* Manrope latin-ext; letter coverage inherited from the official build. */
+@font-face {
+  font-family: "SorteX Manrope";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/fonts/sortex/manrope-v23-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Manrope latin; letter coverage inherited from the official build. */
+@font-face {
+  font-family: "SorteX Manrope";
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("/fonts/sortex/manrope-v23-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Sora latin-ext; letter coverage inherited from the official build. */
+@font-face {
+  font-family: "SorteX Sora";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/sortex/sora-v17-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* Sora latin; letter coverage inherited from the official build. */
+@font-face {
+  font-family: "SorteX Sora";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("/fonts/sortex/sora-v17-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Only explicitly wrapped routes and opted-in components receive these styles. */
+:where(.sx-premium) {
+  --sxp-bg: var(--sxp-light-bg);
+  --sxp-surface: var(--sxp-light-surface);
+  --sxp-text: var(--sxp-light-text);
+  --sxp-muted: var(--sxp-light-muted);
+  --sxp-line: var(--sxp-light-line);
+  --sxp-accent: var(--sxp-light-accent);
+  --sxp-tint: var(--sxp-light-tint);
+  --sxp-selected: var(--sxp-light-selected);
+  --sxp-error: var(--sxp-light-error);
+  --sxp-success: var(--sxp-light-success);
+  --sxp-focus: var(--sxp-accent);
+  --sxp-font-heading: "SorteX Sora", ui-sans-serif, system-ui, sans-serif;
+  --sxp-font-body: "SorteX Manrope", ui-sans-serif, system-ui, sans-serif;
+  color-scheme: light;
+  background-color: var(--sxp-bg);
+  color: var(--sxp-text);
+  font-family: var(--sxp-font-body);
+}
+
+:where(.sx-premium[data-sx-premium="dark"]) {
+  --sxp-bg: var(--sxp-dark-bg);
+  --sxp-surface: var(--sxp-dark-surface);
+  --sxp-text: var(--sxp-dark-text);
+  --sxp-muted: var(--sxp-dark-muted);
+  --sxp-line: var(--sxp-dark-line);
+  --sxp-accent: var(--sxp-dark-accent);
+  --sxp-tint: var(--sxp-dark-tint);
+  --sxp-selected: var(--sxp-dark-selected);
+  --sxp-error: var(--sxp-dark-error);
+  --sxp-success: var(--sxp-dark-success);
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :where(.sx-premium[data-sx-premium="system"]) {
+    --sxp-bg: var(--sxp-dark-bg);
+    --sxp-surface: var(--sxp-dark-surface);
+    --sxp-text: var(--sxp-dark-text);
+    --sxp-muted: var(--sxp-dark-muted);
+    --sxp-line: var(--sxp-dark-line);
+    --sxp-accent: var(--sxp-dark-accent);
+    --sxp-tint: var(--sxp-dark-tint);
+    --sxp-selected: var(--sxp-dark-selected);
+    --sxp-error: var(--sxp-dark-error);
+    --sxp-success: var(--sxp-dark-success);
+    color-scheme: dark;
+  }
+}
+
+:where(.sx-premium) :where(.sx-premium-title, .sx-premium-section) {
+  font-family: var(--sxp-font-heading);
+  overflow-wrap: anywhere;
+}
+:where(.sx-premium) :where(.sx-premium-title) {
+  font-size: var(--sxp-title-size);
+  font-weight: var(--sxp-title-weight);
+  letter-spacing: var(--sxp-title-tracking);
+  line-height: 1.225;
+}
+:where(.sx-premium) :where(.sx-premium-section) {
+  font-size: var(--sxp-section-size);
+  font-weight: var(--sxp-section-weight);
+  letter-spacing: var(--sxp-section-tracking);
+  line-height: 1.3;
+}
+:where(.sx-premium) :where(.sx-premium-muted) {
+  color: var(--sxp-muted);
+  font-size: var(--sxp-body-size);
+  line-height: var(--sxp-body-line);
+}
+:where(.sx-premium) :where(.sx-premium-surface) {
+  background-color: var(--sxp-surface);
+  color: var(--sxp-text);
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-panel-radius);
+  box-shadow: var(--sxp-shadow);
+  min-width: 0;
+}
+:where(.sx-premium) :where(.sx-premium-ticket) {
+  background-color: var(--sxp-blue);
+  background-image: var(--sxp-gradient);
+  color: var(--sxp-white);
+  border-radius: calc(var(--sxp-panel-radius) + 0.25rem);
+  box-shadow: var(--sxp-shadow);
+  min-width: 0;
+}
+:where(.sx-premium) :where(.sx-premium-badge) {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 1.6em;
+  border-radius: 1em;
+  padding: 0.15em 0.65em;
+  background-color: var(--sxp-tint);
+  color: var(--sxp-accent);
+  font-weight: var(--sxp-label-weight);
+  overflow-wrap: anywhere;
+}
+:where(.sx-premium) :where(.sx-premium-button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: var(--sxp-action-height);
+  max-width: 100%;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  background-color: var(--sxp-surface);
+  color: var(--sxp-text);
+  font-size: var(--sxp-label-size);
+  font-weight: var(--sxp-label-weight);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  text-align: center;
+}
+:where(.sx-premium) :where(.sx-premium-button[data-variant="primary"]) {
+  border-color: transparent;
+  background-color: var(--sxp-blue);
+  background-image: var(--sxp-gradient);
+  color: var(--sxp-white);
+}
+:where(.sx-premium) :where(.sx-premium-button[data-variant="ghost"]) {
+  border-color: transparent;
+  background-color: transparent;
+  color: var(--sxp-accent);
+}
+:where(.sx-premium) :where(.sx-premium-button):focus-visible {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 3px;
+}
+:where(.sx-premium) :where(.sx-premium-button):is(:disabled, [aria-disabled="true"]) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+@media (hover: hover) {
+  :where(.sx-premium) :where(.sx-premium-button):not(:disabled, [aria-disabled="true"]):hover {
+    filter: brightness(0.94);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :where(.sx-premium) :where(.sx-premium-button) {
+    transition: filter 150ms ease-out;
+  }
+}

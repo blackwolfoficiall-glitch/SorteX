@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/require-await */
-import { BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import {
   CampaignCategory,
@@ -7,12 +12,17 @@ import {
   CampaignStatus,
   DrawBasis,
   NumberSelectionMode,
+  Prisma,
   UserRole,
+  UserStatus,
   VerificationStatus,
 } from '@prisma/client';
+import { Readable } from 'node:stream';
+import { DrawRuleEngineService } from '../draws/draw-rule-engine.service';
 import { OrganizerStorageService } from '../organizers/organizer-storage.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CampaignsService } from './campaigns.service';
+import { coverRevision } from './cover-revision';
 
 const organizer = {
   id: 'organizer-1',
@@ -66,6 +76,8 @@ function campaign(overrides: Record<string, unknown> = {}) {
     reservedNumbers: 0,
     grossRevenue: 0,
     publishedAt: null,
+    publishedRuleSnapshot: null,
+    publicationBlocked: false,
     createdAt: new Date(),
     updatedAt: new Date(),
     organizer: {
@@ -101,6 +113,18 @@ function campaign(overrides: Record<string, unknown> = {}) {
 describe('CampaignsService', () => {
   let service: CampaignsService;
   let prisma: any;
+  const storage = {
+    save: jest.fn(),
+    resolve: jest.fn(),
+    open: jest.fn(),
+    mimeType: jest.fn(),
+  };
+  const owner = {
+    ...organizer,
+    status: UserStatus.ACTIVE,
+    adminPermissions: [],
+    adminTeamRole: null,
+  };
 
   beforeEach(async () => {
     prisma = {
@@ -110,6 +134,7 @@ describe('CampaignsService', () => {
         findMany: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
         delete: jest.fn(),
       },
       organizerProfile: {
@@ -138,6 +163,8 @@ describe('CampaignsService', () => {
       campaignCustomization: {
         upsert: jest.fn(),
       },
+      purchase: { groupBy: jest.fn().mockResolvedValue([]) },
+      affiliateProgram: { findFirst: jest.fn().mockResolvedValue(null) },
       drawRuleTemplate: {
         upsert: jest.fn(),
         findMany: jest.fn(),
@@ -154,18 +181,207 @@ describe('CampaignsService', () => {
     const module = await Test.createTestingModule({
       providers: [
         CampaignsService,
+        DrawRuleEngineService,
         { provide: PrismaService, useValue: prisma },
         {
           provide: OrganizerStorageService,
-          useValue: {
-            save: jest.fn(),
-            resolve: jest.fn(),
-            mimeType: jest.fn(),
-          },
+          useValue: storage,
         },
       ],
     }).compile();
     service = module.get(CampaignsService);
+  });
+
+  it.each([
+    CampaignStatus.DRAFT,
+    CampaignStatus.PAUSED,
+    CampaignStatus.FINISHED,
+  ])(
+    'does not show %s cover on the public route even with an owner identity',
+    async (status) => {
+      prisma.campaign.findFirst.mockResolvedValue(campaign({ status }));
+      await expect(
+        service.getMediaFile('campaign-1', 'cover', undefined, owner, 'public'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    },
+  );
+
+  it('keeps instant selectors and winner identifiers private on public list and detail', async () => {
+    const row = campaign({
+      status: CampaignStatus.PUBLISHED,
+      instantPrizes: [
+        {
+          id: 'prize-1',
+          exactNumber: '000091',
+          generationRule: { instructions: 'internal' },
+          description: 'Prêmio sintético',
+          value: 12.34,
+          type: CampaignPrizeType.PRODUCT,
+          quantity: 1,
+          status: 'AVAILABLE',
+          foundCount: 0,
+          winnerUserId: 'internal-id',
+        },
+      ],
+    });
+    prisma.campaign.findMany.mockResolvedValue([row]);
+    prisma.campaign.findFirst.mockResolvedValue(row);
+    prisma.campaign.findUnique.mockResolvedValue(row);
+    const [listing, detail, ownerView] = await Promise.all([
+      service.listPublic(),
+      service.getPublic('corolla-ou-90-mil'),
+      service.getOwned('campaign-1', owner),
+    ]);
+    for (const one of [listing[0], detail]) {
+      expect(one.instantPrizes[0]).toEqual({
+        id: 'prize-1',
+        description: 'Prêmio sintético',
+        value: 12.34,
+        type: 'PRODUCT',
+        quantity: 1,
+        status: 'AVAILABLE',
+        foundCount: 0,
+        imageUrl: null,
+      });
+    }
+    expect(ownerView.instantPrizes[0]).toMatchObject({
+      exactNumber: '000091',
+      generationRule: { instructions: 'internal' },
+    });
+  });
+
+  it('keeps the nominal private route restricted when the cover is public', async () => {
+    prisma.campaign.findFirst.mockResolvedValue(
+      campaign({ status: CampaignStatus.PUBLISHED }),
+    );
+    await expect(
+      service.getMediaFile(
+        'campaign-1',
+        'cover',
+        undefined,
+        { ...owner, id: 'other-organizer' },
+        'owner',
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  describe('guarded native draft cover updates', () => {
+    const image = {
+      buffer: Buffer.from('synthetic'),
+      mimetype: 'image/png',
+      originalname: 'capa.png',
+      size: 9,
+    };
+    const newKey = 'campaigns/campaign-1/new.png';
+
+    it.each([
+      { status: CampaignStatus.PUBLISHED },
+      { status: CampaignStatus.PAUSED },
+      { publishedAt: new Date('2026-11-25') },
+      { coverImage: 'campaigns/campaign-1/different.png' },
+    ])(
+      'rejects even owned stale/public drafts before writing storage: %o',
+      async (change) => {
+        storage.save.mockClear();
+        prisma.campaign.findUnique.mockResolvedValue(campaign(change));
+        await expect(
+          service.uploadMedia(
+            'campaign-1',
+            owner,
+            'COVER',
+            [image],
+            undefined,
+            coverRevision('campaigns/1/cover.jpg')!,
+          ),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(storage.save).not.toHaveBeenCalled();
+        expect(prisma.campaign.updateMany).not.toHaveBeenCalled();
+      },
+    );
+
+    it('writes only when the exact unpublished draft cover is still current', async () => {
+      storage.save.mockResolvedValue({ storageKey: newKey });
+      prisma.campaign.findUnique
+        .mockResolvedValueOnce(campaign({ coverImage: null }))
+        .mockResolvedValueOnce(campaign({ coverImage: newKey }));
+      prisma.campaign.updateMany.mockResolvedValue({ count: 1 });
+      const result = await service.uploadMedia(
+        'campaign-1',
+        owner,
+        'COVER',
+        [image],
+        undefined,
+        'none',
+      );
+      expect(prisma.campaign.updateMany).toHaveBeenCalledWith({
+        where: {
+          id: 'campaign-1',
+          organizerId: owner.id,
+          status: 'DRAFT',
+          publishedAt: null,
+          coverImage: null,
+        },
+        data: { coverImage: newKey },
+      });
+      expect(result.coverImageRevision).toBe(coverRevision(newKey));
+      expect(result).not.toHaveProperty('coverImage');
+    });
+
+    it('does not confirm another editor’s intervening cover as this upload', async () => {
+      storage.save.mockResolvedValue({ storageKey: newKey });
+      prisma.campaign.findUnique
+        .mockResolvedValueOnce(campaign({ coverImage: null }))
+        .mockResolvedValueOnce(
+          campaign({ coverImage: 'campaigns/1/concurrent.png' }),
+        );
+      prisma.campaign.updateMany.mockResolvedValue({ count: 1 });
+      await expect(
+        service.uploadMedia(
+          'campaign-1',
+          owner,
+          'COVER',
+          [image],
+          undefined,
+          'none',
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it('does not update public media if publication or a new image wins while storage is writing', async () => {
+      storage.save.mockResolvedValue({ storageKey: newKey });
+      prisma.campaign.findUnique.mockResolvedValue(
+        campaign({ coverImage: null }),
+      );
+      prisma.campaign.updateMany.mockResolvedValue({ count: 0 });
+      await expect(
+        service.uploadMedia(
+          'campaign-1',
+          owner,
+          'COVER',
+          [image],
+          undefined,
+          'none',
+        ),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.campaign.update).not.toHaveBeenCalled();
+      expect(prisma.campaign.findUnique).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('previews an unreferenced milestone image only through the owner route', async () => {
+    const name = '11111111-1111-1111-1111-111111111111.png';
+    const stream = Readable.from([]);
+    storage.open.mockResolvedValueOnce(stream);
+    storage.mimeType.mockReturnValueOnce('image/png');
+    prisma.campaign.findFirst.mockResolvedValue(
+      campaign({ status: CampaignStatus.PUBLISHED, milestonePrizes: [] }),
+    );
+    await expect(
+      service.getMediaFile('campaign-1', 'milestone', name, owner, 'public'),
+    ).rejects.toBeInstanceOf(NotFoundException);
+    await expect(
+      service.getMediaFile('campaign-1', 'milestone', name, owner, 'owner'),
+    ).resolves.toEqual({ stream, mimeType: 'image/png' });
   });
 
   it('cria campanha em rascunho com slug único', async () => {
@@ -378,6 +594,140 @@ describe('CampaignsService', () => {
     );
     expect(prisma.campaign.update).not.toHaveBeenCalled();
   });
+
+  it.each([CampaignStatus.DRAFT, CampaignStatus.PAUSED])(
+    'não publica campanha do próprio organizador quando a administração bloqueou (%s)',
+    async (status) => {
+      prisma.campaign.findUnique.mockResolvedValue(
+        campaign({ status, publicationBlocked: true }),
+      );
+      await expect(service.publish('campaign-1', organizer)).rejects.toThrow(
+        'A publicação desta campanha está bloqueada.',
+      );
+      expect(prisma.campaign.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('não altera a publicação quando um bloqueio ou transição ocorre depois da leitura', async () => {
+    prisma.campaign.findUnique.mockResolvedValue(campaign());
+    prisma.campaign.update.mockRejectedValue(
+      new Prisma.PrismaClientKnownRequestError('Status changed', {
+        code: 'P2025',
+        clientVersion: 'test',
+      }),
+    );
+    await expect(
+      service.publish('campaign-1', organizer),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(prisma.campaign.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'campaign-1',
+          status: CampaignStatus.DRAFT,
+          publicationBlocked: false,
+        },
+      }),
+    );
+  });
+
+  it('reativa sem regravar a data nem substituir a regra original pelo template atual', async () => {
+    const publishedAt = new Date('2026-01-03T10:00:00.000Z');
+    const publishedRuleSnapshot = {
+      digits: [{ prize: 3, position: 4, order: 0 }],
+    };
+    const paused = campaign({
+      status: CampaignStatus.PAUSED,
+      publishedAt,
+      publishedRuleSnapshot,
+      drawRuleTemplate: {
+        ...campaign().drawRuleTemplate,
+        ruleDefinition: {
+          digits: [{ prize: 1, position: 0, order: 0 }],
+        },
+      },
+    });
+    prisma.campaign.findUnique.mockResolvedValue(paused);
+    prisma.campaign.update.mockResolvedValue({
+      ...paused,
+      status: CampaignStatus.PUBLISHED,
+    });
+    await expect(
+      service.publish('campaign-1', organizer),
+    ).resolves.toMatchObject({
+      status: CampaignStatus.PUBLISHED,
+      publishedAt,
+      publishedRuleSnapshot,
+    });
+    expect(prisma.campaign.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: 'campaign-1',
+          status: CampaignStatus.PAUSED,
+          publicationBlocked: false,
+          publishedAt,
+        },
+        data: { status: CampaignStatus.PUBLISHED },
+      }),
+    );
+  });
+
+  it('preserva snapshot nulo legítimo de campanha manual e a data original', async () => {
+    const paused = campaign({
+      status: CampaignStatus.PAUSED,
+      drawBasis: DrawBasis.MANUAL_RESULT,
+      publishedAt: new Date('2026-01-03T10:00:00.000Z'),
+      publishedRuleSnapshot: null,
+      drawRuleTemplateId: null,
+      drawRuleTemplate: null,
+    });
+    prisma.campaign.findUnique.mockResolvedValue(paused);
+    prisma.campaign.update.mockResolvedValue({
+      ...paused,
+      status: CampaignStatus.PUBLISHED,
+    });
+    await expect(
+      service.publish('campaign-1', organizer),
+    ).resolves.toMatchObject({
+      status: CampaignStatus.PUBLISHED,
+      publishedAt: paused.publishedAt,
+      publishedRuleSnapshot: null,
+    });
+    expect(prisma.campaign.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { status: CampaignStatus.PUBLISHED },
+      }),
+    );
+  });
+
+  it.each([
+    {
+      publishedAt: null,
+      publishedRuleSnapshot: { digits: [{ prize: 3, position: 4, order: 0 }] },
+    },
+    {
+      publishedAt: new Date('2026-01-03T10:00:00.000Z'),
+      publishedRuleSnapshot: null,
+    },
+    {
+      publishedAt: new Date('2026-01-03T10:00:00.000Z'),
+      publishedRuleSnapshot: {},
+    },
+    {
+      publishedAt: new Date('2026-01-03T10:00:00.000Z'),
+      publishedRuleSnapshot: { digits: [{ prize: 6, position: 4, order: 0 }] },
+    },
+  ])(
+    'não reconstitui metadados ausentes ou ilegíveis ao reativar (%o)',
+    async (metadata) => {
+      prisma.campaign.findUnique.mockResolvedValue(
+        campaign({ status: CampaignStatus.PAUSED, ...metadata }),
+      );
+      await expect(
+        service.publish('campaign-1', organizer),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(prisma.campaign.update).not.toHaveBeenCalled();
+    },
+  );
 
   it('pausa uma campanha publicada do próprio organizador', async () => {
     prisma.campaign.findUnique.mockResolvedValue(

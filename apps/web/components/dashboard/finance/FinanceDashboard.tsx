@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { loadOrganizerFinanceDashboard } from "@/lib/finance/load-organizer-finance-dashboard";
+import PremiumScope from "@/components/premium/PremiumScope";
 import {
   Area,
   AreaChart,
@@ -21,19 +23,21 @@ import {
   ReceiptText,
   Wallet,
 } from "lucide-react";
+import "./finance-premium.css";
 
 type Overview = {
   balance: {
     gross: number;
     net: number;
     available: number;
+    pending: number;
+    blocked: number;
     platformFees: number;
     gatewayFees: number;
   };
   periods: {
-    today: { gross: number; net: number };
-    last7Days: { gross: number; net: number };
-    currentMonth: { gross: number; net: number };
+    today: { gross: number };
+    currentMonth: { gross: number };
   };
 };
 type Entry = {
@@ -44,8 +48,7 @@ type Entry = {
   amount: number;
   description: string;
   createdAt: string;
-  campaign?: { title: string };
-  payment?: { provider: string; method: string };
+  campaign?: { title: string } | null;
 };
 type Campaign = {
   id: string;
@@ -53,210 +56,431 @@ type Campaign = {
   platformFees: number;
   gatewayFees: number;
   netRevenue: number;
-  estimatedProfit: number;
   campaign: { title: string };
 };
+type Statement = {
+  data: Entry[];
+  pagination: { total: number };
+};
+type Data = { overview: Overview; statement: Statement; campaigns: Campaign[] };
+type LoadState =
+  | { kind: "loading" }
+  | { kind: "error"; message: string }
+  | { kind: "ready"; data: Data };
 type Period = "7" | "30" | "90" | "365" | "custom";
 
-const money = (value = 0) =>
-  value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const card = "rounded-3xl border border-slate-200 bg-white p-5 shadow-sm";
+const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const money = (value: number) => brl.format(value);
+const dateTime = new Intl.DateTimeFormat("pt-BR", {
+  dateStyle: "short",
+  timeStyle: "short",
+});
+const card = "sx-premium-surface sx-finance-panel";
 
 export default function FinanceDashboard() {
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [state, setState] = useState<LoadState>({ kind: "loading" });
+  const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const active = () => !controller.signal.aborted;
+    loadOrganizerFinanceDashboard<Overview, Statement, Campaign[]>(
+      <T,>(url: string) => get<T>(url, controller.signal),
+      active,
+    )
+      .then((result) => {
+        if (active() && result) setState({ kind: "ready", data: result });
+      })
+      .catch((cause: unknown) => {
+        if (active())
+          setState({
+            kind: "error",
+            message: cause instanceof FinanceReadError ? cause.message : "Não foi possível consultar o financeiro.",
+          });
+      });
+    return () => controller.abort();
+  }, [attempt]);
+
+  return (
+    <PremiumScope className="sx-finance">
+      {state.kind === "ready" ? (
+        <FinanceContent {...state.data} />
+      ) : (
+        <div className="sx-finance-content">
+          <FinanceHeader />
+          {state.kind === "loading" ? (
+            <div className={card} role="status">
+              <LoaderCircle className="sx-finance-loader" size={21} aria-hidden="true" />
+              <p>Consultando saldo, taxas e extrato…</p>
+            </div>
+          ) : (
+            <div className={card}>
+              <p className="sx-finance-error" role="alert">{state.message}</p>
+              <button type="button" className="sx-premium-button sx-finance-retry" onClick={() => {
+                setState({ kind: "loading" });
+                setAttempt((n) => n + 1);
+              }}>Tentar novamente</button>
+            </div>
+          )}
+        </div>
+      )}
+    </PremiumScope>
+  );
+}
+
+function FinanceContent({ overview, statement, campaigns }: Data) {
   const [period, setPeriod] = useState<Period>("30");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    Promise.all([
-      get<Overview>("/api/finance/overview"),
-      get<{ data: Entry[] }>("/api/finance/statement?limit=100"),
-      get<Campaign[]>("/api/finance/campaigns"),
-    ])
-      .then(([nextOverview, statement, nextCampaigns]) => {
-        if (!active) return;
-        setOverview(nextOverview);
-        setEntries(statement.data);
-        setCampaigns(nextCampaigns);
-      })
-      .catch((cause) => {
-        if (active)
-          setError(
-            cause instanceof Error
-              ? cause.message
-              : "Falha ao carregar o financeiro.",
-          );
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const invalidRange = period === "custom" && !!startDate && !!endDate && startDate > endDate;
+  const { balance } = overview;
+  const entries = statement.data;
+  const partial = statement.pagination.total > entries.length;
 
   const filteredEntries = useMemo(() => {
+    if (invalidRange) return [];
     const now = new Date();
     const start = period === "custom"
       ? startDate ? new Date(`${startDate}T00:00:00`) : null
       : new Date(now.getFullYear(), now.getMonth(), now.getDate() - Number(period) + 1);
-    const end = period === "custom" && endDate
-      ? new Date(`${endDate}T23:59:59.999`)
-      : now;
+    const end = period === "custom" && endDate ? new Date(`${endDate}T23:59:59.999`) : now;
     return entries.filter((entry) => {
       const date = new Date(entry.createdAt);
       return (!start || date >= start) && date <= end;
     });
-  }, [entries, period, startDate, endDate]);
+  }, [entries, period, startDate, endDate, invalidRange]);
 
   const totals = useMemo(() => {
-    const total = (direction: Entry["direction"]) =>
-      filteredEntries
-        .filter((entry) => entry.direction === direction)
-        .reduce((sum, entry) => sum + entry.amount, 0);
-    const byType = (type: string) =>
-      filteredEntries
-        .filter((entry) => entry.type === type)
-        .reduce((sum, entry) => sum + entry.amount, 0);
-    const revenue = total("CREDIT");
-    const expenses = total("DEBIT");
+    const byType = (direction: Entry["direction"], ...types: string[]) =>
+      sumBRL(filteredEntries.filter((entry) => entry.direction === direction && types.includes(entry.type)));
+    // Gross, net and fees can be informational rows for the same payment.
+    // Never add gross and net together or subtract already-deducted fees again.
     return {
-      revenue,
-      expenses,
-      platformFees: byType("PLATFORM_FEE"),
-      gatewayFees: byType("GATEWAY_FEE"),
-      net: revenue - expenses,
+      grossSales: byType("CREDIT", "GROSS_SALE"),
+      netRevenue: byType("CREDIT", "ORGANIZER_NET_REVENUE"),
+      platformFees: byType("DEBIT", "PLATFORM_FEE"),
+      gatewayFees: byType("DEBIT", "GATEWAY_FEE"),
+      reversals: byType("DEBIT", "REFUND", "CHARGEBACK"),
     };
   }, [filteredEntries]);
 
   const chart = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<number, Entry[]>();
     filteredEntries
-      .filter((entry) => entry.type === "ORGANIZER_NET_REVENUE")
+      .filter((entry) => entry.type === "ORGANIZER_NET_REVENUE" && entry.direction === "CREDIT")
       .forEach((entry) => {
-        const key = entry.createdAt.slice(0, 10);
-        map.set(key, (map.get(key) ?? 0) + entry.amount);
+        const date = new Date(entry.createdAt);
+        const day = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+        const group = map.get(day) ?? [];
+        group.push(entry);
+        map.set(day, group);
       });
     return [...map]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([date, value]) => ({
-        date: new Date(`${date}T12:00:00`).toLocaleDateString("pt-BR", {
-          day: "2-digit",
-          month: "2-digit",
-        }),
-        value,
+      .sort(([a], [b]) => a - b)
+      .map(([date, group]) => ({
+        date: new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit" }).format(date),
+        value: sumBRL(group),
       }));
   }, [filteredEntries]);
 
+  const chartSupported = chart.every((day) => day.value !== null);
+
   function exportExcel() {
     const rows = filteredEntries.map((entry) => [
-      new Date(entry.createdAt).toLocaleString("pt-BR"),
+      dateTime.format(new Date(entry.createdAt)),
       entry.description,
       entry.campaign?.title ?? "",
       entry.direction === "CREDIT" ? "Receita" : "Despesa",
       entry.status,
       entry.amount.toFixed(2).replace(".", ","),
     ]);
+    const note = partial
+      ? `Recorte de até ${entries.length} lançamentos recentes de ${statement.pagination.total} no histórico.`
+      : "Lançamentos correspondentes ao filtro da tela.";
     const table = [
       ["Data", "Descrição", "Campanha", "Movimento", "Status", "Valor"],
       ...rows,
     ]
-      .map(
-        (row, index) =>
-          `<tr>${row
-            .map(
-              (value) =>
-                `<${index ? "td" : "th"}>${htmlCell(value)}</${index ? "td" : "th"}>`,
-            )
-            .join("")}</tr>`,
-      )
+      .map((row, index) => {
+        const tag = index ? "td" : "th";
+        return `<tr>${row.map((value) => `<${tag}>${htmlCell(value)}</${tag}>`).join("")}</tr>`;
+      })
       .join("");
-    const content = `<html><head><meta charset="utf-8"></head><body><table>${table}</table></body></html>`;
-    downloadFile(
-      `sortex-extrato-${new Date().toISOString().slice(0, 10)}.xls`,
-      content,
-      "application/vnd.ms-excel;charset=utf-8",
-    );
+    const content = `<html><head><meta charset="utf-8"></head><body><p>${htmlCell(note)}</p><table>${table}</table></body></html>`;
+    downloadFile(`sortex-extrato-${new Date().toISOString().slice(0, 10)}.xls`, content, "application/vnd.ms-excel;charset=utf-8");
   }
 
-  if (loading)
-    return (
-      <div className="flex min-h-[70vh] items-center justify-center">
-        <LoaderCircle className="animate-spin text-violet-700" />
-      </div>
-    );
-
-  const balance = overview?.balance ?? {
-    gross: 0,
-    net: 0,
-    available: 0,
-    platformFees: 0,
-    gatewayFees: 0,
-  };
-
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-7 md:px-8">
-      <div className="mx-auto max-w-7xl">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+    <div className="sx-finance-content">
+      <FinanceHeader>
+        <div className="sx-finance-exports">
+          <button type="button" onClick={() => window.print()} className="sx-premium-button">
+            <Download size={17} aria-hidden="true" /> Exportar PDF
+          </button>
+          <button type="button" onClick={exportExcel} disabled={invalidRange} className="sx-premium-button" data-variant="primary" aria-describedby="sx-finance-range-note">
+            <FileSpreadsheet size={17} aria-hidden="true" /> Exportar Excel
+          </button>
+        </div>
+      </FinanceHeader>
+
+      <section className="sx-finance-distribution" aria-label="Posição contábil interna">
+        <div className="sx-premium-ticket sx-finance-ticket">
+          <span className="sx-finance-ticket-icon"><Wallet size={21} aria-hidden="true" /></span>
           <div>
-            <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">Gestão financeira</p>
-            <h1 className="mt-2 text-3xl font-black text-slate-950">Financeiro SorteX</h1>
-            <p className="mt-1 text-slate-500">Vendas, taxas e extrato do gateway conectado.</p>
+            <h2>Disponibilidade no controle interno</h2>
+            <p className="sx-finance-ticket-amount">{money(balance.available)}</p>
+            <p className="sx-finance-ticket-detail">Posição contábil da SorteX, não um saldo bancário. Confira recebimentos e prazos de liquidação diretamente no seu gateway.</p>
           </div>
-          <div className="flex flex-wrap gap-2 print:hidden">
-            <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-xl border bg-white px-4 py-3 text-sm font-bold"><Download size={17} /> Exportar PDF</button>
-            <button onClick={exportExcel} className="inline-flex items-center gap-2 rounded-xl bg-violet-700 px-4 py-3 text-sm font-bold text-white"><FileSpreadsheet size={17} /> Exportar Excel</button>
+          <dl className="sx-finance-ticket-splits">
+            <div><dt>Pendente no controle</dt><dd>{money(balance.pending)}</dd></div>
+            <div><dt>Bloqueado no controle</dt><dd>{money(balance.blocked)}</dd></div>
+          </dl>
+        </div>
+        <dl className="sx-finance-metrics">
+          <Metric icon={ReceiptText} label="Vendas do dia" value={overview.periods.today.gross} />
+          <Metric icon={CalendarRange} label="Vendas do mês" value={overview.periods.currentMonth.gross} />
+          <Metric icon={Landmark} label="Faturamento bruto acumulado" value={balance.gross} />
+          <Metric icon={Wallet} label="Receita líquida registrada acumulada" value={balance.net} />
+        </dl>
+      </section>
+
+      <section className={card} aria-labelledby="sx-finance-fees">
+        <h2 className="sx-premium-section" id="sx-finance-fees">Taxas acumuladas</h2>
+        <p className="sx-premium-muted">Valores registrados em toda a operação, sem filtro por período. A taxa do gateway pode incluir estimativas; confira a cobrança efetiva no gateway.</p>
+        <dl className="sx-finance-fees">
+          <Summary label="Taxa SorteX" value={balance.platformFees} />
+          <Summary label="Taxa do gateway registrada" value={balance.gatewayFees} />
+        </dl>
+      </section>
+
+      <section className={card} aria-labelledby="sx-finance-filter">
+        <h2 className="sx-premium-section" id="sx-finance-filter">Consultar extrato</h2>
+        <p className="sx-premium-muted" id="sx-finance-range-note">
+          {partial
+            ? `O filtro e as exportações usam os ${entries.length} lançamentos mais recentes de ${statement.pagination.total} no histórico, não o extrato completo.`
+            : "O filtro é aplicado aos lançamentos do extrato."}
+          {" As datas do filtro e do gráfico seguem o horário do seu dispositivo."}
+        </p>
+        <div className="sx-finance-filters">
+          <div className="sx-finance-field"><label htmlFor="sx-finance-period-select">Período</label>
+            <select id="sx-finance-period-select" value={period} onChange={(event) => setPeriod(event.target.value as Period)}>
+              <option value="7">Últimos 7 dias</option>
+              <option value="30">Últimos 30 dias</option>
+              <option value="90">Últimos 90 dias</option>
+              <option value="365">Últimos 12 meses</option>
+              <option value="custom">Personalizado</option>
+            </select>
           </div>
-        </header>
+          {period === "custom" && <>
+            <div className="sx-finance-field"><label htmlFor="sx-finance-from">De</label><input id="sx-finance-from" type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} aria-invalid={invalidRange} aria-describedby={invalidRange ? "sx-finance-invalid-range" : undefined} /></div>
+            <div className="sx-finance-field"><label htmlFor="sx-finance-to">Até</label><input id="sx-finance-to" type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} aria-invalid={invalidRange} aria-describedby={invalidRange ? "sx-finance-invalid-range" : undefined} /></div>
+          </>}
+        </div>
+        {invalidRange && <p role="alert" className="sx-finance-error" id="sx-finance-invalid-range">A data inicial deve ser anterior ou igual à data final.</p>}
+      </section>
 
-        {error && <p className="mt-5 rounded-2xl bg-red-50 p-4 text-red-700">{error}</p>}
+      {!invalidRange && (
+        <section className={card} aria-labelledby="sx-finance-period">
+          <h2 className="sx-premium-section" id="sx-finance-period">Movimentos no recorte</h2>
+          <p className="sx-premium-muted" role="status">{filteredEntries.length} {filteredEntries.length === 1 ? "lançamento exibido" : "lançamentos exibidos"}. Bruto, líquido, taxas e estornos são lançamentos distintos, inclusive para um mesmo pagamento. Estes valores não devem ser somados entre si e não equivalem a saldo bancário nem a lucro.</p>
+          <dl className="sx-finance-period">
+            <Summary label="Vendas brutas registradas" value={totals.grossSales} tone="positive" />
+            <Summary label="Receita líquida registrada" value={totals.netRevenue} tone="positive" />
+            <Summary label="Taxa SorteX no recorte" value={totals.platformFees} />
+            <Summary label="Taxa do gateway registrada no recorte" value={totals.gatewayFees} />
+            <Summary label="Estornos e contestações" value={totals.reversals} tone="negative" />
+          </dl>
+        </section>
+      )}
 
-        <section className="mt-7 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Metric icon={Wallet} label="Saldo disponível" value={money(balance.available)} tone="green" />
-          <Metric icon={ReceiptText} label="Vendas do dia" value={money(overview?.periods.today.gross)} tone="violet" />
-          <Metric icon={CalendarRange} label="Vendas do mês" value={money(overview?.periods.currentMonth.gross)} tone="violet" />
-          <Metric icon={Landmark} label="Faturamento bruto" value={money(balance.gross)} tone="violet" />
+      <div className="sx-finance-charts">
+        <section className={card} aria-labelledby="sx-finance-history">
+          <h2 className="sx-premium-section" id="sx-finance-history">Histórico financeiro</h2>
+          <p className="sx-premium-muted">Receita líquida registrada, com estornos e contestações exibidos separadamente no recorte.</p>
+          {chart.length && chartSupported ? (
+            <div className="sx-finance-chart">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                <AreaChart data={chart}>
+                  <defs>
+                    <linearGradient id="sx-finance-gradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--sxp-accent)" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="var(--sxp-accent)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="var(--sxp-line)" strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fill: "var(--sxp-muted)", fontSize: 11 }} />
+                  <YAxis width={42} tick={{ fill: "var(--sxp-muted)", fontSize: 11 }} />
+                  <Tooltip formatter={(value) => [money(Number(value)), "Receita líquida"]} contentStyle={{ background: "var(--sxp-surface)", borderColor: "var(--sxp-line)", color: "var(--sxp-text)", borderRadius: 12 }} />
+                  <Area type="monotone" dataKey="value" stroke="var(--sxp-accent)" fill="url(#sx-finance-gradient)" strokeWidth={3} isAnimationActive={false} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          ) : <Empty>{invalidRange ? "Corrija as datas para visualizar o gráfico." : !chartSupported ? "Há valores fora do limite de precisão do gráfico neste recorte." : "Sem receita líquida registrada neste recorte."}</Empty>}
         </section>
 
-        <section className={`${card} mt-6 print:hidden`}>
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="grid gap-1 text-xs font-bold text-slate-600">Período
-              <select value={period} onChange={(event) => setPeriod(event.target.value as Period)} className="h-11 rounded-xl border px-3 text-sm font-normal">
-                <option value="7">Últimos 7 dias</option><option value="30">Últimos 30 dias</option><option value="90">Últimos 90 dias</option><option value="365">Últimos 12 meses</option><option value="custom">Personalizado</option>
-              </select>
-            </label>
-            {period === "custom" && <><label className="grid gap-1 text-xs font-bold text-slate-600">De<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="h-11 rounded-xl border px-3 text-sm font-normal" /></label><label className="grid gap-1 text-xs font-bold text-slate-600">Até<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} className="h-11 rounded-xl border px-3 text-sm font-normal" /></label></>}
-          </div>
+        <section className={card} aria-labelledby="sx-finance-campaigns">
+          <h2 className="sx-premium-section" id="sx-finance-campaigns">Campanhas por faturamento</h2>
+          <p className="sx-premium-muted">Valores acumulados das primeiras seis campanhas, sem filtro por período.</p>
+          {campaigns.length ? (
+            <ul className="sx-finance-ranking">
+              {campaigns.slice(0, 6).map((campaign) => (
+                <li key={campaign.id}>
+                  <div className="sx-finance-row"><strong>{campaign.campaign.title}</strong><span>Líquido {money(campaign.netRevenue)}</span></div>
+                  <div className="sx-finance-track" aria-hidden="true"><div style={{ width: `${Math.max(0, Math.min(100, balance.gross > 0 ? (100 * campaign.grossRevenue) / balance.gross : 0))}%` }} /></div>
+                  <p className="sx-premium-muted">Bruto {money(campaign.grossRevenue)} · SorteX {money(campaign.platformFees)} · Gateway {money(campaign.gatewayFees)}</p>
+                </li>
+              ))}
+            </ul>
+          ) : <Empty>Nenhuma campanha com faturamento registrado.</Empty>}
         </section>
-
-        <section className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-          <Summary label="Receitas" value={totals.revenue} tone="green" />
-          <Summary label="Despesas" value={totals.expenses} tone="red" />
-          <Summary label="Taxa SorteX" value={totals.platformFees} tone="red" />
-          <Summary label="Taxa Gateway" value={totals.gatewayFees} tone="red" />
-          <Summary label="Valor líquido" value={totals.net} tone="violet" />
-        </section>
-
-        <section className="mt-6 grid gap-6 xl:grid-cols-[1.5fr_1fr]">
-          <div className={card}><h2 className="text-lg font-black">Histórico financeiro</h2><p className="text-sm text-slate-500">Receita líquida registrada no período</p><div className="mt-6 h-72">{chart.length ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={chart}><defs><linearGradient id="finance" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#7c3aed" stopOpacity={0.35} /><stop offset="95%" stopColor="#7c3aed" stopOpacity={0} /></linearGradient></defs><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="date" fontSize={11} /><YAxis fontSize={11} /><Tooltip formatter={(value) => money(Number(value))} /><Area type="monotone" dataKey="value" stroke="#7c3aed" fill="url(#finance)" strokeWidth={3} /></AreaChart></ResponsiveContainer> : <Empty />}</div></div>
-          <div className={card}><h2 className="text-lg font-black">Campanhas por faturamento</h2><div className="mt-4 space-y-4">{campaigns.length ? campaigns.slice(0, 6).map((campaign) => <div key={campaign.id}><div className="flex justify-between gap-3 text-sm"><b>{campaign.campaign.title}</b><span className="font-bold text-emerald-700">{money(campaign.netRevenue)}</span></div><div className="mt-2 h-2 rounded-full bg-slate-100"><div className="h-full rounded-full bg-violet-600" style={{ width: `${Math.min(100, balance.gross ? (100 * campaign.grossRevenue) / balance.gross : 0)}%` }} /></div><p className="mt-1 text-xs text-slate-500">Bruto {money(campaign.grossRevenue)} · SorteX {money(campaign.platformFees)} · Gateway {money(campaign.gatewayFees)}</p></div>) : <Empty />}</div></div>
-        </section>
-
-        <section className={`${card} mt-6`}><h2 className="text-lg font-black">Extrato</h2><p className="text-sm text-slate-500">Lançamentos e histórico financeiro do período selecionado</p><div className="mt-4 divide-y">{filteredEntries.length ? filteredEntries.map((entry) => <div key={entry.id} className="flex items-center justify-between gap-3 py-4"><div className="flex min-w-0 items-center gap-3"><span className={`shrink-0 rounded-xl p-2 ${entry.direction === "CREDIT" ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"}`}>{entry.direction === "CREDIT" ? <ArrowUpRight /> : <ArrowDownRight />}</span><div className="min-w-0"><p className="truncate text-sm font-bold">{entry.description}</p><p className="truncate text-xs text-slate-500">{entry.campaign?.title ?? entry.status} · {new Date(entry.createdAt).toLocaleString("pt-BR")}</p></div></div><strong className={`shrink-0 ${entry.direction === "CREDIT" ? "text-emerald-600" : "text-red-600"}`}>{entry.direction === "CREDIT" ? "+" : "−"} {money(entry.amount)}</strong></div>) : <Empty />}</div></section>
       </div>
-    </main>
+
+      <section className={card} aria-labelledby="sx-finance-statement">
+        <h2 className="sx-premium-section" id="sx-finance-statement">Extrato</h2>
+        <p className="sx-premium-muted">Lançamentos do recorte selecionado, com data e situação registradas no sistema.</p>
+        {filteredEntries.length ? (
+          <ul className="sx-finance-statement">
+            {filteredEntries.map((entry) => {
+              const credit = entry.direction === "CREDIT";
+              const Icon = credit ? ArrowUpRight : ArrowDownRight;
+              const date = new Date(entry.createdAt);
+              return (
+                <li key={entry.id}>
+                  <span className="sx-finance-entry-icon" data-tone={credit ? "positive" : "negative"}><Icon size={19} aria-hidden="true" /></span>
+                  <div className="sx-finance-entry-description">
+                    <strong>{entry.description}</strong>
+                    <p className="sx-premium-muted">{entry.campaign?.title && <>{entry.campaign.title} · </>}<time dateTime={entry.createdAt}>{dateTime.format(date)}</time></p>
+                    <p className="sx-premium-muted">{entry.status}</p>
+                  </div>
+                  <strong className="sx-finance-entry-value" data-tone={credit ? "positive" : "negative"}>
+                    <span className="sr-only">{credit ? "Crédito" : "Débito"} </span>
+                    <span aria-hidden="true">{credit ? "+" : "−"} </span>{money(entry.amount)}
+                  </strong>
+                </li>
+              );
+            })}
+          </ul>
+        ) : <Empty>{invalidRange ? "Corrija as datas para consultar o extrato." : partial ? "Nenhum lançamento do recorte recente corresponde a este período." : "Nenhum lançamento no período selecionado."}</Empty>}
+      </section>
+    </div>
   );
 }
 
-function Metric({ icon: Icon, label, value, tone }: { icon: typeof Wallet; label: string; value: string; tone: "green" | "violet" }) { const color = tone === "green" ? "bg-emerald-50 text-emerald-600" : "bg-violet-50 text-violet-600"; return <div className={card}><span className={`inline-flex rounded-2xl p-3 ${color}`}><Icon /></span><p className="mt-5 text-sm text-slate-500">{label}</p><p className="mt-1 text-2xl font-black">{value}</p></div>; }
-function Summary({ label, value, tone }: { label: string; value: number; tone: "green" | "red" | "violet" }) { const color = { green: "text-emerald-600", red: "text-red-600", violet: "text-violet-700" }[tone]; return <div className={card}><p className="text-sm text-slate-500">{label}</p><p className={`mt-2 text-xl font-black ${color}`}>{money(value)}</p></div>; }
-function Empty() { return <p className="py-8 text-center text-sm text-slate-400">Ainda não há dados reais neste período.</p>; }
+function FinanceHeader({ children }: { children?: ReactNode }) {
+  return (
+    <header className="sx-finance-header">
+      <div>
+        <p className="sx-premium-badge">Gestão financeira</p>
+        <h1 className="sx-premium-title">Financeiro SorteX</h1>
+        <p className="sx-premium-muted">Acompanhe vendas, taxas e lançamentos. Os recebimentos são conferidos no seu gateway.</p>
+      </div>
+      {children}
+    </header>
+  );
+}
+
+function Metric({ icon: Icon, label, value }: { icon: typeof Wallet; label: string; value: number }) {
+  return (
+    <div className={card}>
+      <dt><Icon size={18} aria-hidden="true" /> {label}</dt>
+      <dd>{money(value)}</dd>
+    </div>
+  );
+}
+
+function Summary({ label, value, tone }: { label: string; value: number | null; tone?: "positive" | "negative" }) {
+  return <div><dt>{label}</dt><dd data-tone={tone}>{value === null ? "Valor indisponível" : money(value)}</dd></div>;
+}
+function Empty({ children }: { children: ReactNode }) { return <p className="sx-finance-empty sx-premium-muted">{children}</p>; }
 function htmlCell(value: string) { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
 function downloadFile(name: string, content: string, type: string) { const url = URL.createObjectURL(new Blob([content], { type })); const anchor = document.createElement("a"); anchor.href = url; anchor.download = name; anchor.click(); URL.revokeObjectURL(url); }
-async function get<T>(url: string): Promise<T> { const response = await fetch(url); const data = await response.json(); if (!response.ok) throw new Error(data.message ?? "Erro financeiro."); return data; }
+
+class FinanceReadError extends Error {}
+async function get<T>(url: string, signal: AbortSignal): Promise<T> {
+  const response = await fetch(url, { signal, cache: "no-store" });
+  if (response.status === 401 || response.status === 403)
+    throw new FinanceReadError("A sessão não permite consultar este financeiro. Entre com uma conta de organizador autorizada.");
+  if (response.status === 404 || response.status === 501)
+    throw new FinanceReadError("O financeiro não está disponível nesta versão da API. Nenhum valor foi exibido.");
+  if (!response.ok) throw new FinanceReadError("Não foi possível consultar o financeiro. Tente novamente.");
+  const data: unknown = await response.json().catch(() => null);
+  const decoded = decodeFinanceResponse(url, data);
+  if (decoded === null)
+    throw new FinanceReadError("A API retornou dados financeiros incompatíveis. Nenhum valor foi exibido.");
+  return decoded as T;
+}
+
+const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
+const title = (value: unknown) => object(value) && typeof value.title === "string";
+
+// Stay below the binary64 precision boundary where cent increments can
+// become indistinguishable. Larger legacy values must not silently round.
+const maxDisplayCents = 100_000_000_000_000;
+function sumBRL(entries: Entry[]): number | null {
+  const sum = entries.reduce((cash, entry) => cash + BigInt(Math.round(entry.amount * 100)), BigInt(0));
+  const cents = Number(sum);
+  return Math.abs(cents) <= maxDisplayCents ? cents / 100 : null;
+}
+
+// The legacy Prisma JSON may serialize monetary Decimal columns as strings.
+function amount(value: unknown): number | null {
+  if (typeof value !== "number" &&
+      (typeof value !== "string" || !/^-?\d+(?:\.\d{1,2})?$/.test(value))) return null;
+  const numeric = Number(value);
+  const cents = Math.round(numeric * 100);
+  if (Math.abs(cents) > maxDisplayCents || !Number.isSafeInteger(cents)) return null;
+  return Math.abs(cents / 100 - numeric) <= Math.abs(numeric) * Number.EPSILON
+    ? cents / 100
+    : null;
+}
+function monetaryFields(source: Record<string, unknown>, fields: readonly string[]) {
+  const values: Record<string, number> = {};
+  for (const field of fields) {
+    const value = amount(source[field]);
+    if (value === null) return null;
+    values[field] = value;
+  }
+  return values;
+}
+
+function decodeFinanceResponse(url: string, data: unknown): unknown | null {
+  if (url === "/api/finance/overview") {
+    if (!object(data) || !object(data.balance) || !object(data.periods)) return null;
+    const balance = monetaryFields(data.balance, ["gross", "net", "available", "pending", "blocked", "platformFees", "gatewayFees"]);
+    const periods: Record<string, { gross: number }> = {};
+    for (const name of ["today", "currentMonth"]) {
+      const period = data.periods[name];
+      if (!object(period)) return null;
+      const gross = amount(period.gross);
+      if (gross === null) return null;
+      periods[name] = { gross };
+    }
+    return balance ? { balance, periods } : null;
+  }
+  if (url === "/api/finance/campaigns") {
+    if (!Array.isArray(data)) return null;
+    const campaigns = [];
+    for (const campaign of data) {
+      if (!object(campaign) || typeof campaign.id !== "string" || !title(campaign.campaign)) return null;
+      const amounts = monetaryFields(campaign, ["grossRevenue", "platformFees", "gatewayFees", "netRevenue"]);
+      if (!amounts) return null;
+      campaigns.push({ id: campaign.id, campaign: campaign.campaign, ...amounts });
+    }
+    return campaigns;
+  }
+  if (!object(data) || !Array.isArray(data.data) || !object(data.pagination)) return null;
+  const { total } = data.pagination;
+  if (typeof total !== "number" || !Number.isSafeInteger(total) || total < data.data.length) return null;
+  const entries = [];
+  for (const entry of data.data) {
+    if (!object(entry) || typeof entry.id !== "string" || typeof entry.description !== "string" ||
+      typeof entry.type !== "string" || typeof entry.status !== "string" ||
+      (entry.direction !== "CREDIT" && entry.direction !== "DEBIT") ||
+      typeof entry.createdAt !== "string" || !Number.isFinite(Date.parse(entry.createdAt)) ||
+      (entry.campaign != null && !title(entry.campaign))) return null;
+    const money = amount(entry.amount);
+    if (money === null || money < 0) return null;
+    entries.push({ ...entry, amount: money });
+  }
+  return { data: entries, pagination: { total } };
+}

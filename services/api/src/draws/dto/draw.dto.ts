@@ -1,3 +1,4 @@
+import { FEDERAL_EXTRACTION_PATTERN } from '../caixa-federal-results.service';
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -9,6 +10,7 @@ import {
   IsOptional,
   IsString,
   Length,
+  Matches,
   Max,
   Min,
   ValidateNested,
@@ -55,6 +57,11 @@ export class SimulateRuleDto {
     string,
   ];
   @IsInt() @Min(1) totalNumbers!: number;
+}
+export class ImportCaixaLotteryDrawDto {
+  @IsString()
+  @Matches(FEDERAL_EXTRACTION_PATTERN)
+  extractionNumber!: string;
 }
 export class CreateLotteryDrawDto {
   @IsOptional() @IsString() provider?: string;

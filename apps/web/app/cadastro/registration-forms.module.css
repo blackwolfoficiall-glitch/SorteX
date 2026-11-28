@@ -1,0 +1,158 @@
+.registrationForm :global(.sx-auth-form-wrap) { max-width: 34rem; }
+
+.registrationForm :global(.sx-progress) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .36rem;
+  margin-block: .65rem .85rem;
+}
+
+.registrationForm :global(.sx-progress) > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .26rem;
+  min-width: 0;
+  padding: .32rem .16rem;
+  border: 1px solid var(--sxp-line);
+  border-radius: .66rem;
+  background: var(--sxp-bg);
+  color: var(--sxp-muted);
+  font-size: .72rem;
+  font-weight: 750;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.registrationForm :global(.sx-progress) > span[aria-current="step"] {
+  border-color: var(--sxp-accent);
+  background: var(--sxp-tint);
+  color: var(--sxp-accent);
+}
+
+.registrationForm :global(.sx-progress .sx-step-number) {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 100%;
+  background: var(--sxp-surface);
+  color: var(--sxp-muted);
+}
+
+.registrationForm :global(.sx-progress) > span[aria-current="step"] :global(.sx-step-number) {
+  background: var(--sxp-gradient);
+  color: var(--sxp-white);
+}
+
+.registrationForm :global(.sx-progress .sx-step-complete .sx-step-number) {
+  color: var(--sxp-success);
+}
+
+.registrationForm :global(form) {
+  min-width: 0;
+}
+
+.registrationForm :global(form label),
+.registrationForm :global(.sx-person-types) legend {
+  color: var(--sxp-text);
+  font-size: .83rem;
+  font-weight: 750;
+}
+
+.registrationForm :global(.sx-person-types) {
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .4rem;
+  border-color: var(--sxp-line);
+}
+
+.registrationForm :global(.sx-person-types) > label {
+  min-height: 2.75rem;
+  min-width: 0;
+  padding: .5rem;
+  gap: .35rem;
+  border-color: var(--sxp-line);
+  border-radius: .78rem;
+  background: var(--sxp-bg);
+  color: var(--sxp-text);
+  line-height: 1.24;
+  overflow-wrap: anywhere;
+}
+
+.registrationForm :global(.sx-person-types) > label:has(input:checked) {
+  border-color: var(--sxp-accent);
+  color: var(--sxp-accent);
+  background: var(--sxp-tint);
+}
+
+.registrationForm :global(.sx-auth-form) input:is([type="radio"], [type="checkbox"]) {
+  accent-color: var(--sxp-accent);
+  flex-shrink: 0;
+}
+
+.registrationForm :global(.sx-auth-form) input:not([type="radio"], [type="checkbox"], [type="file"]) {
+  min-width: 0;
+  min-height: 2.75rem;
+  border-color: var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  color: var(--sxp-text);
+  background: var(--sxp-bg);
+  box-shadow: none;
+  font-size: 1rem;
+}
+
+.registrationForm :global(.sx-auth-form) input::placeholder { color: var(--sxp-muted); }
+
+.registrationForm :global(.sx-auth-form) input:disabled {
+  background: var(--sxp-surface);
+  color: var(--sxp-muted);
+}
+
+.registrationForm :global(.sx-auth-form) input[type="file"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  color: var(--sxp-muted);
+}
+
+.registrationForm :global(.sx-auth-form) input::file-selector-button {
+  min-height: 2.45rem;
+  max-width: 100%;
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  color: var(--sxp-text);
+  background: var(--sxp-bg);
+}
+
+.registrationForm :global(.sx-auth-form [role="listbox"]) {
+  border-color: var(--sxp-line);
+  color: var(--sxp-text);
+  background: var(--sxp-surface);
+}
+
+.registrationForm :global(.sx-auth-form [role="option"]) {
+  color: var(--sxp-text);
+}
+
+.registrationForm :global(.sx-auth-form [role="option"]):hover,
+.registrationForm :global(.sx-auth-form [role="option"][aria-selected="true"]),
+.registrationForm :global(.sx-auth-form [role="option"][class~="bg-violet-100"]) {
+  color: var(--sxp-accent);
+  background: var(--sxp-tint);
+}
+
+.registrationForm :global(form .border) { border-color: var(--sxp-line); }
+.registrationForm :global(form [class~="text-zinc-500"]) { color: var(--sxp-muted); }
+.registrationForm :global(form a) { color: var(--sxp-accent); text-decoration: underline; }
+.registrationForm :global(form button[type="button"][class~="border"]) {
+  min-height: 2.75rem;
+  color: var(--sxp-text);
+  background: var(--sxp-bg);
+}
+
+@media (max-width: 33rem) {
+  .registrationForm :global(.sx-progress) > span { display: grid; justify-items: center; }
+}

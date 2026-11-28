@@ -5,6 +5,16 @@ import type {
   PaymentStatus,
 } from "./types";
 
+export class PaymentRequestError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "PaymentRequestError";
+  }
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
@@ -16,7 +26,10 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     const message = Array.isArray(payload.message)
       ? payload.message.join(" ")
       : payload.message;
-    throw new Error(message || "Não foi possível processar o pagamento.");
+    throw new PaymentRequestError(
+      message || "Não foi possível processar o pagamento.",
+      response.status,
+    );
   }
   return payload as T;
 }

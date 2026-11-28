@@ -1,4 +1,172 @@
-import Link from "next/link";import { notFound } from "next/navigation";import { MiniCampaignReserve } from "@/components/organizer-platform/MiniCampaignReserve";
-const apiUrl=process.env.API_INTERNAL_URL||process.env.API_URL||"http://localhost:3333";const money=new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"});type Item={name:string;description:string|null;imageUrl:string|null;prizeDescription:string;maxTickets:number;soldTickets:number;availableTickets:number;ticketPrice:number;drawAt:string|null;rules:string;mainCampaign:{title:string;slug:string};organizer:{publicName:string;primaryColor:string}|null;result:null|{winningNumber:number;winner:null|{name:string}}};async function load(slug:string){const response=await fetch(`${apiUrl}/public/mini-campaigns/${encodeURIComponent(slug)}`,{cache:"no-store"});if(response.status===404)notFound();if(!response.ok)throw new Error("Não foi possível carregar esta Mini Campanha.");return response.json() as Promise<Item>}
-export default async function Page({params}:{params:Promise<{slug:string}>}){const{slug}=await params,item=await load(slug),percentage=item.maxTickets?Math.min(100,Math.round(item.soldTickets/item.maxTickets*100)):0;return <main className="min-h-screen bg-zinc-50 px-4 py-6"><div className="mx-auto max-w-4xl"><header className="flex items-center justify-between"><Link href="/" className="text-2xl font-black text-violet-700">SorteX</Link><span className="text-sm font-bold text-zinc-500">{item.organizer?.publicName}</span></header><article className="mt-6 overflow-hidden rounded-3xl border bg-white shadow-sm">{item.imageUrl&&<img src={item.imageUrl} alt={item.name} className="aspect-[16/8] w-full object-cover"/>}<div className="p-6 sm:p-8"><span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-black uppercase text-violet-700">Mini Campanha</span><h1 className="mt-4 text-3xl font-black sm:text-4xl">{item.name}</h1><p className="mt-2 text-zinc-600">{item.description||item.prizeDescription}</p><div className="mt-6 grid gap-3 sm:grid-cols-3"><Info label="Prêmio" value={item.prizeDescription}/><Info label="Valor do título" value={money.format(item.ticketPrice)}/><Info label="Sorteio" value={item.drawAt?new Date(item.drawAt).toLocaleString("pt-BR"):"A definir"}/></div><div className="mt-6"><div className="flex justify-between text-sm font-bold"><span>{percentage}% reservado</span><span>{item.availableTickets} disponíveis</span></div><div className="mt-2 h-3 overflow-hidden rounded-full bg-zinc-100"><div className="h-full rounded-full bg-violet-600" style={{width:`${percentage}%`,backgroundColor:item.organizer?.primaryColor}}/></div></div>{item.result?<div className="mt-6 rounded-2xl bg-green-50 p-5 text-green-800"><b>Resultado registrado</b><p>Número vencedor: {item.result.winningNumber}. {item.result.winner&&`Ganhador: ${item.result.winner.name}.`}</p></div>:<><div className="mt-6 rounded-2xl bg-amber-50 p-5 text-amber-900"><b>Ambiente de teste</b><p className="text-sm">Nenhum pagamento real é processado nesta etapa.</p></div><MiniCampaignReserve slug={slug} available={item.availableTickets}/></>}<details className="mt-6 rounded-2xl border p-5"><summary className="cursor-pointer font-black">Regras</summary><p className="mt-3 whitespace-pre-wrap text-sm text-zinc-600">{item.rules}</p></details><Link href={`/campanha/${item.mainCampaign.slug}`} className="mt-6 inline-flex h-12 items-center rounded-xl bg-violet-600 px-6 font-black text-white">Ver campanha principal</Link></div></article></div></main>}
-function Info({label,value}:{label:string;value:string}){return <div className="rounded-2xl bg-zinc-50 p-4"><span className="text-xs font-black uppercase text-zinc-400">{label}</span><b className="mt-1 block">{value}</b></div>}
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import {
+  Boxes,
+  CalendarDays,
+  ExternalLink,
+  Ticket,
+  Trophy,
+} from "lucide-react";
+import { MiniCampaignReserve } from "@/components/organizer-platform/MiniCampaignReserve";
+import PremiumScope from "@/components/premium/PremiumScope";
+import { resolveApiUpstream } from "@/lib/api-upstream";
+import styles from "./public-mini-campaign.module.css";
+
+const money = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+type Item = {
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  prizeDescription: string;
+  maxTickets: number;
+  soldTickets: number;
+  availableTickets: number;
+  ticketPrice: number;
+  drawAt: string | null;
+  rules: string;
+  mainCampaign: { title: string; slug: string };
+  organizer: { publicName: string; primaryColor: string } | null;
+  result: null | { winningNumber: number; winner: null | { name: string } };
+};
+
+async function load(slug: string) {
+  const response = await fetch(
+    `${resolveApiUpstream()}/public/mini-campaigns/${encodeURIComponent(slug)}`,
+    { cache: "no-store" },
+  );
+  if (response.status === 404) notFound();
+  if (!response.ok)
+    throw new Error("Não foi possível carregar esta Mini Campanha.");
+  return response.json() as Promise<Item>;
+}
+
+export default async function Page({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}) {
+  const { slug } = await params;
+  const item = await load(slug);
+  const percentage = item.maxTickets
+    ? Math.min(100, Math.round((item.soldTickets / item.maxTickets) * 100))
+    : 0;
+  return (
+    <PremiumScope className={styles.scope}>
+      <main className={styles.content} aria-label="Mini Campanha pública">
+        <header className={styles.top}>
+          <Link href="/" className={styles.brand}>
+            SorteX
+          </Link>
+          {item.organizer?.publicName && (
+            <span>{item.organizer.publicName}</span>
+          )}
+        </header>
+
+        <article className={styles.panel}>
+          {item.imageUrl && (
+            // Preserve existing uploaded and remote Mini Campaign image sources.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={item.imageUrl} alt={item.name} className={styles.cover} />
+          )}
+          <div className={styles.body}>
+            <header className={styles.intro}>
+              <span className={styles.icon}>
+                <Boxes size={23} aria-hidden="true" />
+              </span>
+              <div>
+                <p className={styles.eyebrow}>Mini Campanha</p>
+                <h1 className="sx-premium-title">{item.name}</h1>
+                <p className={styles.muted}>
+                  {item.description || item.prizeDescription}
+                </p>
+              </div>
+            </header>
+            <dl className={styles.metrics}>
+              <div>
+                <Trophy aria-hidden="true" size={19} />
+                <dt>Prêmio</dt>
+                <dd>{item.prizeDescription}</dd>
+              </div>
+              <div>
+                <Ticket aria-hidden="true" size={19} />
+                <dt>Valor do título</dt>
+                <dd>{money.format(item.ticketPrice)}</dd>
+              </div>
+              <div>
+                <CalendarDays aria-hidden="true" size={19} />
+                <dt>Sorteio</dt>
+                <dd>
+                  {item.drawAt
+                    ? new Date(item.drawAt).toLocaleString("pt-BR")
+                    : "A definir"}
+                </dd>
+              </div>
+            </dl>
+            <div className={styles.progress}>
+              <div className={styles.progressLabels}>
+                <span>{percentage}% reservado</span>
+                <span>{item.availableTickets} disponíveis</span>
+              </div>
+              <div
+                className={styles.track}
+                role="progressbar"
+                aria-label="Percentual reservado"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={percentage}
+              >
+                <div
+                  className={styles.fill}
+                  style={{
+                    width: `${percentage}%`,
+                    backgroundColor: item.organizer?.primaryColor,
+                  }}
+                />
+              </div>
+            </div>
+
+            {item.result ? (
+              <div className={styles.result}>
+                <b>Resultado registrado</b>
+                <p>
+                  Número vencedor: {item.result.winningNumber}.{" "}
+                  {item.result.winner &&
+                    `Ganhador: ${item.result.winner.name}.`}
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className={styles.testNotice}>
+                  <b>Ambiente de teste</b>
+                  <p>Nenhum pagamento real é processado nesta etapa.</p>
+                </div>
+                <div className={styles.reserve}>
+                  <MiniCampaignReserve
+                    slug={slug}
+                    available={item.availableTickets}
+                  />
+                </div>
+              </>
+            )}
+
+            <details className={styles.rules}>
+              <summary>Regras</summary>
+              <p>{item.rules}</p>
+            </details>
+            <Link
+              href={`/campanha/${item.mainCampaign.slug}`}
+              className="sx-premium-button"
+              data-variant="primary"
+            >
+              Ver campanha principal{" "}
+              <ExternalLink size={16} aria-hidden="true" />
+            </Link>
+          </div>
+        </article>
+      </main>
+    </PremiumScope>
+  );
+}

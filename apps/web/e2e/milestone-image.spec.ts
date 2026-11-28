@@ -96,7 +96,9 @@ test("foto do prêmio por meta é enviada, persistida, exibida e removida", asyn
   const removePhoto = page.getByRole("button",{name:"Remover foto"});
   await expect(removePhoto).toBeVisible();
   await removePhoto.click();
-  await expect(page.getByText("Adicionar foto")).toBeVisible();
+  await expect(page.getByText("Adicionar foto", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Adicionar foto", { exact: true })).toBeAttached();
+  await expect(page.getByAltText("Foto do prêmio Moto de homologação")).toHaveCount(0);
   const saveResponse = page.waitForResponse(
     (response) =>
       response.url().includes(`/api/campaigns/${campaign.id}`) &&
@@ -105,5 +107,8 @@ test("foto do prêmio por meta é enviada, persistida, exibida e removida", asyn
   await page.getByRole("button",{name:"Salvar rascunho"}).click();
   expect((await saveResponse).ok()).toBeTruthy();
   const removed=await page.request.get(`/api/campaigns/${campaign.id}`);
-  expect((await removed.json() as {milestonePrizes:Array<{imageUrl:string|null}>}).milestonePrizes[0].imageUrl).toBeNull();
+  expect((await removed.json()).milestonePrizes[0]).toMatchObject({
+    imageUrl: null,
+    imageCrop: null,
+  });
 });

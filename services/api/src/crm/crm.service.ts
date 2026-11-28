@@ -702,9 +702,10 @@ export class CrmService {
     return { message: 'Agendamento cancelado.' };
   }
   async communicationPreview(u: AuthenticatedUser, d: CreateCommunicationDto) {
-    const recipients = await this.communicationRecipients(u, d);
+    const campaign = await this.communicationCampaign(u, d.campaignId);
+    const recipients = await this.communicationRecipients(u, d, campaign?.id);
     const first = recipients[0];
-    const variables = await this.communicationVariables(first, d.campaignId);
+    const variables = this.communicationVariables(first, campaign);
     return {
       recipients: recipients.length,
       subject: this.render(d.subject || '', variables),
@@ -713,17 +714,15 @@ export class CrmService {
     };
   }
   async createCommunication(u: AuthenticatedUser, d: CreateCommunicationDto) {
-    const recipients = await this.communicationRecipients(u, d);
+    const campaign = await this.communicationCampaign(u, d.campaignId);
+    const recipients = await this.communicationRecipients(u, d, campaign?.id);
     if (!recipients.length)
       throw new BadRequestException('O público selecionado está vazio.');
     const scheduledAt = d.scheduledAt ? new Date(d.scheduledAt) : new Date();
     const scheduled = scheduledAt.getTime() > Date.now() + 30000;
     let createdCount = 0;
     for (const contact of recipients) {
-      const variables = await this.communicationVariables(
-        contact,
-        d.campaignId,
-      );
+      const variables = this.communicationVariables(contact, campaign);
       await this.prisma.outboundMessage.create({
         data: {
           organizerId: u.id,
@@ -926,6 +925,7 @@ export class CrmService {
   private async communicationRecipients(
     u: AuthenticatedUser,
     d: CreateCommunicationDto,
+    campaignId: string | undefined,
   ) {
     this.org(u);
     let where: Prisma.CrmContactWhereInput = {
@@ -950,26 +950,13 @@ export class CrmService {
       where = this.rulesWhere(u.id, segment.rules as Record<string, unknown>);
       where.externalOptOut = false;
     } else if (d.audienceType === 'CAMPAIGN') {
-      if (!d.campaignId)
-        throw new BadRequestException('Selecione uma campanha.');
-      const campaign = await this.prisma.campaign.findFirst({
-        where: { id: d.campaignId, organizerId: u.id },
-        select: { id: true },
-      });
-      if (!campaign) throw new NotFoundException('Campanha não encontrada.');
-      where.user = { purchases: { some: { campaignId: campaign.id } } };
+      if (!campaignId) throw new BadRequestException('Selecione uma campanha.');
+      where.user = { purchases: { some: { campaignId } } };
     } else if (d.audienceType === 'ABANDONED') {
-      if (d.campaignId) {
-        const campaign = await this.prisma.campaign.findFirst({
-          where: { id: d.campaignId, organizerId: u.id },
-          select: { id: true },
-        });
-        if (!campaign) throw new NotFoundException('Campanha não encontrada.');
-      }
       const purchases = await this.prisma.purchase.findMany({
         where: {
           campaign: { organizerId: u.id },
-          ...(d.campaignId ? { campaignId: d.campaignId } : {}),
+          ...(campaignId ? { campaignId } : {}),
           OR: [
             { status: 'EXPIRED' },
             {
@@ -997,22 +984,30 @@ export class CrmService {
       take: 500,
     });
   }
-  private async communicationVariables(
-    contact:
-      { name: string; city?: string | null; phone?: string | null } | undefined,
+  private async communicationCampaign(
+    u: AuthenticatedUser,
     campaignId?: string,
   ) {
-    const campaign = campaignId
-      ? await this.prisma.campaign.findUnique({
-          where: { id: campaignId },
-          select: {
-            title: true,
-            slug: true,
-            drawDate: true,
-            mainPrizeName: true,
-          },
-        })
-      : null;
+    this.org(u);
+    if (campaignId === undefined) return null;
+    const campaign = await this.prisma.campaign.findFirst({
+      where: { id: campaignId, organizerId: u.id },
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+        drawDate: true,
+        mainPrizeName: true,
+      },
+    });
+    if (!campaign) throw new NotFoundException('Campanha não encontrada.');
+    return campaign;
+  }
+  private communicationVariables(
+    contact:
+      { name: string; city?: string | null; phone?: string | null } | undefined,
+    campaign: Awaited<ReturnType<CrmService['communicationCampaign']>>,
+  ) {
     return {
       nome: contact?.name || 'Contato',
       cidade: contact?.city || '',

@@ -1,13 +1,5 @@
 import { cookies } from "next/headers";
-import type { AuthTokens } from "@/lib/auth/types";
-import {
-  REFRESH_COOKIE,
-  apiFetch,
-  clearAuthCookies,
-  jsonFromUpstream,
-  readJson,
-  setAuthCookies,
-} from "@/lib/auth/server";
+import { REFRESH_COOKIE, renewAuthSession } from "@/lib/auth/server";
 
 export async function POST() {
   const cookieStore = await cookies();
@@ -20,17 +12,6 @@ export async function POST() {
     );
   }
 
-  const response = await apiFetch("/auth/refresh", {
-    method: "POST",
-    body: JSON.stringify({ refreshToken }),
-  });
-  const payload = (await readJson(response)) as AuthTokens;
-
-  if (!response.ok) {
-    clearAuthCookies(cookieStore);
-    return jsonFromUpstream(payload, response.status);
-  }
-
-  setAuthCookies(cookieStore, payload);
-  return Response.json({ refreshed: true });
+  const renewal = await renewAuthSession(cookieStore, refreshToken);
+  return renewal.ok ? Response.json({ refreshed: true }) : renewal.response;
 }

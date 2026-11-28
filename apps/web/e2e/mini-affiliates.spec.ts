@@ -41,9 +41,12 @@ test("mini campanha cria, edita, publica e abre a página persistida", async ({ 
   await expect(page.getByRole("heading", { name: editedName })).toBeVisible();
 });
 
-test("afiliados persiste comissão, estados e respeita Não cancelar", async ({ page, context }) => {
+test("afiliados persiste comissão, estados e respeita Não cancelar", async ({ page, context, browserName }) => {
   test.setTimeout(60_000);
-  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  // Chromium headless requires an explicit grant. WebKit rejects the grant
+  // names; a real click supplies the browser's required user activation.
+  if (browserName === "chromium")
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
   const suffix = Date.now().toString().slice(-7);
   const inviteName = `Afiliado Homologação ${suffix}`;
   const inviteEmail = `afiliado.${suffix}@example.invalid`;
@@ -79,6 +82,12 @@ test("afiliados persiste comissão, estados e respeita Não cancelar", async ({ 
   await expect(page.getByText("Convite criado. Nenhuma mensagem externa foi enviada.")).toBeVisible();
   await page.getByRole("button", { name: "Copiar link" }).first().click();
   await expect(page.getByText("Link copiado com sucesso.")).toBeVisible();
+  if (browserName === "chromium") {
+    const copiedUrl = new URL(await page.evaluate(() => navigator.clipboard.readText()));
+    expect(copiedUrl.origin).toBe(new URL(page.url()).origin);
+    expect(copiedUrl.pathname).toMatch(/^\/afiliado\/convite\/[^/]+$/);
+    expect(copiedUrl.search).toBe("");
+  }
 
   const inviteRow = page.locator("article").filter({ has: page.getByRole("heading", { name: inviteName }) });
   page.once("dialog", (dialog) => dialog.dismiss());

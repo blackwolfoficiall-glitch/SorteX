@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight, LoaderCircle, RefreshCw, Search, ShieldAlert, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, CreditCard, Headphones, LoaderCircle, RefreshCw, Search, ShieldAlert, TicketCheck, UsersRound, X } from 'lucide-react';
+import PremiumScope from '@/components/premium/PremiumScope';
 import { useAuthorizedUser } from '@/components/auth/RoleGate';
 import { hasAdminPermission } from '@/lib/admin/authorization';
 import type { AdminPermission } from '@/lib/auth/types';
@@ -28,12 +29,14 @@ const configs: Record<OperationalMode, Config> = {
   reports: { title: 'Denúncias', subtitle: 'Análise e resolução rastreável', read: 'SUPPORT_WRITE', write: 'SUPPORT_WRITE', search: 'Motivo, descrição ou entidade', status: ['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'DISMISSED'] },
 };
 
-export default function AdminResourcePage({ mode }: { mode: Mode }) {
+export default function AdminResourcePage({ mode, premiumUsers = false, premiumCampaigns = false, premiumPayments = false, premiumCasework = false }: {
+  mode: Mode; premiumUsers?: boolean; premiumCampaigns?: boolean; premiumPayments?: boolean; premiumCasework?: boolean;
+}) {
   if (!(mode in configs)) return <LegacyResource mode={mode} />;
-  return <OperationalResource mode={mode as OperationalMode} />;
+  return <OperationalResource mode={mode as OperationalMode} premiumList={(premiumUsers && mode === 'users') || (premiumCampaigns && mode === 'campaigns') || (premiumPayments && mode === 'payments') || (premiumCasework && (mode === 'support' || mode === 'reports'))} />;
 }
 
-function OperationalResource({ mode }: { mode: OperationalMode }) {
+function OperationalResource({ mode, premiumList }: { mode: OperationalMode; premiumList: boolean }) {
   const config = configs[mode];
   const user = useAuthorizedUser();
   const canWrite = Boolean(user && hasAdminPermission(user, config.write));
@@ -50,8 +53,13 @@ function OperationalResource({ mode }: { mode: OperationalMode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [listUnavailable, setListUnavailable] = useState(false);
+  const listRequest = useRef(0);
+  const caseworkTrigger = useRef<HTMLButtonElement | null>(null);
 
   const load = useCallback(async () => {
+    const request = premiumList ? ++listRequest.current : 0;
+    const isCurrent = () => !premiumList || request === listRequest.current;
     setLoading(true);
     setError('');
     try {
@@ -61,23 +69,31 @@ function OperationalResource({ mode }: { mode: OperationalMode }) {
       if (from) query.set('from', new Date(`${from}T00:00:00`).toISOString());
       if (to) query.set('to', new Date(`${to}T23:59:59`).toISOString());
       const result = await api<PageResult>(`${mode}?${query}`);
+      if (!isCurrent()) return;
+      if (premiumList) setListUnavailable(false);
       setRows(result.data ?? []);
       setPages(result.pagination?.pages || 1);
       setTotal(result.pagination?.total || 0);
     } catch (cause) {
+      if (!isCurrent()) return;
+      if (premiumList) setListUnavailable(true);
       setError(cause instanceof Error ? cause.message : 'Não foi possível carregar esta área.');
     } finally {
-      setLoading(false);
+      if (isCurrent()) setLoading(false);
     }
-  }, [from, mode, page, search, sort, status, to]);
+  }, [from, mode, page, premiumList, search, sort, status, to]);
 
   useEffect(() => {
     const task = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(task);
-  }, [load]);
+    return () => {
+      window.clearTimeout(task);
+      if (premiumList) listRequest.current += 1;
+    };
+  }, [load, premiumList]);
 
-  async function openDetail(row: Row) {
+  async function openDetail(row: Row, trigger?: HTMLButtonElement) {
     try {
+      if (trigger && (mode === 'support' || mode === 'reports')) caseworkTrigger.current = trigger;
       setDetail(await api<Row>(`${mode}/${row.id}`));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível abrir os detalhes.');
@@ -110,6 +126,139 @@ function OperationalResource({ mode }: { mode: OperationalMode }) {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível enviar a resposta.');
     }
+  }
+
+  if (premiumList) {
+    const campaigns = mode === 'campaigns';
+    const payments = mode === 'payments';
+    const support = mode === 'support';
+    const reports = mode === 'reports';
+    const casework = support || reports;
+    const Icon = support ? Headphones : reports ? ShieldAlert : payments ? CreditCard : campaigns ? TicketCheck : UsersRound;
+    const item = support ? 'chamado' : reports ? 'denúncia' : payments ? 'pagamento' : campaigns ? 'campanha' : 'usuário';
+    const statuses = casework ? caseworkStatuses : payments ? paymentStatuses : campaigns ? campaignStatuses : userStatuses;
+    const filtering = Boolean(search.trim() || status || from || to);
+    const statusText = loading ? `Carregando ${item}s…`
+      : listUnavailable ? 'Listagem indisponível.'
+      : `${total.toLocaleString('pt-BR')} ${total === 1 ? item : `${item}s`} ${filtering ? 'nos filtros aplicados' : 'no cadastro'}`;
+    return <>
+      <PremiumScope className={casework ? "sx-admin-casework" : payments ? "sx-admin-payments" : campaigns ? "sx-admin-campaigns" : "sx-admin-users"}>
+        <main className="sx-au-wrap">
+          <header className="sx-premium-ticket sx-au-hero">
+            <Icon aria-hidden="true" size={30} />
+            <div>
+              <p className="sx-au-eyebrow">Administração</p>
+              <h1 className="sx-premium-title">{config.title}</h1>
+              <p>{payments ? "Consulte os pagamentos registrados na SorteX." : config.subtitle}</p>
+            </div>
+            <button type="button" onClick={load} disabled={loading} className="sx-premium-button sx-au-refresh">
+              <RefreshCw aria-hidden="true" size={17} /> Atualizar listagem
+            </button>
+          </header>
+          <section className="sx-premium-surface sx-au-filters" aria-labelledby="sx-au-filters">
+            <h2 id="sx-au-filters" className="sx-premium-section">Filtros</h2>
+            <div className="sx-au-fields">
+              <label className="sx-au-search">
+                <span>Pesquisar {item}s</span>
+                <span className="sx-au-input">
+                  <Search aria-hidden="true" size={17} />
+                  <input type="search" value={search} aria-describedby="sx-au-search-hint" onChange={(event) => { setSearch(event.target.value); setPage(1); }} />
+                </span>
+              </label>
+              <label>
+                <span>Status</span>
+                <select aria-label="Filtrar status" value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }}>
+                  <option value="">Todos os status</option>
+                  {config.status?.map((item) => <option key={item} value={item}>{statuses[item] ?? item}</option>)}
+                </select>
+              </label>
+              <label>
+                <span>Ordenação</span>
+                <select aria-label="Ordenar" value={sort} onChange={(event) => { setSort(event.target.value); if (!casework) setPage(1); }}>
+                  <option value="recent">Mais recentes</option><option value="oldest">Mais antigos</option>
+                </select>
+              </label>
+              <label><span>Data inicial</span><input type="date" value={from} onChange={(event) => { setFrom(event.target.value); setPage(1); }} /></label>
+              <label><span>Data final</span><input type="date" value={to} onChange={(event) => { setTo(event.target.value); setPage(1); }} /></label>
+            </div>
+            <p id="sx-au-search-hint" className="sx-premium-muted">{casework ? config.search : payments ? 'Pesquise por referência, participante ou campanha.' : campaigns ? 'Pesquise pelo título da campanha.' : 'Pesquise por nome, e-mail, CPF, CNPJ ou telefone.'}</p>
+          </section>
+          <section className="sx-au-results" aria-labelledby="sx-au-results">
+            <header>
+              <h2 id="sx-au-results" className="sx-premium-section">Resultados</h2>
+              {payments && <p className="sx-premium-muted">O status é o da transação. Um pagamento aprovado não comprova liquidação, repasse nem saque.</p>}
+              <p role="status" className="sx-premium-muted">{statusText}</p>
+            </header>
+            {error && (
+              <div className="sx-premium-surface sx-au-state sx-au-error">
+                <p role="alert">{error}</p>
+                <button type="button" onClick={load} className="sx-premium-button">Tentar novamente</button>
+              </div>
+            )}
+            {notice && <p role="status" className="sx-premium-surface sx-au-state">{notice}</p>}
+            {loading ? (
+              <div aria-hidden="true" className="sx-premium-surface sx-au-state">
+                <LoaderCircle className="sx-au-spinner" size={24} />
+              </div>
+            ) : !listUnavailable && (rows.length ? (
+              <ul className="sx-au-list" role="list">
+                {rows.map((row) => {
+                  const presenter = present(mode, row);
+                  const nextAction = primaryAction(mode, presenter.status);
+                  return (
+                    <li key={String(row.id)} className="sx-premium-surface sx-au-row">
+                      <div className="sx-au-identity">
+                        <h3 className="sx-premium-section"><button type="button" className="sx-au-name" onClick={(event) => void openDetail(row, event.currentTarget)}>{presenter.title}</button></h3>
+                        {presenter.subtitle && <p className="sx-premium-muted">{campaigns ? `Organizador: ${presenter.subtitle}` : presenter.subtitle}</p>}
+                      </div>
+                      <dl className="sx-au-meta">
+                        {payments ? (
+                          <>
+                            <div><dt>Valor da transação</dt><dd>{paymentAmount(row.amount, row.currency)}</dd></div>
+                            <div><dt>Método</dt><dd>{paymentMethods[String(row.method)] ?? String(row.method ?? 'Não informado')}</dd></div>
+                          </>
+                        ) : campaigns ? (
+                          <>
+                            <div><dt>Títulos vendidos</dt><dd>{campaignCount(row.soldNumbers)}</dd></div>
+                            <div><dt>Total de títulos</dt><dd>{campaignCount(row.totalNumbers)}</dd></div>
+                          </>
+                        ) : casework ? (
+                          <>
+                            <div><dt>{support ? 'Prioridade' : 'Entidade'}</dt><dd>{support ? supportPriorities[presenter.context] ?? presenter.context : String(row.entityType ?? '—')}</dd></div>
+                            {!support && row.entityId != null && <div><dt>Identificador da entidade</dt><dd>{String(row.entityId)}</dd></div>}
+                          </>
+                        ) : (
+                          <>
+                            <div><dt>Perfil</dt><dd>{userRoles[String(row.role)] ?? String(row.role ?? '—')}</dd></div>
+                            <div><dt>Localidade</dt><dd>{[row.city, row.state].filter(Boolean).join(' / ') || '—'}</dd></div>
+                          </>
+                        )}
+                        <div><dt>Status</dt><dd><span className="sx-premium-badge">{statuses[presenter.status] ?? presenter.status}</span></dd></div>
+                        <div><dt>{payments || casework ? "Data do registro" : "Cadastro"}</dt><dd>{formatDate(row.createdAt ?? row.requestedAt)}</dd></div>
+                      </dl>
+                      <div className="sx-au-actions">
+                        <button type="button" className="sx-premium-button" onClick={(event) => void openDetail(row, event.currentTarget)}>Detalhes</button>
+                        {canWrite && support && <button type="button" className="sx-premium-button" onClick={() => void reply(String(row.id))}>Responder</button>}
+                        {canWrite && nextAction && <button type="button" className="sx-premium-button" onClick={() => void action(String(row.id), nextAction)}>{actionLabel(nextAction)}</button>}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : <p className="sx-premium-surface sx-au-state">Nenhum registro encontrado para os filtros informados.</p>)}
+            {!loading && !listUnavailable && pages > 1 && (
+              <nav aria-label="Paginação" className="sx-au-pages">
+                <button type="button" disabled={page === 1} onClick={() => setPage((value) => value - 1)} className="sx-premium-button">Anterior</button>
+                <span className="sx-premium-muted">Página {page} de {pages}</span>
+                <button type="button" disabled={page === pages} onClick={() => setPage((value) => value + 1)} className="sx-premium-button">Próxima</button>
+              </nav>
+            )}
+          </section>
+        </main>
+        {detail && casework && <CaseworkDetail mode={mode} data={detail} canWrite={canWrite} close={() => setDetail(null)} action={action} reply={reply} focusTarget={caseworkTrigger} />}
+      </PremiumScope>
+      {detail && !casework && <DetailDrawer mode={mode} data={detail} canWrite={canWrite} close={() => setDetail(null)} action={action} reply={reply} />}
+    </>;
   }
 
   return <main className="p-5 pt-20 lg:p-8"><div className="mx-auto max-w-7xl">
@@ -158,6 +307,80 @@ function DetailDrawer({ mode, data, canWrite, close, action, reply }: { mode: Op
   </aside></div>;
 }
 
+const caseworkStatuses: Readonly<Record<string, string>> = {
+  OPEN: 'Aberto', IN_PROGRESS: 'Em atendimento', WAITING_USER: 'Aguardando usuário',
+  RESOLVED: 'Resolvido', CLOSED: 'Fechado', UNDER_REVIEW: 'Em análise', DISMISSED: 'Descartado',
+};
+const supportPriorities: Readonly<Record<string, string>> = {
+  LOW: 'Baixa', MEDIUM: 'Média', HIGH: 'Alta', URGENT: 'Urgente',
+};
+
+function CaseworkDetail({ mode, data, canWrite, close, action, reply, focusTarget }: {
+  mode: 'support' | 'reports'; data: Row; canWrite: boolean; close: () => void;
+  focusTarget: { current: HTMLButtonElement | null };
+  action: (id: string, action: string) => void; reply: (id: string) => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const modal = dialog.current;
+    if (!modal) return;
+    const trigger = focusTarget.current ?? document.activeElement;
+    modal.showModal();
+    return () => {
+      modal.close();
+      if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus();
+    };
+  }, [focusTarget]);
+  const audit = Array.isArray(data.audit) ? data.audit as Row[] : Array.isArray(data.auditLogs) ? data.auditLogs as Row[] : [];
+  const messages = Array.isArray(data.messages) ? data.messages as Row[] : [];
+  const actions = availableActions(mode, String(data.status ?? ''));
+  const fields = Object.entries(data).filter(([key, value]) =>
+    !['audit', 'messages', 'metadata', 'password', 'pixQrCode', 'pixCopyPaste'].includes(key) &&
+    value != null && typeof value !== 'object'
+  );
+  const valueLabel = (key: string, value: unknown) => {
+    if (key === 'status') return caseworkStatuses[String(value)] ?? String(value);
+    if (key === 'priority') return supportPriorities[String(value)] ?? String(value);
+    return /(?:At|Date)$/.test(key) ? formatDate(value) : String(value);
+  };
+  return (
+    <dialog className="sx-ac-dialog" ref={dialog} aria-labelledby="sx-ac-dialog-title" onCancel={(event) => { event.preventDefault(); close(); }}>
+      <header className="sx-ac-dialog-header">
+        <div>
+          <p className="sx-au-eyebrow">Detalhes</p>
+          <h2 id="sx-ac-dialog-title" className="sx-premium-section">{present(mode, data).title}</h2>
+        </div>
+        <button type="button" autoFocus onClick={close} className="sx-premium-button" aria-label="Fechar detalhes"><X size={20} aria-hidden="true" /></button>
+      </header>
+      <dl className="sx-ac-detail-fields">
+        {fields.map(([key, value]) => <div className="sx-ac-field" key={key}><dt>{fieldLabel(key)}</dt><dd>{valueLabel(key, value)}</dd></div>)}
+      </dl>
+      {canWrite && (
+        <div className="sx-au-actions">
+          {mode === 'support' && <button type="button" onClick={() => reply(String(data.id))} className="sx-premium-button">Responder chamado</button>}
+          {actions.map((item) => <button type="button" key={item} onClick={() => action(String(data.id), item)} className="sx-premium-button">{caseworkActionLabel(item)}</button>)}
+        </div>
+      )}
+      {messages.length > 0 && <CaseworkHistory title="Mensagens" rows={messages} label="message" />}
+      <CaseworkHistory title="Histórico administrativo" rows={audit} label="action" />
+    </dialog>
+  );
+}
+function CaseworkHistory({ title, rows, label }: { title: string; rows: Row[]; label: 'message' | 'action' }) {
+  return <section className="sx-ac-history">
+    <h3 className="sx-premium-section">{title}</h3>
+    {rows.length ? <ul role="list">{rows.map((row, index) => (
+      <li className="sx-ac-field" key={String(row.id ?? index)}>
+        <b>{String(row[label] ?? 'Registro')}</b>
+        <p className="sx-premium-muted">{String((row.actor as Row | undefined)?.name ?? row.senderUserId ?? '')} {formatDate(row.createdAt)}</p>
+      </li>
+    ))}</ul> : <p className="sx-premium-muted">Nenhum registro disponível.</p>}
+  </section>;
+}
+function caseworkActionLabel(action: string) {
+  return action === 'WAITING_USER' ? 'Aguardar usuário' : actionLabel(action);
+}
+
 function actionRequest(mode: OperationalMode, id: string, action: string, reason: string) {
   if (mode === 'campaigns') return { path: `campaigns/${id}/action`, body: { action, reason } };
   if (mode === 'users') return { path: `users/${id}/action`, body: { action, reason } };
@@ -176,6 +399,41 @@ function availableActions(mode: OperationalMode, status: string): string[] {
 }
 function primaryAction(mode: OperationalMode, status: string) { return availableActions(mode, status)[0]; }
 function actionLabel(action: string) { return ({ APPROVE: 'Aprovar', REJECT: 'Rejeitar', REQUEST_CHANGES: 'Solicitar ajustes', PAUSE: 'Pausar', REACTIVATE: 'Reativar', BLOCK_PURCHASES: 'Bloquear compras', UNBLOCK_PURCHASES: 'Liberar compras', ACTIVATE: 'Ativar', SUSPEND: 'Suspender', BLOCK: 'Bloquear', UNBLOCK: 'Desbloquear', REVOKE_SESSIONS: 'Encerrar sessões', REVIEW: 'Marcar para revisão', RESOLVED: 'Resolver', DISMISSED: 'Descartar', DISPUTED: 'Sinalizar disputa', DELIVERED: 'Confirmar entrega', OPEN: 'Reabrir', IN_PROGRESS: 'Iniciar atendimento', WAITING_CUSTOMER: 'Aguardar cliente', CLOSED: 'Fechar' } as Record<string, string>)[action] ?? action; }
+
+const paymentStatuses: Readonly<Record<string, string>> = {
+  CREATED: 'Criado', PENDING: 'Pendente', PROCESSING: 'Em processamento',
+  APPROVED: 'Aprovado', REJECTED: 'Recusado', CANCELLED: 'Cancelado', EXPIRED: 'Expirado',
+  REFUNDED: 'Estornado', CHARGEBACK: 'Contestado (chargeback)',
+};
+const paymentMethods: Readonly<Record<string, string>> = {
+  PIX: 'Pix', CREDIT_CARD: 'Cartão de crédito', DEBIT_CARD: 'Cartão de débito',
+};
+
+function paymentAmount(value: unknown, currency: unknown) {
+  const decimal = typeof value === 'number' ? String(value) : value;
+  if (typeof decimal !== 'string' || !/^-?\d{1,12}(?:\.\d{1,2})?$/.test(decimal) ||
+    typeof currency !== 'string' || !/^[A-Z]{3}$/.test(currency)) return 'Não informado';
+  // The payment record stores two fractional digits; formatting does not convert currencies.
+  return Number(decimal).toLocaleString('pt-BR', {
+    style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+}
+
+const campaignStatuses: Readonly<Record<string, string>> = {
+  DRAFT: 'Rascunho', PENDING_REVIEW: 'Aguardando revisão', PUBLISHED: 'Publicada',
+  PAUSED: 'Pausada', SOLD_OUT: 'Esgotada', DRAWN: 'Sorteada', FINISHED: 'Encerrada', CANCELLED: 'Cancelada',
+};
+
+function campaignCount(value: unknown) {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value.toLocaleString('pt-BR') : 'Não informado';
+}
+
+const userStatuses: Readonly<Record<string, string>> = {
+  ACTIVE: 'Ativo', INACTIVE: 'Inativo', SUSPENDED: 'Suspenso', BLOCKED: 'Bloqueado',
+};
+const userRoles: Readonly<Record<string, string>> = {
+  ADMIN: 'Administrador', BUYER: 'Comprador', ORGANIZER: 'Organizador',
+};
 
 function present(mode: OperationalMode, row: Row) {
   const organizer = row.organizer as Row | undefined, buyer = row.buyer as Row | undefined, campaign = row.campaign as Row | undefined;

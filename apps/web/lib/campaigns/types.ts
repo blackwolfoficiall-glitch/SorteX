@@ -1,3 +1,5 @@
+import type { CampaignSalesWindow } from "../../../../packages/contracts/src/campaign-sales-window";
+
 export type CampaignStatus =
   | "DRAFT"
   | "PENDING_REVIEW"
@@ -143,11 +145,17 @@ export type Campaign = Required<Pick<CampaignDraft, RequiredCampaignField>> &
     RequiredCampaignField | "promotions" | "instantPrizes"
   > & {
     id: string;
+    scheduledDrawAt?: string | null;
+    drawTimeZone?: string | null;
+    salesWindow?: CampaignSalesWindow;
     organizerId: string;
     slug: string;
     status: CampaignStatus;
     isFeatured?: boolean;
     coverImageUrl: string | null;
+    coverImageRevision?: string | null;
+    publicationBlocked?: boolean;
+    adminReviewStatus?: string | null;
     promotionalVideoUrl: string | null;
     mainPrizeImageUrl: string | null;
     soldNumbers: number;

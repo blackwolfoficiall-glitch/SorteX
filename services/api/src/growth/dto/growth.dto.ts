@@ -10,6 +10,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayNotEmpty,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -49,6 +50,7 @@ export class PromotionListDto {
 export class PromotionQuoteDto {
   @IsString() campaignId: string;
   @Type(() => Number) @IsInt() @Min(1) quantity: number;
+  @IsOptional() @IsString() promotionId?: string;
   @IsOptional() @IsString() couponCode?: string;
 }
 
@@ -100,6 +102,7 @@ export class RecommendationFeedbackDto {
 }
 export class AdvisorChatDto {
   @IsString() @MinLength(3) @MaxLength(600) question: string;
+  @IsOptional() @IsBoolean() allowAi?: boolean;
 }
 export class AdvisorSimulationDto {
   @IsOptional() @IsString() campaignId?: string;

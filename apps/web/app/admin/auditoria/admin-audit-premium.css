@@ -1,0 +1,47 @@
+.sx-admin-audit { min-height: 100vh; padding: 4.75rem clamp(.75rem,3vw,2rem) 2rem; }
+.sx-admin-audit .sx-aa-wrap { width: min(100%,78rem); margin-inline: auto; min-width: 0; display: grid; gap: 1rem; }
+.sx-admin-audit .sx-aa-hero {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: .85rem;
+  padding: clamp(.9rem,4vw,1.7rem);
+  background-image: linear-gradient(138deg,#5923c1,#214fc1);
+}
+.sx-admin-audit .sx-aa-hero > svg { flex: none; }
+.sx-admin-audit .sx-aa-hero > div { flex: 1 1 12rem; min-width: 0; }
+.sx-admin-audit .sx-aa-hero p:last-child { margin-block-start: .35rem; font-size: .93rem; }
+.sx-admin-audit .sx-aa-eyebrow { margin-block-end: .3rem; text-transform: uppercase; letter-spacing: .08em; font-weight: 800; font-size: .72rem; }
+.sx-admin-audit .sx-aa-refresh { margin-inline-start: auto; }
+.sx-admin-audit :is(.sx-aa-filters,.sx-aa-records,.sx-aa-list,.sx-aa-fields) { display: grid; gap: .75rem; min-width: 0; }
+.sx-admin-audit .sx-aa-filters { padding: clamp(.75rem,3vw,1.3rem); }
+.sx-admin-audit .sx-aa-fields label { min-width: 0; font-size: .84rem; font-weight: 750; }
+.sx-admin-audit .sx-aa-fields input {
+  display: block;
+  min-width: 0;
+  width: 100%;
+  min-height: 2.75rem;
+  margin-block-start: .28rem;
+  padding: .5rem .65rem;
+  border: 1px solid var(--sxp-muted);
+  border-radius: var(--sxp-button-radius);
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+}
+.sx-admin-audit .sx-aa-actions { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
+.sx-admin-audit .sx-aa-actions [data-variant="primary"] { background-image: linear-gradient(138deg,#5923c1,#214fc1); }
+.sx-admin-audit .sx-aa-records nav { justify-content: center; }
+.sx-admin-audit .sx-aa-entry { padding: clamp(.75rem,3vw,1.2rem); overflow-wrap: anywhere; }
+.sx-admin-audit .sx-aa-entry dl { display: grid; gap: .6rem; margin-block-start: .55rem; }
+.sx-admin-audit .sx-aa-entry dt { color: var(--sxp-muted); font-size: .78rem; }
+.sx-admin-audit .sx-aa-entry dd { margin-block-start: .12rem; font-size: .85rem; font-weight: 750; }
+.sx-admin-audit .sx-aa-state { display: grid; align-content: center; justify-items: center; gap: .6rem; padding: 1rem; min-height: 7rem; text-align: center; }
+.sx-admin-audit .sx-aa-error { color: var(--sxp-error); }
+.sx-admin-audit .sx-aa-spinner { color: var(--sxp-accent); }
+.sx-admin-audit :is(button,input):focus-visible { outline: 2px solid var(--sxp-focus); outline-offset: 2px; }
+@media (min-width: 42rem) {
+  .sx-admin-audit .sx-aa-fields { grid-template-columns: minmax(0,1.4fr) repeat(2,minmax(0,1fr)); }
+  .sx-admin-audit .sx-aa-entry dl { grid-template-columns: minmax(0,.75fr) minmax(0,1.55fr) minmax(0,1fr); }
+}
+@media (min-width: 64rem) { .sx-admin-audit { padding-block-start: 2rem; } }
+@media (prefers-reduced-motion: no-preference) { .sx-admin-audit .sx-aa-spinner { animation: spin 1s linear infinite; } }

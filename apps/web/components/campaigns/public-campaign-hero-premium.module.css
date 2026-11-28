@@ -1,0 +1,43 @@
+.scope { background: transparent; color: inherit; font-size: inherit; }
+.scope.personalizedFont { font-family: inherit; }
+.scope .frame, .scope .metrics {
+  border-radius: var(--sxp-panel-radius);
+  border-color: var(--sxp-line);
+  box-shadow: var(--sxp-shadow);
+  background-color: var(--sxp-surface);
+}
+.scope .media h1 { font-family: var(--sxp-font-heading); letter-spacing: -.041em; overflow-wrap: anywhere; }
+.scope.personalizedFont .media h1 { font-family: inherit; }
+.scope .whiteTitleScrim { background-image: linear-gradient(to top, #100e17d0, #100e1760 68%, transparent); }
+.scope .whiteTitleScrim h1 { text-shadow: 0 2px 7px #100e17cf; }
+.placeholder { background: linear-gradient(128deg, #191238, #352389); }
+.placeholder[data-dark-title] { background: linear-gradient(128deg, #f2eaff, #ddd9ff); }
+.gallery {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .4rem .75rem;
+  border-top: 1px solid var(--sxp-line); padding: .45rem .65rem;
+  color: var(--sxp-text);
+}
+.galleryLabel { display: inline-flex; align-items: center; gap: .35rem; font-size: .77rem; font-weight: 790; }
+.galleryLabel svg { color: var(--sxp-accent); flex: none; }
+.controls { display: flex; align-items: center; flex-wrap: wrap; gap: .28rem; min-width: 0; }
+.controls button {
+  display: grid; place-items: center; min-inline-size: 2.75rem; min-block-size: 2.75rem; padding: .2rem .4rem;
+  background: var(--sxp-surface); color: var(--sxp-accent); border: 1px solid var(--sxp-line);
+  border-radius: .68rem; font-size: .79rem; font-weight: 800; transition: background-color 150ms ease;
+}
+.controls button:hover { background: var(--sxp-tint); }
+.controls button[aria-pressed="true"] { background: #5925b6; color: #fff; border-color: transparent; }
+.controls button:focus-visible { outline: 2px solid var(--sxp-focus); outline-offset: 2px; }
+.metrics > div { border-color: var(--sxp-line); color: var(--sxp-text); min-width: 0; }
+.metrics > div p { color: var(--sxp-text); overflow-wrap: anywhere; }
+.scope .progress { background: var(--sxp-tint); }
+@media (max-width: 25rem) {
+  .scope .media { min-height: 17.25rem; }
+  .scope .verified { top: 3.2rem; }
+  .scope .metrics > div { padding-inline: .42rem; }
+  .scope .metrics > div:first-child p + p { font-size: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scope .controls button { transition: none; }
+  .scope .progressFill { transition: none; }
+}

@@ -1,0 +1,99 @@
+.sx-buyer-profile {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  max-width: 59rem;
+  margin-inline: auto;
+  padding: clamp(0.65rem, 3vw, 1.55rem);
+  border-radius: var(--sxp-panel-radius);
+  background-image: radial-gradient(ellipse at top left, var(--sxp-tint), transparent 42rem);
+  overflow-wrap: anywhere;
+  container-type: inline-size;
+}
+.sx-buyer-profile-hero {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  padding: clamp(1rem, 4vw, 2rem);
+  background-image: linear-gradient(rgba(15, 7, 44, 0.2), rgba(15, 7, 44, 0.2)), var(--sxp-gradient);
+}
+.sx-buyer-profile-hero > div { min-width: 0; }
+.sx-buyer-profile-hero h1 { margin-block: 0.2rem; font-size: clamp(1.8rem, 4.8vw, 2.6rem); }
+.sx-buyer-profile-kicker { font-size: 0.86rem; font-weight: 750; }
+.sx-buyer-profile-avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 3.6rem;
+  height: 3.6rem;
+  border-radius: 1.25rem;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.44);
+  font: 800 1.55rem/1 var(--sxp-font-heading);
+}
+.sx-buyer-profile-panel { padding: clamp(0.8rem, 2.35vw, 1.4rem); min-width: 0; }
+.sx-buyer-profile-form, .sx-buyer-profile-link-list { display: grid; gap: 0.65rem; margin-top: 0.75rem; }
+.sx-buyer-profile-field { display: grid; min-width: 0; gap: 0.25rem; }
+.sx-buyer-profile-field label { color: var(--sxp-muted); font-weight: 730; font-size: 0.875rem; }
+.sx-buyer-profile-field input {
+  min-height: var(--sxp-action-height);
+  width: 100%;
+  min-width: 0;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+  font-size: 1rem;
+}
+.sx-buyer-profile-field input:focus-visible, .sx-buyer-profile-link:focus-visible {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 3px;
+}
+.sx-buyer-profile-id {
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  background: var(--sxp-bg);
+  padding: 0.55rem 0.7rem;
+}
+.sx-buyer-profile-save, .sx-buyer-profile-signout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+}
+.sx-buyer-profile-link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: var(--sxp-action-height);
+  gap: 0.55rem;
+  padding: 0.52rem 0.72rem;
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  background: var(--sxp-bg);
+  font-size: 0.9rem;
+  font-weight: 730;
+  color: var(--sxp-text);
+}
+.sx-buyer-profile-link svg { color: var(--sxp-accent); }
+.sx-buyer-profile-loading { display: flex; align-items: center; gap: 0.5rem; }
+.sx-buyer-profile-spinner { flex: none; color: var(--sxp-accent); }
+.sx-buyer-profile-retry { margin-top: 0.65rem; }
+.sx-buyer-profile-error, .sx-buyer-profile .sx-buyer-profile-signout-button { color: var(--sxp-error); }
+.sx-buyer-profile-success { color: var(--sxp-success); }
+.sx-buyer-profile-signout-button { width: 100%; }
+.sx-buyer-profile-save .sx-premium-button { width: 100%; }
+@container (min-width: 30rem) {
+  .sx-buyer-profile-form, .sx-buyer-profile-link-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sx-buyer-profile-wide { grid-column: 1 / -1; }
+  .sx-buyer-profile-save .sx-premium-button, .sx-buyer-profile-signout-button { width: auto; }
+}
+@media (hover: hover) {
+  .sx-buyer-profile-link:hover { background: var(--sxp-tint); border-color: var(--sxp-accent); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sx-buyer-profile-spinner { animation: sx-buyer-profile-spin 1.1s linear infinite; }
+}
+@keyframes sx-buyer-profile-spin { to { transform: rotate(360deg); } }

@@ -1,0 +1,198 @@
+name: Interface nativa iOS (PostgreSQL local)
+on:
+  # First opted-in change on the QA branch triggers exactly this smoke.
+  # Does not modify or trigger the isolated hosted API/preview deploy.
+  push:
+    branches: [homologacao/web-ios-integrada]
+    paths:
+      - '.github/native-ui/**'
+      - '.github/workflows/mobile-native-ui.yml'
+permissions:
+  contents: read
+concurrency:
+  group: sortex-ios-native-ui-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  buyer-session:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event_name == 'push' && github.event.repository.private == false
+    runs-on: macos-latest
+    timeout-minutes: 70
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_NO_DOTENV: '1'
+      EXPO_PUBLIC_API_URL: http://127.0.0.1:3338
+      EXPO_PUBLIC_ALLOW_LOCAL_API: '1'
+      EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS: '0'
+      MAESTRO_CLI_NO_ANALYTICS: 'true'
+      MAESTRO_DISABLE_UPDATE_CHECK: 'true'
+      MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED: 'true'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      SORTEX_IOS_UI_CHECKPOINTS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        id: checkout
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        id: node
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            apps/mobile/package-lock.json
+            services/api/package-lock.json
+      - uses: actions/setup-java@v4
+        id: java
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Verificar as barreiras do cenário isolado
+        id: guards
+        run: node --test .github/native-ui/fixture-guards.test.cjs .github/native-ui/startup-probe.test.cjs .github/native-ui/phase-evidence.test.cjs
+      - name: Instalar PostgreSQL local e Maestro CLI verificado
+        id: tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install postgresql@18
+          echo "SORTEX_IOS_UI_PG_BIN=$(brew --prefix postgresql@18)/bin" >> "$GITHUB_ENV"
+          archive="$RUNNER_TEMP/maestro.zip"
+          # Upstream GitHub release cli-2.12.1 asset SHA-256.
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            --retry 2 --connect-timeout 15 --max-time 300 \
+            https://github.com/mobile-dev-inc/maestro/releases/download/cli-2.12.1/maestro.zip -o "$archive"
+          printf '%s  %s\n' 54dbb0716425626604973cbb374c585ca30272375d9ce15177a1152765ddd9d7 "$archive" | shasum -a 256 -c -
+          unzip -q "$archive" -d "$RUNNER_TEMP"
+          test -x "$RUNNER_TEMP/maestro/bin/maestro"
+          echo "MAESTRO_BIN=$RUNNER_TEMP/maestro/bin/maestro" >> "$GITHUB_ENV"
+      - name: Conferir o executável do Maestro e os seis fluxos
+        id: maestro-preflight
+        shell: bash
+        run: bash .github/native-ui/check-maestro.sh
+      - name: Preparar API Nest local
+        id: api
+        working-directory: services/api
+        run: |
+          npm ci --no-audit --no-fund
+          npx --no-install prisma generate
+          npm run build
+      - name: Preparar o aplicativo nativo
+        id: app
+        working-directory: apps/mobile
+        run: |
+          npm ci --no-audit --no-fund
+          npx expo prebuild --platform ios --no-install
+          node scripts/check-native-config.cjs
+      - name: Inicializar um iPhone virtual
+        id: simulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          simulator_id="$(xcrun simctl list devices available --json | node -e 'let s="";process.stdin.on("data",x=>s+=x);process.stdin.on("end",()=>{const rows=Object.entries(JSON.parse(s).devices).filter(([runtime])=>runtime.includes("iOS")).flatMap(([,devices])=>devices);const d=rows.find(x=>x.isAvailable&&x.name.startsWith("iPhone")&&x.state==="Booted")||rows.find(x=>x.isAvailable&&x.name.startsWith("iPhone"));if(!d)process.exit(1);console.log(d.udid);});')"
+          xcrun simctl bootstatus "$simulator_id" -b
+          echo "SORTEX_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+      - name: Compilar Release, testar na interface e confirmar revogação
+        id: native-e2e
+        shell: bash
+        run: bash .github/native-ui/with-fixture.sh bash .github/native-ui/run-ios.sh
+      - name: Guardar apenas o diagnóstico de inicialização sem credenciais
+        if: ${{ failure() && steps.native-e2e.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sortex-ios-startup-diagnostic-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/sortex-native-startup-failure/startup.txt
+            ${{ runner.temp }}/sortex-native-startup-failure/startup.png
+          if-no-files-found: ignore
+          retention-days: 1
+      - name: Guardar somente evidências aprovadas e sem credenciais
+        id: evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: sortex-ios-native-ui-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/sortex-native-ui-evidence/native-ui.txt
+            ${{ runner.temp }}/sortex-native-ui-evidence/signed-out.png
+          if-no-files-found: error
+          retention-days: 1
+      - name: Guardar etapa da falha sem expor dados do cenário
+        if: ${{ failure() && !cancelled() }}
+        shell: bash
+        env:
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
+          NODE_OUTCOME: ${{ steps.node.outcome }}
+          JAVA_OUTCOME: ${{ steps.java.outcome }}
+          GUARDS_OUTCOME: ${{ steps.guards.outcome }}
+          TOOLS_OUTCOME: ${{ steps.tools.outcome }}
+          MAESTRO_PREFLIGHT_OUTCOME: ${{ steps.maestro-preflight.outcome }}
+          API_OUTCOME: ${{ steps.api.outcome }}
+          APP_OUTCOME: ${{ steps.app.outcome }}
+          SIMULATOR_OUTCOME: ${{ steps.simulator.outcome }}
+          SCENARIO_OUTCOME: ${{ steps.native-e2e.outcome }}
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
+          # Inline so failure evidence is available even when checkout fails.
+          # Map only GitHub's outcomes; never copy output from a failed step.
+          failed=unclassified
+          if [[ "$CHECKOUT_OUTCOME" == failure ]]; then failed=checkout
+          elif [[ "$NODE_OUTCOME" == failure ]]; then failed=node
+          elif [[ "$JAVA_OUTCOME" == failure ]]; then failed=java
+          elif [[ "$GUARDS_OUTCOME" == failure ]]; then failed=guards
+          elif [[ "$TOOLS_OUTCOME" == failure ]]; then failed=tools
+          elif [[ "$MAESTRO_PREFLIGHT_OUTCOME" == failure ]]; then failed=maestro-preflight
+          elif [[ "$API_OUTCOME" == failure ]]; then failed=api-build
+          elif [[ "$APP_OUTCOME" == failure ]]; then failed=app-prebuild
+          elif [[ "$SIMULATOR_OUTCOME" == failure ]]; then failed=simulator-boot
+          elif [[ "$SCENARIO_OUTCOME" == failure ]]; then failed=scenario
+          elif [[ "$EVIDENCE_OUTCOME" == failure ]]; then failed=evidence-upload
+          fi
+          last=none
+          checkpoint="$RUNNER_TEMP/sortex-native-ui-checkpoint"
+          if [[ -f "$checkpoint" ]] && IFS= read -r value < "$checkpoint"; then
+            case "$value" in
+              fixture-entered|postgres-started|migrations-applied|fixture-seeded|api-ready|\
+              launcher-validated|release-installed|startup-controls-verified|login-verified|\
+              campaign-verified|signed-in-relaunch-verified|logout-verified|\
+              signed-out-relaunch-verified|signed-out-evidence-saved|server-verification-complete)
+                last="$value" ;;
+            esac
+          fi
+          {
+            printf 'sha=%s\nfailed_step=%s\nlast_completed=%s\n' "$GITHUB_SHA" "$failed" "$last"
+            diagnostic="$RUNNER_TEMP/sortex-native-ui-login-diagnostic"
+            if [[ "$failed" == scenario && "$last" == startup-controls-verified && -f "$diagnostic" ]]; then
+              {
+                IFS= read -r cli || cli=
+                IFS= read -r api || api=
+                IFS= read -r input || input=
+              } < "$diagnostic"
+              case "$cli" in
+                login_cli=keyboard-dismiss-failed|login_cli=email-control|login_cli=email-value|login_cli=password-control|\
+                login_cli=inputs-not-observed|login_cli=submit-control|login_cli=signed-in-view|login_cli=driver|login_cli=unclassified)
+                  printf '%s\n' "$cli" ;;
+              esac
+              case "$api" in
+                login_api=2xx|login_api=400-validation|login_api=401-unauthorized|login_api=403-forbidden|\
+                login_api=429-rate-limited|login_api=4xx-other|login_api=5xx|login_api=not-seen|login_api=unknown)
+                  printf '%s\n' "$api" ;;
+              esac
+              case "$input" in
+                login_input=matches|login_input=email-mismatch|login_input=password-mismatch|\
+                login_input=both-mismatch|login_input=missing-email|login_input=missing-password|\
+                login_input=missing-both|login_input=not-seen|login_input=unknown)
+                  printf '%s\n' "$input" ;;
+              esac
+            fi
+          } | tee "$RUNNER_TEMP/sortex-native-ui-failure.txt"
+      - name: Publicar diagnóstico de etapa sem transcrições
+        if: ${{ failure() && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sortex-ios-phase-diagnostic-${{ github.sha }}
+          path: ${{ runner.temp }}/sortex-native-ui-failure.txt
+          if-no-files-found: error
+          retention-days: 1

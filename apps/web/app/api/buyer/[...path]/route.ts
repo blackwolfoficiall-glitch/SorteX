@@ -9,7 +9,12 @@ async function proxy(request: Request, context: { params: Promise<{ path: string
     body: body || undefined,
     headers: body ? { 'Content-Type': request.headers.get('content-type') ?? 'application/json' } : undefined,
   });
-  return jsonFromUpstream(await readJson(response), response.status);
+  return jsonFromUpstream(
+    await readJson(response),
+    response.status,
+    path[0] === 'notifications' || path[0] === 'favorites' || path[0] === 'results'
+      ? { 'Cache-Control': 'private, no-store' } : undefined,
+  );
 }
 export const GET = proxy;
 export const POST = proxy;

@@ -1,0 +1,51 @@
+.page { min-height: 100vh; }
+.page :is(button, input, select, textarea):focus-visible { outline: 2px solid var(--sxp-focus); outline-offset: 3px; }
+.wrap { max-width: 63rem; display: grid; gap: .9rem; margin-inline: auto; padding: clamp(.75rem, 3vw, 2rem) clamp(.65rem, 3vw, 2rem) 5.5rem; container-type: inline-size; }
+.hero {
+  position: relative; display: flex; justify-content: space-between; align-items: center; gap: .8rem; min-width: 0;
+  padding: clamp(.95rem, 3vw, 1.72rem) clamp(1rem, 3.4vw, 2.25rem); border-radius: var(--sxp-panel-radius);
+  color: #fff; background: linear-gradient(128deg, #5925b6 8%, #2447b9 90%); box-shadow: var(--sxp-shadow);
+}
+.hero::before, .hero::after { content: ""; position: absolute; top: calc(50% - .35rem); width: .7rem; height: .7rem; border-radius: 50%; background: var(--sxp-bg); pointer-events: none; }
+.hero::before { left: -.35rem; }
+.hero::after { right: -.35rem; }
+.hero h1, .panel h2, .list h3 { font-family: var(--sxp-font-heading); font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+.hero h1 { margin: .2rem 0 .4rem; font-size: clamp(1.55rem, 4vw, 2.35rem); letter-spacing: -.045em; }
+.hero p { margin: 0; font-size: .84rem; line-height: 1.45; }
+.hero .kicker { font-size: .72rem; font-weight: 800; letter-spacing: .085em; text-transform: uppercase; }
+.hero svg, .panelHead svg, .date svg, .state svg { flex: none; }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr); align-items: start; gap: .85rem; }
+.panel, .restricted { min-width: 0; border: 1px solid var(--sxp-line); background: var(--sxp-surface); border-radius: var(--sxp-panel-radius); box-shadow: var(--sxp-shadow); }
+.panel { display: grid; gap: .78rem; padding: clamp(.78rem, 2vw, 1.22rem); }
+.panel h2 { margin: 0; font-size: 1rem; }
+.panelHead { display: flex; align-items: center; gap: .55rem; }
+.panelHead span { display: grid; place-items: center; flex: none; width: 2.38rem; height: 2.38rem; color: var(--sxp-accent); background: var(--sxp-tint); border-radius: .75rem; }
+.form { display: grid; gap: .73rem; }
+.form label { display: grid; gap: .26rem; font-size: .81rem; font-weight: 780; min-width: 0; }
+.form :is(input, select, textarea), .button { min-height: 2.75rem; border: 1px solid var(--sxp-line); border-radius: var(--sxp-button-radius); background: var(--sxp-surface); }
+.form :is(input, select, textarea) { width: 100%; color: var(--sxp-text); padding: .52rem .65rem; font: inherit; font-weight: 610; }
+.form textarea { min-height: 7rem; resize: vertical; }
+.button { justify-self: start; color: var(--sxp-accent); padding: .48rem .72rem; font-size: .81rem; font-weight: 790; transition: background-color 140ms ease; }
+.button:hover { background: var(--sxp-tint); }
+.button.primary { color: #fff; background: #5925b6; border-color: transparent; }
+.button.primary:hover { background: #482095; }
+.button:disabled { cursor: wait; opacity: .7; }
+.list { display: grid; gap: .5rem; list-style: none; margin: 0; padding: 0; }
+.list > li { min-width: 0; border: 1px solid var(--sxp-line); border-radius: .82rem; padding: .64rem; overflow-wrap: anywhere; }
+.list h3 { margin: .35rem 0 .28rem; font-size: .94rem; }
+.description, .hint, .date, .state, .restricted { color: var(--sxp-muted); font-size: .78rem; line-height: 1.42; }
+.description { margin: 0; white-space: pre-wrap; }
+.date { margin: .42rem 0 0; display: flex; align-items: center; flex-wrap: wrap; gap: .28rem; }
+.date svg, .state svg { color: var(--sxp-accent); }
+.hint, .error, .success { margin: 0; }
+.badge { display: inline-block; color: var(--sxp-accent); border: 1px solid var(--sxp-line); border-radius: 999px; background: var(--sxp-tint); padding: .22rem .48rem; font-size: .72rem; font-weight: 760; }
+.state { display: grid; gap: .42rem; padding: .58rem; margin: 0; border-radius: .65rem; background: var(--sxp-tint); }
+.state[role="status"] { display: flex; align-items: center; }
+.restricted { margin: 0; padding: .66rem; }
+.error, .success { font-size: .8rem; font-weight: 760; }
+.error { color: var(--sxp-error); }
+.success { color: var(--sxp-success); }
+.spinner { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(1turn); } }
+@container (min-width: 44rem) { .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .page .button { transition: none; } .page .spinner { animation: none; } }

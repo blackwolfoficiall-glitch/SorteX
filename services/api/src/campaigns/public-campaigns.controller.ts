@@ -73,14 +73,16 @@ export class PublicCampaignsController {
     response: Response,
     user?: AuthenticatedUser,
   ) {
+    // Visibility can be revoked as soon as the campaign stops being public.
+    response.setHeader('Cache-Control', 'no-store');
     const file = await this.campaignsService.getMediaFile(
       campaignId,
       kind,
       mediaId,
       user,
+      'public',
     );
     response.setHeader('Content-Type', file.mimeType);
-    response.setHeader('Cache-Control', 'public, max-age=3600');
     return new StreamableFile(file.stream);
   }
 }

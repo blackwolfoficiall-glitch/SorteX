@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import {
   BadgeCheck,
+  Landmark,
+  WalletCards,
   Copy,
   LoaderCircle,
   Plus,
@@ -11,6 +13,7 @@ import {
   Search,
   ShieldAlert,
 } from "lucide-react";
+import PremiumScope from "@/components/premium/PremiumScope";
 import { authRequest } from "@/lib/auth/client";
 import { useAuthorizedUser } from "@/components/auth/RoleGate";
 import { hasAdminPermission } from "@/lib/admin/authorization";
@@ -41,13 +44,20 @@ const titles: Record<Mode, [string, string]> = {
   ],
 };
 
-export default function AdminManagement({ mode }: { mode: Mode }) {
+export default function AdminManagement({ mode, premiumPlans = false, premiumGateways = false }: {
+  mode: Mode; premiumPlans?: boolean; premiumGateways?: boolean;
+}) {
   const user = useAuthorizedUser();
   const [items, setItems] = useState<Json[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const gatewayOverview = mode === "gateways" && premiumGateways;
+  const premium = (mode === "plans" && premiumPlans) || gatewayOverview;
+  const catalogRequest = useRef(0);
   const load = useCallback(async () => {
+    const request = premium ? ++catalogRequest.current : 0;
+    const active = () => !premium || request === catalogRequest.current;
     setLoading(true);
     setError("");
     try {
@@ -55,23 +65,83 @@ export default function AdminManagement({ mode }: { mode: Mode }) {
         `/api/admin/platform/${endpoint[mode]}`,
         { cache: "no-store" },
       );
-      setItems(Array.isArray(data) ? data : data.data || []);
+      if (active()) setItems(Array.isArray(data) ? data : data.data || []);
     } catch (cause) {
+      if (!active()) return;
       setError(
         cause instanceof Error
           ? cause.message
           : "Não foi possível carregar os dados.",
       );
     } finally {
-      setLoading(false);
+      if (active()) setLoading(false);
     }
-  }, [mode]);
+  }, [mode, premium]);
   useEffect(() => {
-    void load();
-  }, [load]);
-  const shown = items.filter((item) =>
-    JSON.stringify(item).toLowerCase().includes(query.toLowerCase()),
+    if (!premium) {
+      void load();
+      return;
+    }
+    const task = window.setTimeout(() => void load(), 0);
+    return () => {
+      window.clearTimeout(task);
+      catalogRequest.current += 1;
+    };
+  }, [load, premium]);
+  const shown = items.filter((item) => {
+    const terms = gatewayOverview
+      ? [item.displayName, item.provider, gatewayStatus(item.status)].filter((value) => typeof value === "string").join(" ")
+      : JSON.stringify(item);
+    return terms.toLowerCase().includes((gatewayOverview ? query.trim() : query).toLowerCase());
+  });
+  const resourceName = gatewayOverview ? "gateway" : "plano";
+  const Icon = gatewayOverview ? Landmark : WalletCards;
+  if (premium) return (
+    <PremiumScope className={gatewayOverview ? "sx-admin-gateways" : "sx-admin-plans"}>
+      <main className="sx-ap-wrap">
+        <header className="sx-premium-ticket sx-ap-hero">
+          <Icon size={30} aria-hidden="true" />
+          <div>
+            <p className="sx-ap-eyebrow">Equipe SorteX</p>
+            <h1 className="sx-premium-title">{gatewayOverview ? "Gateways" : "Planos"}</h1>
+            <p>{gatewayOverview ? "Consulte a configuração registrada de cada provedor." : "Consulte os valores, limites e taxas padrão cadastrados."}</p>
+          </div>
+        </header>
+        {user && hasAdminPermission(user, "SETTINGS_WRITE") && <div className="sx-ap-editor"><Editor mode={gatewayOverview ? "gateways" : "plans"} onSaved={load} /></div>}
+        <section className="sx-premium-surface sx-ap-filters" aria-labelledby="sx-ap-filters">
+          <h2 className="sx-premium-section" id="sx-ap-filters">Filtrar {resourceName}s</h2>
+          <div>
+            <label>
+              <span>Pesquisar {resourceName}</span>
+              <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
+            </label>
+            <button type="button" onClick={load} className="sx-premium-button"><RefreshCw size={17} aria-hidden="true" /> Atualizar</button>
+          </div>
+        </section>
+        <section className="sx-ap-results" aria-labelledby="sx-ap-results">
+          <header>
+            <h2 className="sx-premium-section" id="sx-ap-results">{gatewayOverview ? "Provedores cadastrados" : "Catálogo administrativo"}</h2>
+            <p className="sx-premium-muted">{gatewayOverview
+              ? "Os estados e recursos abaixo refletem o cadastro. Esta tela não testa conexão nem confirma transações, split ou cobrança de planos."
+              : "Valores de referência do plano. Taxa padrão não inclui condições individuais e não indica cobrança realizada."}</p>
+            <p role="status" className="sx-premium-muted">{loading ? `Carregando ${resourceName}s…` : error ? "Catálogo indisponível." : `${shown.length.toLocaleString("pt-BR")} ${resourceName}${shown.length === 1 ? "" : "s"} ${query.trim() ? "na pesquisa" : "no catálogo"}`}</p>
+          </header>
+          {loading ? (
+            <div className="sx-premium-surface sx-ap-state" aria-hidden="true"><LoaderCircle size={25} className="sx-ap-spinner" /></div>
+          ) : error ? (
+            <div className="sx-premium-surface sx-ap-state">
+              <p role="alert" className="sx-ap-error">Não foi possível consultar os {resourceName}s.</p>
+              <button type="button" onClick={load} className="sx-premium-button">Tentar novamente</button>
+            </div>
+          ) : !shown.length ? (
+            <p className="sx-premium-surface sx-ap-state">Nenhum {resourceName} encontrado{query.trim() ? " para a pesquisa." : "."}</p>
+          ) : <ul className="sx-ap-list" role="list">{shown.map((item) => gatewayOverview
+            ? <GatewayCard key={item.id} gateway={item} /> : <PlanCard key={item.id} plan={item} />)}</ul>}
+        </section>
+      </main>
+    </PremiumScope>
   );
+
   return (
     <main className="p-5 pt-20 lg:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -129,6 +199,74 @@ export default function AdminManagement({ mode }: { mode: Mode }) {
         )}
       </div>
     </main>
+  );
+}
+
+function catalogAmount(value: unknown, mode: "money" | "rate" | "count") {
+  if (typeof value !== "number" && (typeof value !== "string" || !/^\d+(?:\.\d+)?$/.test(value))) return "Não informado";
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return "Não informado";
+  if (mode === "count" && !Number.isSafeInteger(number)) return "Não informado";
+  if (mode === "money") return number.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  if (mode === "rate") return `${number.toLocaleString("pt-BR", { maximumFractionDigits: 3 })}%`;
+  return number.toLocaleString("pt-BR");
+}
+
+function PlanCard({ plan }: { plan: Json }) {
+  return (
+    <li className="sx-premium-surface sx-ap-card">
+      <header>
+        <div>
+          <h3 className="sx-premium-section">{plan.name || "Plano sem nome"}</h3>
+          {plan.code && <p className="sx-premium-muted">{plan.code}</p>}
+        </div>
+        <span className="sx-premium-badge">{plan.isActive === true ? "Ativo" : plan.isActive === false ? "Inativo" : "Status não informado"}</span>
+      </header>
+      {plan.description && <p className="sx-premium-muted">{plan.description}</p>}
+      <dl>
+        <Info label="Valor mensal" value={catalogAmount(plan.monthlyPrice, "money")} />
+        <Info label="Valor anual" value={catalogAmount(plan.annualPrice, "money")} />
+        <Info label="Taxa padrão SorteX" value={catalogAmount(plan.platformFeeRate, "rate")} />
+        <Info label="Campanhas" value={catalogAmount(plan.campaignLimit, "count")} />
+        <Info label="Títulos" value={catalogAmount(plan.ticketLimit, "count")} />
+        <Info label="Usuários da equipe" value={catalogAmount(plan.teamMemberLimit, "count")} />
+        <Info label="Dias de teste" value={catalogAmount(plan.trialDays, "count")} />
+      </dl>
+    </li>
+  );
+}
+
+const gatewayStatuses: Readonly<Record<string, string>> = {
+  INACTIVE: "Inativo", SANDBOX: "Sandbox", ACTIVE: "Ativo no cadastro",
+  ERROR: "Erro registrado", MAINTENANCE: "Em manutenção",
+};
+
+function gatewayStatus(value: unknown) {
+  return typeof value === "string" ? gatewayStatuses[value] ?? "Status não informado" : "Status não informado";
+}
+
+function registeredFlag(value: unknown) {
+  return value === true ? "Habilitado no cadastro" : value === false ? "Desabilitado no cadastro" : "Não informado";
+}
+
+function GatewayCard({ gateway }: { gateway: Json }) {
+  return (
+    <li className="sx-premium-surface sx-ap-card">
+      <header>
+        <div>
+          <h3 className="sx-premium-section">{gateway.displayName || "Gateway sem nome"}</h3>
+          {gateway.provider && <p className="sx-premium-muted">{gateway.provider}</p>}
+        </div>
+        <span className="sx-premium-badge">{gatewayStatus(gateway.status)}</span>
+      </header>
+      <dl>
+        <Info label="Sandbox" value={registeredFlag(gateway.sandboxEnabled)} />
+        <Info label="Produção" value={registeredFlag(gateway.productionEnabled)} />
+        <Info label="Split" value={registeredFlag(gateway.splitAvailable)} />
+        <Info label="Cobrança de planos" value={registeredFlag(gateway.planBillingAvailable)} />
+        <Info label="Taxa estimada no cadastro" value={catalogAmount(gateway.estimatedFeeRate, "rate")} />
+      </dl>
+    </li>
   );
 }
 

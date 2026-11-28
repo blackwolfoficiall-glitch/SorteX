@@ -318,15 +318,42 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
     const payment = response.transactions?.payments?.[0];
     const method =
       requestedMethod || this.mapMethod(payment?.payment_method?.type);
+    const orderReconciliation = this.reconciliationIssue(
+      response.status,
+      response.status_detail,
+    );
+    const orderStatus = this.normalizeStatus(
+      response.status,
+      response.status_detail,
+    );
+    const useOrderStatus =
+      !payment?.status ||
+      Boolean(orderReconciliation) ||
+      orderStatus === PaymentStatus.REFUNDED ||
+      orderStatus === PaymentStatus.CHARGEBACK;
+    const rawStatus = useOrderStatus ? response.status : payment?.status;
+    const rawDetail = useOrderStatus
+      ? response.status_detail
+      : payment?.status_detail;
+    const reconciliationIssue =
+      orderReconciliation ||
+      this.reconciliationIssue(payment?.status, payment?.status_detail);
+    const orderClosure = reconciliationIssue
+      ? undefined
+      : this.confirmedOrderClosure(response);
+    const status = reconciliationIssue
+      ? PaymentStatus.PROCESSING
+      : (orderClosure ?? this.normalizeStatus(rawStatus, rawDetail));
     return {
       providerPaymentId: response.id,
       externalReference: response.external_reference || '',
-      status: this.normalizeStatus(
-        payment?.status || response.status,
-        payment?.status_detail || response.status_detail,
-      ),
+      status,
       method,
-      amount: String(payment?.amount || response.total_amount || '0'),
+      amount: String(
+        orderClosure
+          ? (response.total_amount ?? '0')
+          : payment?.amount || response.total_amount || '0',
+      ),
       expiresAt: payment?.date_of_expiration
         ? new Date(payment.date_of_expiration)
         : undefined,
@@ -339,13 +366,32 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
           ? payment?.payment_method?.id
           : undefined,
       installments: payment?.payment_method?.installments,
-      failureReason:
-        this.normalizeStatus(payment?.status || response.status) ===
-        PaymentStatus.REJECTED
-          ? payment?.status_detail || response.status_detail
-          : undefined,
-      rawStatus: `${payment?.status || response.status || ''}:${payment?.status_detail || response.status_detail || ''}`,
+      failureReason: status === PaymentStatus.REJECTED ? rawDetail : undefined,
+      rawStatus: `${rawStatus || ''}:${rawDetail || ''}`,
+      reconciliationIssue,
+      ...(orderClosure ? { orderClosure } : {}),
     };
+  }
+
+  private confirmedOrderClosure(response: Awaited<ReturnType<Order['get']>>) {
+    const status = response.status?.toLowerCase();
+    const detail = response.status_detail?.toLowerCase();
+    if (
+      response.transactions?.payments?.some(
+        ({ status }) =>
+          !['canceled', 'cancelled', 'expired', 'failed', 'rejected'].includes(
+            status?.toLowerCase() ?? '',
+          ),
+      )
+    )
+      return undefined;
+    if (detail === 'expired' && (status === 'canceled' || status === 'failed'))
+      return PaymentStatus.EXPIRED;
+    if (
+      status === 'canceled' &&
+      (detail === 'canceled' || detail === 'canceled_by_api')
+    )
+      return PaymentStatus.CANCELLED;
   }
 
   private mapMethod(type?: string) {
@@ -355,21 +401,46 @@ export class MercadoPagoGatewayProvider implements PaymentGatewayProvider {
   }
 
   normalizeStatus(status?: string, detail?: string) {
-    const value = `${status || ''}:${detail || ''}`.toLowerCase();
-    if (
-      value.includes('accredited') ||
-      value.includes('approved') ||
-      value.startsWith('processed')
-    )
-      return PaymentStatus.APPROVED;
-    if (value.includes('chargeback')) return PaymentStatus.CHARGEBACK;
-    if (value.includes('refund')) return PaymentStatus.REFUNDED;
-    if (value.includes('cancel')) return PaymentStatus.CANCELLED;
-    if (value.includes('expir')) return PaymentStatus.EXPIRED;
-    if (value.includes('reject') || value.includes('failed'))
-      return PaymentStatus.REJECTED;
-    if (value.includes('processing')) return PaymentStatus.PROCESSING;
-    return PaymentStatus.PENDING;
+    const code = status?.toLowerCase();
+    if (this.reconciliationIssue(status, detail))
+      return PaymentStatus.PROCESSING;
+    switch (code) {
+      case 'processed':
+        return detail?.toLowerCase() === 'accredited'
+          ? PaymentStatus.APPROVED
+          : PaymentStatus.PENDING;
+      case 'approved':
+        return PaymentStatus.APPROVED;
+      case 'charged_back':
+      case 'chargeback':
+        return PaymentStatus.CHARGEBACK;
+      case 'refunded':
+        return PaymentStatus.REFUNDED;
+      case 'canceled':
+      case 'cancelled':
+        return PaymentStatus.CANCELLED;
+      case 'expired':
+        return PaymentStatus.EXPIRED;
+      case 'rejected':
+      case 'failed':
+        return PaymentStatus.REJECTED;
+      case 'processing':
+      case 'in_review':
+        return PaymentStatus.PROCESSING;
+      default:
+        return PaymentStatus.PENDING;
+    }
+  }
+
+  private reconciliationIssue(
+    status?: string,
+    detail?: string,
+  ): GatewayPaymentResult['reconciliationIssue'] {
+    const code = detail?.toLowerCase();
+    if (code === 'partially_refunded') return 'PARTIAL_REFUND';
+    if (status?.toLowerCase() === 'charged_back' && code === 'reimbursed') {
+      return 'CHARGEBACK_REIMBURSED';
+    }
   }
 
   private scalar(value: unknown, fallback = '') {

@@ -1,3 +1,4 @@
+import { campaignDrawInstant } from '../campaigns/campaign-sales-window';
 import {
   BadRequestException,
   ConflictException,
@@ -9,7 +10,9 @@ import {
   CampaignDrawStatus,
   CampaignStatus,
   LotteryDrawStatus,
+  LotterySourceType,
   Prisma,
+  PurchaseStatus,
   TicketStatus,
   UserRole,
   WinnerStatus,
@@ -17,6 +20,11 @@ import {
 import { randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import {
+  CAIXA_FEDERAL_ENDPOINT,
+  CaixaFederalResultsService,
+  FEDERAL_EXTRACTION_PATTERN,
+} from './caixa-federal-results.service';
 import { AuditHashService } from './audit-hash.service';
 import {
   DrawRuleDefinition,
@@ -36,6 +44,7 @@ export class DrawsService {
     private readonly prisma: PrismaService,
     private readonly engine: DrawRuleEngineService,
     private readonly hashes: AuditHashService,
+    private readonly caixa: CaixaFederalResultsService,
   ) {}
 
   simulateRule(dto: SimulateRuleDto) {
@@ -47,6 +56,10 @@ export class DrawsService {
 
   async createLotteryDraw(user: AuthenticatedUser, dto: CreateLotteryDrawDto) {
     this.assertFivePrizes(dto);
+    if (dto.sourceType === LotterySourceType.OFFICIAL_API)
+      throw new BadRequestException(
+        'Use a importação oficial para registrar uma resposta da CAIXA.',
+      );
     const draw = await this.prisma.lotteryDraw.create({
       data: {
         ...dto,
@@ -58,6 +71,55 @@ export class DrawsService {
     await this.audit('LotteryDraw', draw.id, 'CREATED', user, undefined, draw);
     return draw;
   }
+  async importCaixaLotteryDraw(
+    user: AuthenticatedUser,
+    extractionNumber: string,
+  ) {
+    const record = await this.caixa.fetchExtraction(extractionNumber);
+    const [firstPrize, secondPrize, thirdPrize, fourthPrize, fifthPrize] =
+      record.prizes;
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const draw = await tx.lotteryDraw.create({
+          data: {
+            provider: 'LOTERIA_FEDERAL',
+            lotteryName: 'Loteria Federal',
+            extractionNumber: record.extractionNumber,
+            drawDate: record.drawDate,
+            firstPrize,
+            secondPrize,
+            thirdPrize,
+            fourthPrize,
+            fifthPrize,
+            sourcePrizes: record.sourcePrizes,
+            sourceUrl: record.sourceUrl,
+            sourceDocumentHash: record.sourceDocumentHash,
+            sourceType: LotterySourceType.OFFICIAL_API,
+            enteredByUserId: user.id,
+            status: LotteryDrawStatus.PENDING_REVIEW,
+          },
+        });
+        await this.audit(
+          'LotteryDraw',
+          draw.id,
+          'IMPORTED_CAIXA',
+          user,
+          undefined,
+          draw,
+          tx,
+        );
+        return draw;
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      )
+        throw new ConflictException('Esta extração já está cadastrada.');
+      throw error;
+    }
+  }
+
   listLotteryDraws() {
     return this.prisma.lotteryDraw.findMany({ orderBy: { drawDate: 'desc' } });
   }
@@ -74,12 +136,33 @@ export class DrawsService {
     const current = await this.getLotteryDraw(id);
     if (current.status === LotteryDrawStatus.LOCKED)
       throw new ConflictException('Resultado bloqueado não pode ser alterado.');
+    if (
+      current.sourceType === LotterySourceType.OFFICIAL_API ||
+      dto.sourceType === LotterySourceType.OFFICIAL_API
+    )
+      throw new ConflictException(
+        'Registros importados da CAIXA não podem ser editados manualmente. Use a revisão administrativa.',
+      );
+    this.assertFivePrizes({ ...current, ...dto });
     const next = await this.prisma.lotteryDraw.update({
       where: { id },
       data: {
-        ...dto,
+        provider: dto.provider,
+        lotteryName: dto.lotteryName,
+        extractionNumber: dto.extractionNumber,
         drawDate: dto.drawDate ? new Date(dto.drawDate) : undefined,
+        drawTime: dto.drawTime,
+        firstPrize: dto.firstPrize,
+        secondPrize: dto.secondPrize,
+        thirdPrize: dto.thirdPrize,
+        fourthPrize: dto.fourthPrize,
+        fifthPrize: dto.fifthPrize,
+        sourceUrl: dto.sourceUrl,
+        sourceType: dto.sourceType,
+        notes: dto.notes,
         status: LotteryDrawStatus.PENDING_REVIEW,
+        reviewedByUserId: null,
+        reviewedAt: null,
       },
     });
     await this.audit('LotteryDraw', id, 'UPDATED', user, current, next);
@@ -96,17 +179,32 @@ export class DrawsService {
     const current = await this.getLotteryDraw(id);
     if (current.status === LotteryDrawStatus.LOCKED)
       throw new ConflictException('Resultado já está bloqueado.');
-    const next = await this.prisma.lotteryDraw.update({
-      where: { id },
-      data: {
-        status,
-        reviewedByUserId: user.id,
-        reviewedAt: new Date(),
-        notes: reason,
-      },
+    if (
+      current.sourceType === LotterySourceType.OFFICIAL_API &&
+      status === LotteryDrawStatus.LOCKED &&
+      current.status !== LotteryDrawStatus.VERIFIED
+    )
+      throw new ConflictException(
+        'Verifique a extração da CAIXA antes de bloquear alterações.',
+      );
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.lotteryDraw.updateMany({
+        where: { id, status: current.status, updatedAt: current.updatedAt },
+        data: {
+          status,
+          reviewedByUserId: user.id,
+          reviewedAt: new Date(),
+          notes: reason,
+        },
+      });
+      if (updated.count !== 1)
+        throw new ConflictException(
+          'A extração mudou durante a revisão. Recarregue e tente novamente.',
+        );
+      const next = await tx.lotteryDraw.findUniqueOrThrow({ where: { id } });
+      await this.audit('LotteryDraw', id, status, user, current, next, tx);
+      return next;
     });
-    await this.audit('LotteryDraw', id, status, user, current, next);
-    return next;
   }
 
   async simulateCampaign(
@@ -172,43 +270,49 @@ export class DrawsService {
       lottery: {
         id: lottery.id,
         extractionNumber: lottery.extractionNumber,
-        drawDate: lottery.drawDate,
+        drawDate: lottery.drawDate.toISOString(),
         prizes: this.prizes(lottery),
+        ...(lottery.sourcePrizes && {
+          sourcePrizes: lottery.sourcePrizes,
+          sourceUrl: lottery.sourceUrl,
+          sourceDocumentHash: lottery.sourceDocumentHash,
+        }),
       },
       ticketId: ticket?.id ?? null,
       policy: campaign.unsoldNumberPolicy,
     };
-    const auditHash = this.hashes.create({
+    const facts = {
       campaignId: id,
       lotteryDrawId: lottery.id,
-      rule,
-      result: snapshot,
-      ticketId: ticket?.id ?? null,
-      executedAt: new Date().toISOString(),
+      ruleSnapshot: rule as unknown as Prisma.InputJsonValue,
+      resultSnapshot: snapshot,
+      winningNumber: result.rawResult,
+      normalizedWinningNumber: result.normalizedResult,
+      executedAt: new Date(),
+    };
+    const draw = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.campaignDraw.create({
+        data: {
+          ...facts,
+          ruleTemplateId: campaign.drawRuleTemplateId,
+          status: CampaignDrawStatus.PENDING_CONFIRMATION,
+          executedByUserId: user.id,
+          auditHash: this.hashes.drawHash(facts),
+          auditHashVersion: this.hashes.algorithmVersion,
+          notes: dto.notes,
+        },
+      });
+      await this.audit(
+        'CampaignDraw',
+        created.id,
+        'EXECUTED',
+        user,
+        undefined,
+        created,
+        tx,
+      );
+      return created;
     });
-    const draw = await this.prisma.campaignDraw.create({
-      data: {
-        campaignId: id,
-        lotteryDrawId: lottery.id,
-        ruleTemplateId: campaign.drawRuleTemplateId,
-        ruleSnapshot: rule as unknown as Prisma.InputJsonValue,
-        resultSnapshot: snapshot,
-        winningNumber: result.rawResult,
-        normalizedWinningNumber: result.normalizedResult,
-        status: CampaignDrawStatus.PENDING_CONFIRMATION,
-        executedByUserId: user.id,
-        auditHash,
-        notes: dto.notes,
-      },
-    });
-    await this.audit(
-      'CampaignDraw',
-      draw.id,
-      'EXECUTED',
-      user,
-      undefined,
-      draw,
-    );
     return { ...draw, preview: snapshot, requiresManualReview: !ticket };
   }
 
@@ -223,6 +327,16 @@ export class DrawsService {
       throw new ConflictException('Sorteio já confirmado.');
     if (draw.status !== CampaignDrawStatus.PENDING_CONFIRMATION)
       throw new BadRequestException('Execução não pode ser confirmada.');
+    // Existing v1 proofs did not persist their input timestamp; do not
+    // reinterpret or rewrite them as though they were reproducible.
+    if (
+      draw.auditHashVersion !== null &&
+      (draw.auditHashVersion !== this.hashes.algorithmVersion ||
+        this.hashes.drawHash(draw) !== draw.auditHash)
+    )
+      throw new ConflictException(
+        'A verificação de integridade da apuração falhou. Revise o registro antes de confirmar.',
+      );
     const snapshot = draw.resultSnapshot as Record<string, unknown>;
     const ticketId =
       typeof snapshot.ticketId === 'string' ? snapshot.ticketId : null;
@@ -261,14 +375,21 @@ export class DrawsService {
           publicCity: ticket.buyer.city,
         },
       });
-      const confirmed = await tx.campaignDraw.update({
-        where: { id: draw.id },
+      const transition = await tx.campaignDraw.updateMany({
+        where: { id: draw.id, status: CampaignDrawStatus.PENDING_CONFIRMATION },
         data: {
           status: CampaignDrawStatus.CONFIRMED,
           confirmedByUserId: user.id,
           confirmedAt: new Date(),
           notes: notes ?? draw.notes,
         },
+      });
+      if (transition.count !== 1)
+        throw new ConflictException(
+          'A apuração mudou durante a confirmação. Atualize antes de tentar novamente.',
+        );
+      const confirmed = await tx.campaignDraw.findUniqueOrThrow({
+        where: { id: draw.id },
       });
       await tx.campaign.update({
         where: { id },
@@ -455,16 +576,33 @@ export class DrawsService {
     });
   }
   async invalidateDraw(id: string, user: AuthenticatedUser, reason: string) {
-    const current = await this.prisma.campaignDraw.findUnique({
-      where: { id },
+    const justification = reason?.trim();
+    if (!justification)
+      throw new BadRequestException('Justificativa obrigatória.');
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.campaignDraw.findUnique({ where: { id } });
+      if (!current) throw new NotFoundException('Apuração não encontrada.');
+      if (current.status === CampaignDrawStatus.INVALIDATED) return current;
+      const changed = await tx.campaignDraw.updateMany({
+        where: { id, status: current.status },
+        data: { status: CampaignDrawStatus.INVALIDATED, notes: justification },
+      });
+      if (changed.count !== 1)
+        throw new ConflictException(
+          'A apuração mudou durante a invalidação. Atualize antes de tentar novamente.',
+        );
+      const next = await tx.campaignDraw.findUniqueOrThrow({ where: { id } });
+      await this.audit(
+        'CampaignDraw',
+        id,
+        'INVALIDATED',
+        user,
+        current,
+        next,
+        tx,
+      );
+      return next;
     });
-    if (!current) throw new NotFoundException();
-    const next = await this.prisma.campaignDraw.update({
-      where: { id },
-      data: { status: CampaignDrawStatus.INVALIDATED, notes: reason },
-    });
-    await this.audit('CampaignDraw', id, 'INVALIDATED', user, current, next);
-    return next;
   }
 
   listOrganizerWinners(user: AuthenticatedUser) {
@@ -491,6 +629,118 @@ export class DrawsService {
       where: { buyerId: user.id },
       include: { campaign: true, ticket: true },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+  async listBuyerDrawResults(user: AuthenticatedUser) {
+    if (user.role !== UserRole.BUYER) throw new ForbiddenException();
+    // Use existing isolated QA flags: no new production feature toggle or
+    // write path. The exact marked fixture is never a confirmed result.
+    const syntheticEnabled =
+      process.env.APP_ENV === 'staging' &&
+      process.env.PAYMENT_ENV === 'sandbox' &&
+      process.env.INTEGRATIONS_MODE === 'sandbox' &&
+      process.env.FEATURE_REAL_PAYMENTS === 'false' &&
+      process.env.FEATURE_REAL_DRAWS === 'false';
+    const paidTicket: Prisma.TicketWhereInput = {
+      buyerId: user.id,
+      status: TicketStatus.SOLD,
+    };
+    const paidPurchase: Prisma.PurchaseWhereInput = {
+      buyerId: user.id,
+      status: PurchaseStatus.PAID,
+      tickets: { some: paidTicket },
+    };
+    const campaigns = await this.prisma.campaign.findMany({
+      where: {
+        purchases: { some: paidPurchase },
+        OR: [
+          {
+            status: {
+              in: [
+                CampaignStatus.PUBLISHED,
+                CampaignStatus.SOLD_OUT,
+                CampaignStatus.DRAWN,
+                CampaignStatus.FINISHED,
+              ],
+            },
+            draws: { some: { status: CampaignDrawStatus.CONFIRMED } },
+          },
+          ...(syntheticEnabled
+            ? [
+                {
+                  id: 'sortex-review-v1-c3',
+                  status: CampaignStatus.CANCELLED,
+                  title: { startsWith: '[FICTÍCIO] ' },
+                  publishedAt: null,
+                  purchasesBlocked: true,
+                  draws: {
+                    some: {
+                      status: CampaignDrawStatus.SIMULATED,
+                      lotteryDrawId: null,
+                      confirmedAt: null,
+                      confirmedByUserId: null,
+                      ruleSnapshot: { path: ['syntheticReview'], equals: true },
+                      resultSnapshot: {
+                        path: ['syntheticReview'],
+                        equals: true,
+                      },
+                    },
+                  },
+                },
+              ]
+            : []),
+        ],
+      },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        purchases: {
+          where: paidPurchase,
+          select: {
+            tickets: {
+              where: paidTicket,
+              distinct: ['campaignId'],
+              select: { campaignId: true },
+            },
+          },
+        },
+        draws: { select: { status: true, winningNumber: true } },
+        winners: {
+          where: { buyerId: user.id, publicDisclosureAuthorized: true },
+          select: { id: true, prizeName: true, publicDisplayName: true },
+        },
+      },
+      orderBy: [{ drawDate: 'desc' }, { id: 'asc' }],
+    });
+    return campaigns.flatMap((campaign) => {
+      if (
+        !campaign.purchases.some(({ tickets }) =>
+          tickets.some(({ campaignId }) => campaignId === campaign.id),
+        )
+      )
+        return [];
+      const isSynthetic = campaign.status === CampaignStatus.CANCELLED;
+      const draw = campaign.draws.find(
+        (item) =>
+          item.status ===
+            (isSynthetic
+              ? CampaignDrawStatus.SIMULATED
+              : CampaignDrawStatus.CONFIRMED) &&
+          /^\d{1,12}$/.test(item.winningNumber) &&
+          !/[^0-9]/.test(item.winningNumber),
+      );
+      return draw
+        ? [
+            {
+              id: campaign.id,
+              title: campaign.title,
+              ...(isSynthetic ? { synthetic: true } : {}),
+              draws: [{ winningNumber: draw.winningNumber }],
+              winners: isSynthetic ? [] : campaign.winners,
+            },
+          ]
+        : [];
     });
   }
   async updateWinner(
@@ -551,10 +801,48 @@ export class DrawsService {
             },
           },
         },
-        campaignDraw: { include: { lotteryDraw: true } },
+        campaignDraw: {
+          include: {
+            lotteryDraw: {
+              select: {
+                provider: true,
+                lotteryName: true,
+                extractionNumber: true,
+                drawDate: true,
+                drawTime: true,
+                firstPrize: true,
+                secondPrize: true,
+                thirdPrize: true,
+                fourthPrize: true,
+                fifthPrize: true,
+                sourceType: true,
+                sourcePrizes: true,
+                sourceDocumentHash: true,
+                sourceUrl: true,
+                status: true,
+              },
+            },
+          },
+        },
       },
     });
-    if (!winner) throw new NotFoundException('Código de verificação inválido.');
+    if (winner?.campaignDraw.status !== CampaignDrawStatus.CONFIRMED)
+      throw new NotFoundException(
+        'Não há prova de ganhador válida para este código.',
+      );
+    const { lotteryDraw, resultSnapshot } = winner.campaignDraw;
+    const sourceUrl = (extraction: unknown, source: unknown) =>
+      typeof extraction === 'string' &&
+      FEDERAL_EXTRACTION_PATTERN.test(extraction) &&
+      source === `${CAIXA_FEDERAL_ENDPOINT}/${extraction}`
+        ? source
+        : null;
+    const record = (value: Prisma.JsonValue | undefined) =>
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? value
+        : null;
+    const result = record(resultSnapshot);
+    const snapshot = record(result?.lottery);
     return {
       verificationCode: winner.publicVerificationCode,
       status: winner.status,
@@ -580,8 +868,39 @@ export class DrawsService {
         date: winner.campaignDraw.confirmedAt,
         auditHash: winner.campaignDraw.auditHash,
         rule: winner.campaignDraw.ruleSnapshot,
-        result: winner.campaignDraw.resultSnapshot,
-        lottery: winner.campaignDraw.lotteryDraw,
+        result: result
+          ? {
+              steps: result.steps,
+              rawResult: result.rawResult,
+              normalizedResult: result.normalizedResult,
+              explanation: result.explanation,
+              warnings: result.warnings,
+              valid: result.valid,
+              policy: result.policy,
+              lottery: snapshot
+                ? {
+                    extractionNumber: snapshot.extractionNumber,
+                    drawDate: snapshot.drawDate,
+                    prizes: snapshot.prizes,
+                    sourcePrizes: snapshot.sourcePrizes,
+                    sourceDocumentHash: snapshot.sourceDocumentHash,
+                    sourceUrl: sourceUrl(
+                      snapshot.extractionNumber,
+                      snapshot.sourceUrl,
+                    ),
+                  }
+                : null,
+            }
+          : null,
+        lottery: lotteryDraw
+          ? {
+              ...lotteryDraw,
+              sourceUrl: sourceUrl(
+                lotteryDraw.extractionNumber,
+                lotteryDraw.sourceUrl,
+              ),
+            }
+          : null,
       },
     };
   }
@@ -600,9 +919,11 @@ export class DrawsService {
     this.assertOwner(campaign.organizerId, user);
     if (campaign.status !== CampaignStatus.PUBLISHED)
       throw new BadRequestException('A campanha precisa estar publicada.');
-    if (strict && (!campaign.drawDate || campaign.drawDate > new Date()))
+    const scheduledDrawAt = campaignDrawInstant(campaign);
+    const now = new Date();
+    if (strict && (!scheduledDrawAt || scheduledDrawAt > now))
       throw new BadRequestException('A data do sorteio ainda não chegou.');
-    if (strict && campaign.salesEndAt && campaign.salesEndAt > new Date())
+    if (strict && campaign.salesEndAt && campaign.salesEndAt > now)
       throw new BadRequestException('As vendas ainda não foram encerradas.');
     const lottery = await this.getLotteryDraw(lotteryId);
     if (
@@ -812,7 +1133,12 @@ export class DrawsService {
       draw.fifthPrize,
     ] as [string, string, string, string, string];
   }
-  private assertFivePrizes(dto: CreateLotteryDrawDto) {
+  private assertFivePrizes(
+    dto: Pick<
+      CreateLotteryDrawDto,
+      'firstPrize' | 'secondPrize' | 'thirdPrize' | 'fourthPrize' | 'fifthPrize'
+    >,
+  ) {
     [
       dto.firstPrize,
       dto.secondPrize,
@@ -820,7 +1146,7 @@ export class DrawsService {
       dto.fourthPrize,
       dto.fifthPrize,
     ].forEach((v) => {
-      if (!/^\d{5}$/.test(v))
+      if (typeof v !== 'string' || v.length !== 5 || !/^\d{5}$/.test(v))
         throw new BadRequestException(
           'Cada prêmio deve conter exatamente cinco dígitos.',
         );
@@ -841,8 +1167,9 @@ export class DrawsService {
     user: AuthenticatedUser,
     previousData?: unknown,
     newData?: unknown,
+    client: Pick<Prisma.TransactionClient, 'auditLog'> = this.prisma,
   ) {
-    return this.prisma.auditLog.create({
+    return client.auditLog.create({
       data: {
         entityType,
         entityId,

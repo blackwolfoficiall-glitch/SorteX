@@ -1,7 +1,9 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -19,6 +21,7 @@ import {
   ConfirmReceiptDto,
   CreateInstantPrizeDto,
   CreateLotteryDrawDto,
+  ImportCaixaLotteryDrawDto,
   ExecuteDrawDto,
   ManualWinnerLookupDto,
   RejectDrawDto,
@@ -27,6 +30,11 @@ import {
   UpdateInstantPrizeDto,
   PrizeTicketQueryDto,
 } from './dto/draw.dto';
+import {
+  CreateDraftInstantPrizeDto,
+  DraftInstantPrizeRevisionDto,
+  UpdateDraftInstantPrizeDto,
+} from './dto/draft-instant-prize.dto';
 import { InstantPrizeDetectionService } from './instant-prize-detection.service';
 import { RouletteService } from './roulette.service';
 
@@ -121,6 +129,40 @@ export class DrawsController {
   ) {
     return this.instant.organizerPrizeTickets(user.id, query);
   }
+  @Post('campaigns/:campaignId/draft-prize-tickets')
+  @Roles(UserRole.ORGANIZER)
+  createDraftPrizeTicket(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('campaignId') campaignId: string,
+    @Body() dto: CreateDraftInstantPrizeDto,
+  ) {
+    return this.instant.createDraftPrizeTicket(user, campaignId, dto);
+  }
+  @Patch('campaigns/:campaignId/draft-prize-tickets/:prizeId')
+  @Roles(UserRole.ORGANIZER)
+  updateDraftPrizeTicket(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('campaignId') campaignId: string,
+    @Param('prizeId') prizeId: string,
+    @Body() dto: UpdateDraftInstantPrizeDto,
+  ) {
+    return this.instant.updateDraftPrizeTicket(user, campaignId, prizeId, dto);
+  }
+  @Delete('campaigns/:campaignId/draft-prize-tickets/:prizeId')
+  @Roles(UserRole.ORGANIZER)
+  removeDraftPrizeTicket(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('campaignId') campaignId: string,
+    @Param('prizeId') prizeId: string,
+    @Query() query: DraftInstantPrizeRevisionDto,
+  ) {
+    return this.instant.removeDraftPrizeTicket(
+      user,
+      campaignId,
+      prizeId,
+      query.revision,
+    );
+  }
   @Get('organizer/prize-tickets/summary')
   @Roles(UserRole.ORGANIZER)
   organizerPrizeTicketSummary(
@@ -180,6 +222,12 @@ export class DrawsController {
   ) {
     return this.draws.listMyWinners(user);
   }
+  @Get('buyer/results/my')
+  @Header('Cache-Control', 'private, no-store')
+  @Roles(UserRole.BUYER)
+  myDrawResults(@CurrentUser() user: AuthenticatedUser) {
+    return this.draws.listBuyerDrawResults(user);
+  }
   @Post('winners/:id/confirm-receipt') @Roles(UserRole.BUYER) confirmReceipt(
     @Param('id') id: string,
     @CurrentUser() user: AuthenticatedUser,
@@ -192,9 +240,10 @@ export class DrawsController {
   ) {
     return this.instant.myResults(user.id);
   }
-  @Get('public/campaigns/:slug/instant-prizes') @Public() publicInstant(
-    @Param('slug') slug: string,
-  ) {
+  @Get('public/campaigns/:slug/instant-prizes')
+  @Public()
+  @Header('Cache-Control', 'no-store')
+  publicInstant(@Param('slug') slug: string) {
     return this.instant.publicResults(slug);
   }
   @Get('roulette/campaigns/:id/status') @Roles(UserRole.BUYER) rouletteStatus(
@@ -217,9 +266,10 @@ export class DrawsController {
   ) {
     return this.roulette.organizerStatus(id, user.id);
   }
-  @Get('public/winners/verify/:code') @Public() verify(
-    @Param('code') code: string,
-  ) {
+  @Get('public/winners/verify/:code')
+  @Public()
+  @Header('Cache-Control', 'no-store')
+  verify(@Param('code') code: string) {
     return this.draws.publicVerification(code);
   }
 }
@@ -234,6 +284,12 @@ export class AdminLotteryDrawsController {
     @Body() dto: CreateLotteryDrawDto,
   ) {
     return this.draws.createLotteryDraw(user, dto);
+  }
+  @Post('import/caixa') importCaixa(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ImportCaixaLotteryDrawDto,
+  ) {
+    return this.draws.importCaixaLotteryDraw(user, dto.extractionNumber);
   }
   @Get() list() {
     return this.draws.listLotteryDraws();

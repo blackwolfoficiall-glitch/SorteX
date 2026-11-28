@@ -39,6 +39,9 @@ export type GatewayPaymentResult = {
   installments?: number;
   failureReason?: string;
   rawStatus?: string;
+  // Consolidated, authoritative provider order status; not an individual transaction result.
+  orderClosure?: typeof PaymentStatus.CANCELLED | typeof PaymentStatus.EXPIRED;
+  reconciliationIssue?: 'PARTIAL_REFUND' | 'CHARGEBACK_REIMBURSED';
 };
 
 export type GatewayWebhookContext = {

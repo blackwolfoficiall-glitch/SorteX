@@ -12,6 +12,7 @@ import {
   UserMinus,
   Users,
 } from "lucide-react";
+import PremiumScope from "@/components/premium/PremiumScope";
 import { authRequest } from "@/lib/auth/client";
 import { useAuthorizedUser } from "@/components/auth/RoleGate";
 import { hasAdminPermission } from "@/lib/admin/authorization";
@@ -67,24 +68,30 @@ export default function AdminTeamCenter() {
     [open, setOpen] = useState(false),
     [message, setMessage] = useState(""),
     [link, setLink] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [query, setQuery] = useState("");
+  const normalized = query.trim().toLocaleLowerCase("pt-BR");
+  const visible = data.members.filter((member) =>
+    [member.name, roleLabel[member.adminTeamRole], member.isActive ? "Ativo" : "Desativado"].some((term) =>
+      term?.toLocaleLowerCase("pt-BR").includes(normalized),
+    ),
+  );
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       setData(
         await authRequest("/api/admin/platform/team", { cache: "no-store" }),
       );
-    } catch (cause) {
-      setMessage(
-        cause instanceof Error
-          ? cause.message
-          : "Não foi possível carregar a equipe.",
-      );
+    } catch {
+      setLoadError("Não foi possível carregar a equipe.");
     } finally {
       setLoading(false);
     }
   }, []);
   useEffect(() => {
-    void load();
+    const task = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(task);
   }, [load]);
   async function invite(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -169,27 +176,32 @@ export default function AdminTeamCenter() {
     }
   }
   return (
-    <main className="p-5 pt-20 lg:p-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <header className="flex flex-wrap items-end justify-between gap-4">
+    <PremiumScope className="sx-admin-team">
+      <main className="sx-at-wrap">
+        <header className="sx-premium-ticket sx-at-hero">
+          <Users aria-hidden="true" size={30} />
           <div>
-            <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">
-              Equipe SorteX
-            </p>
-            <h1 className="mt-2 text-3xl font-black">Gestão da equipe</h1>
-            <p className="mt-1 text-slate-500">
-              Convites, cargos, acessos e sessões administrativas.
-            </p>
+            <p className="sx-at-eyebrow">Equipe SorteX</p>
+            <h1 className="sx-premium-title">Gestão da equipe</h1>
+            <p>Convites, cargos, acessos e sessões administrativas.</p>
           </div>
           {canManage && <button
+            type="button"
             onClick={() => setOpen((v) => !v)}
-            className="inline-flex h-12 items-center gap-2 rounded-xl bg-violet-600 px-5 font-bold text-white"
+            aria-expanded={open}
+            className="sx-premium-button sx-at-invite"
           >
-            <Plus size={18} />
+            <Plus size={18} aria-hidden="true" />
             Convidar funcionário
           </button>}
         </header>
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {loadError ? <div className="sx-premium-surface sx-at-state">
+          <p role="alert" className="sx-at-error">{loadError}</p>
+          <button type="button" className="sx-premium-button" onClick={load}>Tentar novamente</button>
+        </div> : loading ? <div className="sx-premium-surface sx-at-state">
+          <LoaderCircle className="sx-at-spinner" aria-hidden="true" />
+          <p role="status" className="sx-premium-muted">Carregando equipe…</p>
+        </div> : <section aria-label="Resumo da equipe" className="sx-at-kpis">
           <Metric
             icon={<Users />}
             label="Total de membros"
@@ -210,7 +222,7 @@ export default function AdminTeamCenter() {
             label="Desativados"
             value={data.summary.inactive}
           />
-        </section>
+        </section>}
         {open && canManage && (
           <form
             onSubmit={invite}
@@ -275,27 +287,26 @@ export default function AdminTeamCenter() {
         {message && (
           <p className="rounded-xl bg-slate-100 p-3 text-sm">{message}</p>
         )}
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-black">Funcionários</h2>
-          <button
-            onClick={load}
-            className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 font-bold"
-          >
-            <RefreshCw size={17} />
-            Atualizar
-          </button>
-        </div>
-        {loading ? (
-          <LoaderCircle className="mx-auto animate-spin text-violet-600" />
+        {!loading && !loadError && <>
+        <section className="sx-premium-surface sx-at-filter" aria-labelledby="sx-at-filter">
+          <h2 className="sx-premium-section" id="sx-at-filter">Funcionários</h2>
+          <div>
+            <label><span>Pesquisar funcionário</span><input type="search" value={query} onChange={(event) => setQuery(event.target.value)} /></label>
+            <button type="button" onClick={load} className="sx-premium-button"><RefreshCw size={17} aria-hidden="true" /> Atualizar</button>
+          </div>
+          <p role="status" className="sx-premium-muted">{visible.length.toLocaleString("pt-BR")} {visible.length === 1 ? "funcionário" : "funcionários"} {normalized ? "na pesquisa" : "na equipe"}</p>
+        </section>
+        {visible.length === 0 ? (
+          <p className="sx-premium-surface sx-at-state">{normalized ? "Nenhum funcionário encontrado para a pesquisa." : "Nenhum funcionário cadastrado."}</p>
         ) : (
-          <section className="grid gap-4 lg:grid-cols-2">
-            {data.members.map((member) => (
+          <section className="sx-at-members" aria-label="Funcionários encontrados">
+            {visible.map((member) => (
               <article
                 key={member.id}
-                className="rounded-3xl border bg-white p-5 shadow-sm"
+                className="sx-premium-surface sx-at-member"
               >
                 <div className="flex gap-3">
-                  <span className="grid h-12 w-12 place-items-center rounded-full bg-violet-100 font-black text-violet-700">
+                  <span className="sx-at-avatar" aria-hidden="true">
                     {member.name
                       .split(/\s+/)
                       .map((v) => v[0])
@@ -303,13 +314,13 @@ export default function AdminTeamCenter() {
                       .join("")}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <h3 className="font-black">{member.name}</h3>
-                    <p className="truncate text-sm text-slate-500">
+                    <h3 className="sx-premium-section">{member.name}</h3>
+                    <p className="sx-premium-muted">
                       {member.email}
                     </p>
                   </div>
                   <span
-                    className={`h-fit rounded-full px-3 py-1 text-xs font-black ${member.isActive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}
+                    className="sx-premium-badge sx-at-member-state"
                   >
                     {member.isActive ? "Ativo" : "Desativado"}
                   </span>
@@ -330,8 +341,8 @@ export default function AdminTeamCenter() {
                 </dl>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link
-                    href={`/admin/equipe/${member.id}`}
-                    className="rounded-lg border px-3 py-2 text-sm font-bold"
+                    href={`/admin/equipe/${member.id}`} prefetch={false}
+                    className="sx-premium-button"
                   >
                     Ver perfil
                   </Link>
@@ -342,13 +353,13 @@ export default function AdminTeamCenter() {
                         member.isActive ? "DEACTIVATE" : "REACTIVATE",
                       )
                     }
-                    className="rounded-lg border px-3 py-2 text-sm font-bold"
+                    className="sx-premium-button"
                   >
                     {member.isActive ? "Desativar" : "Reativar"}
                   </button>}
                   {canManage && <button
                     onClick={() => action(member.id, "REVOKE_SESSIONS")}
-                    className="rounded-lg border px-3 py-2 text-sm font-bold"
+                    className="sx-premium-button"
                   >
                     Revogar sessões
                   </button>}
@@ -357,44 +368,44 @@ export default function AdminTeamCenter() {
             ))}
           </section>
         )}
-        <h2 className="text-xl font-black">Convites</h2>
-        <section className="space-y-3">
+        <h2 className="sx-premium-section">Convites</h2>
+        <section className="sx-at-invitations" aria-label="Convites para a equipe">
           {data.invitations.length === 0 ? (
-            <p className="rounded-2xl border border-dashed bg-white p-8 text-center text-slate-500">
+            <p className="sx-premium-surface sx-at-state sx-premium-muted">
               Nenhum convite pendente.
             </p>
           ) : (
             data.invitations.map((invite) => (
               <article
                 key={invite.id}
-                className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border bg-white p-4"
+                className="sx-premium-surface sx-at-invitation"
               >
                 <div>
                   <p className="font-black">{invite.name}</p>
-                  <p className="text-sm text-slate-500">
+                  <p className="sx-premium-muted">
                     {invite.email} · {roleLabel[invite.role]}
                   </p>
-                  <p className="text-xs text-slate-400">
+                  <p className="sx-premium-muted">
                     Validade:{" "}
                     {new Date(invite.expiresAt).toLocaleString("pt-BR")}
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-black text-amber-700">
+                <div className="sx-at-actions">
+                  <span className="sx-premium-badge">
                     {invite.status === "PENDING"
                       ? "Convite pendente"
                       : "Convite expirado"}
                   </span>
                   {canManage && <button
                     onClick={() => regenerate(invite.id)}
-                    className="rounded-lg border px-3 py-2 text-sm font-bold"
+                    className="sx-premium-button"
                   >
                     Gerar novo link
                   </button>}
                   {canManage && invite.status === "PENDING" && (
                     <button
                       onClick={() => cancel(invite.id)}
-                      className="rounded-lg border px-3 py-2 text-sm font-bold text-red-600"
+                      className="sx-premium-button sx-at-error"
                     >
                       Cancelar
                     </button>
@@ -404,8 +415,9 @@ export default function AdminTeamCenter() {
             ))
           )}
         </section>
-      </div>
-    </main>
+        </>}
+      </main>
+    </PremiumScope>
   );
 }
 function Metric({
@@ -418,10 +430,10 @@ function Metric({
   value: number;
 }) {
   return (
-    <article className="rounded-3xl border bg-white p-5 shadow-sm">
-      <span className="text-violet-600">{icon}</span>
-      <p className="mt-4 text-3xl font-black">{value}</p>
-      <p className="text-sm text-slate-500">{label}</p>
+    <article className="sx-premium-surface sx-at-stat">
+      <span aria-hidden="true">{icon}</span>
+      <p className="sx-premium-muted">{label}</p>
+      <p>{value.toLocaleString("pt-BR")}</p>
     </article>
   );
 }
@@ -452,7 +464,7 @@ function Field({
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <dt className="text-xs font-bold uppercase text-slate-400">{label}</dt>
+      <dt className="sx-premium-muted">{label}</dt>
       <dd className="mt-1 font-semibold">{value}</dd>
     </div>
   );

@@ -1,10 +1,14 @@
 "use client";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Children, type FormEvent, useCallback, useEffect, useState } from "react";
+import PremiumScope from "@/components/premium/PremiumScope";
+import styles from "./affiliates-premium.module.css";
 import {
   Check,
   Clipboard,
   Link2,
+  LoaderCircle,
   Pause,
+  Ticket,
   Play,
   Plus,
   RotateCw,
@@ -42,6 +46,10 @@ const tabs = [
   "Comissões",
   "Configurações",
 ];
+type ConversionRow = { id: string; status: string; affiliate: { name: string }; campaign: { title: string }; grossAmount: string | number };
+type CommissionRow = { id: string; status: string; affiliate: { name: string }; conversion: { campaign: { title: string } }; amount: string | number };
+type CampaignOption = { id: string; title: string };
+
 const money = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const status: Record<string, string> = {
@@ -65,10 +73,12 @@ export function AffiliatesCenter() {
   const [summary, setSummary] = useState<AffiliateSummary | null>(null);
   const [programList, setPrograms] = useState<Program[]>([]);
   const [affiliateList, setAffiliates] = useState<OrganizerAffiliate[]>([]);
-  const [conversions, setConversions] = useState<any[]>([]);
-  const [commissions, setCommissions] = useState<any[]>([]);
-  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [conversions, setConversions] = useState<ConversionRow[]>([]);
+  const [commissions, setCommissions] = useState<CommissionRow[]>([]);
+  const [campaigns, setCampaigns] = useState<CampaignOption[]>([]);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [editingProgramId, setEditingProgramId] = useState("");
   const [message, setMessage] = useState("");
   const [inviteUrl, setInviteUrl] = useState("");
@@ -95,30 +105,35 @@ export function AffiliatesCenter() {
     validityDays: 7,
   });
   const load = useCallback(async () => {
-    const [s, p, a, c, m, cs] = await Promise.all([
-      organizerAffiliateDashboard(),
-      programs(),
-      affiliates(),
-      organizerConversions(),
-      organizerCommissions(),
-      getMyCampaigns(),
-    ]);
-    setSummary(s);
-    setPrograms(p);
-    setAffiliates(a);
-    setConversions(c);
-    setCommissions(m);
-    setCampaigns(cs);
-    setInvite((current) =>
-      current.programId || !p[0] ? current : { ...current, programId: p[0].id },
-    );
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const [s, p, a, c, m, cs] = await Promise.all([
+        organizerAffiliateDashboard(),
+        programs(),
+        affiliates(),
+        organizerConversions(),
+        organizerCommissions(),
+        getMyCampaigns(),
+      ]);
+      setSummary(s);
+      setPrograms(p);
+      setAffiliates(a);
+      setConversions(c);
+      setCommissions(m);
+      setCampaigns(cs);
+      setInvite((current) =>
+        current.programId || !p[0] ? current : { ...current, programId: p[0].id },
+      );
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
   useEffect(() => {
-    load().catch((e) =>
-      setMessage(
-        e instanceof Error ? e.message : "Não foi possível carregar afiliados.",
-      ),
-    );
+    const initial = window.setTimeout(() => { void load(); }, 0);
+    return () => window.clearTimeout(initial);
   }, [load]);
   const invitations = affiliateList.filter((a) =>
     ["INVITED", "INACTIVE"].includes(a.status),
@@ -170,89 +185,62 @@ export function AffiliatesCenter() {
     }
   }
   async function copy(value: string) {
-    await navigator.clipboard.writeText(value);
-    setMessage("Link copiado com sucesso.");
+    try {
+      await navigator.clipboard.writeText(value);
+      setMessage("Link copiado com sucesso.");
+    } catch {
+      setMessage("Não foi possível copiar. Confira a permissão da área de transferência.");
+    }
   }
   return (
-    <div className="mx-auto max-w-7xl space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
+    <PremiumScope className={styles.page}>
+      <header className={styles.hero}>
         <div>
-          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">
-            Crescimento orgânico
-          </p>
-          <h1 className="mt-2 text-3xl font-black">Afiliados</h1>
-          <p className="mt-2 text-zinc-500">
-            Programas, atribuição e comissões sem pagamento automático.
-          </p>
+          <p className={styles.eyebrow}>Crescimento orgânico</p>
+          <h1 className={styles.title}>Afiliados</h1>
+          <p className={styles.copy}>Organize seus programas e acompanhe as vendas atribuídas e as comissões registradas nesta conta.</p>
         </div>
-        <button
-          onClick={() => setTab("Programas")}
-          className="flex h-11 items-center gap-2 rounded-xl bg-violet-700 px-5 font-bold text-white"
-        >
-          <Plus size={18} />
-          Criar programa
+        <button type="button" onClick={() => setTab("Programas")} className={styles.primary}>
+          <Plus size={18} aria-hidden="true" /> Criar programa
         </button>
       </header>
-      {message && (
-        <p
-          role="status"
-          className="rounded-2xl bg-violet-50 p-4 text-sm font-semibold text-violet-800"
-        >
-          {message}
-        </p>
-      )}
-      <select
-        aria-label="Seção de afiliados"
-        value={tab}
-        onChange={(e) => setTab(e.target.value)}
-        className="h-12 w-full rounded-xl border bg-white px-3 font-bold md:hidden"
-      >
-        {tabs.map((x) => (
-          <option key={x}>{x}</option>
-        ))}
-      </select>
-      <nav className="hidden flex-wrap gap-2 md:flex">
-        {tabs.map((x) => (
-          <button
-            key={x}
-            onClick={() => setTab(x)}
-            className={`rounded-xl px-4 py-2 text-sm font-bold ${tab === x ? "bg-violet-700 text-white" : "border bg-white text-zinc-600"}`}
-          >
-            {x}
+      {message && <p role="status" className={styles.notice}>{message}</p>}
+      <div className={styles.notice}>
+        <strong>Repasses automáticos indisponíveis.</strong>{" "}
+        A SorteX registra o controle das comissões. Marcar uma comissão como paga não transfere dinheiro.
+      </div>
+
+      <div className={styles.sectionPicker}>
+        <label htmlFor="affiliate-section" className={styles.mobileLabel}>Seção de afiliados</label>
+        <select id="affiliate-section" value={tab} onChange={(e) => setTab(e.target.value)} className={styles.field}>
+          {tabs.map((section) => <option key={section}>{section}</option>)}
+        </select>
+      </div>
+      <nav aria-label="Seções de afiliados" className={styles.sectionNav}>
+        {tabs.map((section) => (
+          <button type="button" key={section} onClick={() => setTab(section)} aria-pressed={tab === section}>
+            {section}
           </button>
         ))}
       </nav>
-      {tab === "Visão geral" && summary && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {[
-            ["Programas ativos", summary.activePrograms],
-            ["Afiliados ativos", summary.activeAffiliates],
-            ["Convites pendentes", summary.pendingInvites],
-            ["Cliques", summary.clicks],
-            ["Reservas atribuídas", summary.attributedReservations],
-            ["Vendas aprovadas", summary.approvedSales],
-            ["Receita gerada", money(summary.generatedRevenue)],
-            ["Comissões estimadas", money(summary.estimatedCommissions)],
-            ["Comissões liberadas", money(summary.availableCommissions)],
-            ["Comissões pagas", money(summary.paidCommissions)],
-          ].map(([label, value]) => (
-            <article
-              key={String(label)}
-              className="rounded-2xl border bg-white p-5 shadow-sm"
-            >
-              <span className="text-xs font-bold uppercase text-zinc-400">
-                {label}
-              </span>
-              <strong className="mt-2 block text-2xl">{value}</strong>
-            </article>
-          ))}
+
+      <section className={styles.content} aria-label={`Afiliados: ${tab}`}>
+      {loading ? (
+        <div className={styles.empty} role="status">
+          <LoaderCircle size={18} aria-hidden="true" className={styles.spinner} /> Carregando dados de afiliados…
         </div>
-      )}
+      ) : loadError ? (
+        <div className={styles.empty}>
+          <p role="alert">Não foi possível carregar os dados de afiliados.</p>
+          <button type="button" className={styles.control} onClick={() => void load()}>Tentar novamente</button>
+        </div>
+      ) : (<>
+      {tab === "Visão geral" && summary && <SummaryView summary={summary} />}
       {tab === "Programas" && (
-        <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
+        <div className={styles.workGrid}>
           <form
             onSubmit={submitProgram}
-            className="rounded-3xl border bg-white p-6 shadow-sm"
+            className={styles.card}
           >
             <h2 className="text-xl font-black">{editingProgramId ? "Editar programa" : "Novo programa"}</h2>
             <Field label="Nome">
@@ -365,14 +353,15 @@ export function AffiliatesCenter() {
             </Field>
             <button
               disabled={busy}
-              className="mt-4 h-11 w-full rounded-xl bg-violet-700 font-bold text-white"
+              className={`${styles.primary} mt-4 w-full`}
             >
               {editingProgramId ? "Salvar alterações" : "Salvar rascunho"}
             </button>
           </form>
-          <div className="grid content-start gap-3 md:grid-cols-2">
+          <div className={styles.list}>
+            {!programList.length && <p className={styles.empty}>Nenhum programa cadastrado.</p>}
             {programList.map((p) => (
-              <article key={p.id} className="rounded-2xl border bg-white p-5">
+              <article key={p.id} className={styles.card}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <h3 className="font-black">{p.name}</h3>
@@ -440,10 +429,10 @@ export function AffiliatesCenter() {
         </div>
       )}
       {tab === "Convites" && (
-        <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
+        <div className={styles.workGrid}>
           <form
             onSubmit={submitInvite}
-            className="rounded-3xl border bg-white p-6"
+            className={styles.card}
           >
             <h2 className="text-xl font-black">Convidar afiliado</h2>
             <Field label="Programa">
@@ -503,10 +492,11 @@ export function AffiliatesCenter() {
                 }
               />
             </Field>
-            <button className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-zinc-950 font-bold text-white">
-              <Send size={17} />
+            <button disabled={busy} className={`${styles.primary} mt-4 w-full`}>
+              <Send size={17} aria-hidden="true" />
               Gerar convite
             </button>
+            <p className={styles.muted}>Gerar o link não envia e-mail nem mensagem.</p>
             {inviteUrl && (
               <button
                 type="button"
@@ -518,7 +508,7 @@ export function AffiliatesCenter() {
               </button>
             )}
           </form>
-          <List>
+          <List empty="Nenhum convite registrado.">
             {invitations.map((a) => (
               <Row
                 key={a.id}
@@ -562,7 +552,7 @@ export function AffiliatesCenter() {
         </div>
       )}
       {tab === "Afiliados" && (
-        <List>
+        <List empty="Nenhum afiliado registrado.">
           {affiliateList
             .filter((a) => !["INVITED", "INACTIVE"].includes(a.status))
             .map((a) => (
@@ -590,7 +580,7 @@ export function AffiliatesCenter() {
         </List>
       )}
       {tab === "Vendas atribuídas" && (
-        <List>
+        <List empty="Nenhuma venda ou reserva atribuída disponível.">
           {conversions.map((c) => (
             <Row
               key={c.id}
@@ -602,13 +592,13 @@ export function AffiliatesCenter() {
         </List>
       )}
       {tab === "Comissões" && (
-        <List>
+        <List empty="Nenhuma comissão registrada.">
           {commissions.map((c) => (
             <Row
               key={c.id}
               title={c.affiliate.name}
               subtitle={`${c.conversion.campaign.title} · ${money(Number(c.amount))}`}
-              badge={status[c.status] || c.status}
+              badge={c.status === "PAID" ? "Pagamento manual registrado" : (status[c.status] || c.status)}
             >
               {c.status === "APPROVED" && (
                 <button
@@ -627,7 +617,7 @@ export function AffiliatesCenter() {
                     void commissionAction(c.id, "pay").then(load)
                   }
                 >
-                  <Check size={16} /> Marcar paga
+                  <Check size={16} aria-hidden="true" /> Registrar pagamento externo
                 </button>
               )}
             </Row>
@@ -635,7 +625,7 @@ export function AffiliatesCenter() {
         </List>
       )}
       {tab === "Configurações" && (
-        <article className="rounded-3xl border bg-white p-6">
+        <article className={styles.card}>
           <Users className="text-violet-700" />
           <h2 className="mt-4 text-xl font-black">Regras de atribuição</h2>
           <p className="mt-2 max-w-2xl text-sm text-zinc-600">
@@ -645,11 +635,49 @@ export function AffiliatesCenter() {
           </p>
         </article>
       )}
-    </div>
+      </>)}
+      </section>
+    </PremiumScope>
   );
 }
-const input =
-  "mt-2 h-11 w-full rounded-xl border border-zinc-200 px-3 outline-none focus:border-violet-500";
+
+function SummaryView({ summary }: { summary: AffiliateSummary }) {
+  const cards = [
+    ["Programas ativos", summary.activePrograms],
+    ["Afiliados ativos", summary.activeAffiliates],
+    ["Convites pendentes", summary.pendingInvites],
+    ["Cliques registrados", summary.clicks],
+    ["Reservas atribuídas pendentes", summary.attributedReservations],
+    ["Vendas aprovadas", summary.approvedSales],
+    ["Comissões estimadas", money(summary.estimatedCommissions)],
+    ["Comissões liberadas", money(summary.availableCommissions)],
+    ["Pagamentos manuais registrados", money(summary.paidCommissions)],
+  ];
+  return (
+    <section aria-labelledby="affiliate-summary" className={styles.summary}>
+      <header>
+        <p className={styles.eyebrow}>Registros desta conta</p>
+        <h2 id="affiliate-summary" className={styles.heading}>Visão geral</h2>
+      </header>
+      <div className={styles.ticket}>
+        <div>
+          <p><Ticket size={18} aria-hidden="true" /> Valor bruto das atribuições</p>
+          <strong>{money(summary.generatedRevenue)}</strong>
+        </div>
+        <p>Inclui atribuições de todos os status. Não é receita líquida nem saldo disponível.</p>
+      </div>
+      <dl className={styles.stats}>
+        {cards.map(([label, value]) => (
+          <div key={String(label)} className={styles.stat}>
+            <dt>{label}</dt><dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+const input = styles.field;
 function Field({
   label,
   children,
@@ -658,7 +686,7 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="mt-3 block text-sm font-bold text-zinc-700">
+    <label className={styles.label}>
       {label}
       {children}
     </label>
@@ -666,21 +694,13 @@ function Field({
 }
 function Badge({ children }: { children: React.ReactNode }) {
   return (
-    <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700">
+    <span className={styles.badge}>
       {children}
     </span>
   );
 }
-function List({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="space-y-3">
-      {children || (
-        <p className="rounded-2xl border bg-white p-8 text-center text-zinc-500">
-          Nenhum registro.
-        </p>
-      )}
-    </div>
-  );
+function List({ children, empty }: { children: React.ReactNode; empty: string }) {
+  return <div className={styles.list}>{Children.count(children) ? children : <p className={styles.empty}>{empty}</p>}</div>;
 }
 function Row({
   title,
@@ -694,7 +714,7 @@ function Row({
   children?: React.ReactNode;
 }) {
   return (
-    <article className="flex flex-col gap-3 rounded-2xl border bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+    <article className={styles.row}>
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="font-black">{title}</h3>
@@ -703,7 +723,7 @@ function Row({
         <p className="mt-1 text-sm text-zinc-500">{subtitle}</p>
       </div>
       {children && (
-        <div className="flex items-center gap-3 text-sm font-bold text-violet-700">
+        <div className={styles.rowActions}>
           {children}
         </div>
       )}

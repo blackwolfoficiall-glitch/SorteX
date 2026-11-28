@@ -1,3 +1,4 @@
+import { coverRevision } from '../campaigns/cover-revision';
 import { changedMunicipality } from '../locations/locations';
 import {
   BadRequestException,
@@ -18,7 +19,11 @@ import type {
   CreateSupportTicketDto,
   SupportMessageDto,
 } from './dto/buyer-profile.dto';
-import { CrmSyncService } from '../crm/crm-sync.service';
+
+const favoritableCampaign = {
+  status: CampaignStatus.PUBLISHED,
+  publicationBlocked: false,
+} as const;
 
 const campaignSelect = {
   id: true,
@@ -50,10 +55,7 @@ const campaignSelect = {
 
 @Injectable()
 export class BuyerService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly crmSync: CrmSyncService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async home(user: AuthenticatedUser) {
     const now = new Date();
@@ -80,7 +82,7 @@ export class BuyerService {
           orderBy: { sortOrder: 'asc' },
         }),
         this.prisma.notification.count({
-          where: { userId: user.id, readAt: null },
+          where: { userId: user.id, readAt: null, deletedAt: null },
         }),
       ]);
     const campaigns =
@@ -198,9 +200,9 @@ export class BuyerService {
   }
   async favorites(userId: string) {
     const rows = await this.prisma.buyerFavorite.findMany({
-      where: { buyerId: userId },
+      where: { buyerId: userId, campaign: favoritableCampaign },
       include: { campaign: { select: campaignSelect } },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
     return rows.map((row) => ({
       id: row.id,
@@ -208,27 +210,23 @@ export class BuyerService {
       campaign: this.serializeCampaign(row.campaign),
     }));
   }
-  async favorite(userId: string, campaignId: string) {
-    const campaign = await this.prisma.campaign.findFirst({
-      where: {
-        id: campaignId,
-        status: {
-          in: [
-            CampaignStatus.PUBLISHED,
-            CampaignStatus.DRAWN,
-            CampaignStatus.FINISHED,
-          ],
-        },
-      },
+  favorite(userId: string, campaignId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const campaign = await tx.campaign.findFirst({
+        where: { id: campaignId, ...favoritableCampaign },
+        select: { id: true },
+      });
+      if (!campaign) throw new NotFoundException('Campanha não encontrada.');
+      // A bookmark is not a lead, sale, or permission to contact the buyer.
+      // One row and its original timestamp survive concurrent/repeated saves.
+      await tx.buyerFavorite.createMany({
+        data: { buyerId: userId, campaignId },
+        skipDuplicates: true,
+      });
+      return tx.buyerFavorite.findUniqueOrThrow({
+        where: { buyerId_campaignId: { buyerId: userId, campaignId } },
+      });
     });
-    if (!campaign) throw new NotFoundException('Campanha não encontrada.');
-    const favorite = await this.prisma.buyerFavorite.upsert({
-      where: { buyerId_campaignId: { buyerId: userId, campaignId } },
-      create: { buyerId: userId, campaignId },
-      update: {},
-    });
-    await this.crmSync.syncFavorite(this.prisma, userId, campaignId);
-    return favorite;
   }
   async unfavorite(userId: string, campaignId: string) {
     await this.prisma.buyerFavorite.deleteMany({
@@ -238,24 +236,39 @@ export class BuyerService {
   }
   notifications(userId: string) {
     return this.prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
+      where: { userId, deletedAt: null },
+      select: {
+        id: true,
+        type: true,
+        title: true,
+        message: true,
+        readAt: true,
+        createdAt: true,
+      },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: 100,
     });
   }
   async readAll(userId: string) {
     await this.prisma.notification.updateMany({
-      where: { userId, readAt: null },
+      where: { userId, readAt: null, deletedAt: null },
       data: { readAt: new Date() },
     });
     return { message: 'Notificações lidas.' };
   }
   async read(userId: string, id: string) {
+    const where = { id, userId, deletedAt: null };
     const result = await this.prisma.notification.updateMany({
-      where: { id, userId },
+      where: { ...where, readAt: null },
       data: { readAt: new Date() },
     });
-    if (!result.count)
+    if (
+      !result.count &&
+      !(await this.prisma.notification.findFirst({
+        where,
+        select: { id: true },
+      }))
+    )
       throw new NotFoundException('Notificação não encontrada.');
     return { message: 'Notificação lida.' };
   }
@@ -315,13 +328,16 @@ export class BuyerService {
   private serializeCampaign(
     item: Prisma.CampaignGetPayload<{ select: typeof campaignSelect }>,
   ) {
+    const { coverImage, ...publicItem } = item;
     return {
-      ...item,
+      ...publicItem,
+      coverImageRevision: coverRevision(coverImage),
       numberPrice: Number(item.numberPrice),
       cashAlternative:
         item.cashAlternative === null ? null : Number(item.cashAlternative),
-      coverImageUrl: item.coverImage
-        ? `/api/public/campaign-media/${item.coverImage}`
+      // Public media is resolved by campaign ID and asset type, not storage key.
+      coverImageUrl: coverImage
+        ? `/api/public/campaign-media/${encodeURIComponent(item.id)}/cover`
         : null,
       soldPercentage: item.totalNumbers
         ? Math.min(

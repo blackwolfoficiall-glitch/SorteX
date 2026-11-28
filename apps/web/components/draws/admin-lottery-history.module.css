@@ -1,0 +1,237 @@
+.scope {
+  --lottery-warning: #805208;
+  width: 100%;
+  min-width: 0;
+  border-radius: 1.5rem;
+}
+@media (prefers-color-scheme: dark) {
+  .scope {
+    --lottery-warning: #ffcc7a;
+  }
+}
+.content {
+  width: min(100%, 74rem);
+  min-width: 0;
+  margin: 0 auto;
+  padding: clamp(0.65rem, 2vw, 1.25rem);
+  display: grid;
+  gap: 1rem;
+  overflow-wrap: anywhere;
+}
+.banner,
+.history,
+.forms > form {
+  min-width: 0;
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+  border: 1px solid var(--sxp-line);
+  border-radius: 1.5rem;
+  padding: clamp(1rem, 3vw, 1.65rem);
+  box-shadow: var(--sxp-shadow);
+}
+.banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+}
+.banner > div {
+  min-width: 0;
+}
+.banner h1 {
+  margin: 0.25rem 0;
+}
+.ticket {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  background: var(--sxp-gradient);
+  color: var(--sxp-white);
+}
+.eyebrow {
+  color: var(--sxp-accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.forms {
+  display: grid;
+  gap: 1rem;
+}
+@media (min-width: 60rem) {
+  .forms {
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+}
+.heading svg,
+.audit svg {
+  color: var(--sxp-accent);
+  flex: none;
+}
+.muted,
+.forms p {
+  color: var(--sxp-muted);
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+.notice,
+.audit,
+.row {
+  min-width: 0;
+  background: var(--sxp-bg);
+  padding: 0.85rem;
+  border: 1px solid var(--sxp-line);
+  border-radius: 0.9rem;
+}
+.list {
+  display: grid;
+  gap: 0.85rem;
+  padding: 0;
+  margin: 1rem 0 0;
+  list-style: none;
+}
+.rowHead {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+.rowHead h3 {
+  font-size: 1.05rem;
+  font-weight: 800;
+}
+.status {
+  display: inline-block;
+  padding: 0.25rem 0.6rem;
+  border-radius: 1.1rem;
+  color: var(--sxp-text);
+  background: var(--sxp-tint);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.status[data-status="VERIFIED"] {
+  color: var(--sxp-success);
+}
+.status[data-status="PENDING_REVIEW"] {
+  color: var(--lottery-warning);
+}
+.status[data-status="REJECTED"] {
+  color: var(--sxp-error);
+}
+.metadata,
+.prizes {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+.metadata {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 8rem), 1fr));
+}
+.prizes {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6rem), 1fr));
+}
+.prizes > div {
+  padding: 0.55rem;
+  background: var(--sxp-surface);
+  border: 1px solid var(--sxp-line);
+  border-radius: 0.65rem;
+}
+.metadata dt,
+.prizes dt,
+.originals h4 {
+  color: var(--sxp-muted);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+.metadata dd {
+  font-size: 0.875rem;
+}
+.prizes dd,
+.originals li {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.originals {
+  margin-top: 0.7rem;
+}
+.originals ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0;
+  margin: 0.35rem 0 0;
+  list-style: none;
+}
+.originals li {
+  padding: 0.2rem 0.45rem;
+  border-radius: 0.4rem;
+  background: var(--sxp-tint);
+  font-size: 0.8rem;
+}
+.audit {
+  margin-top: 0.75rem;
+}
+.audit summary {
+  cursor: pointer;
+  font-weight: 750;
+  font-size: 0.85rem;
+}
+.audit svg {
+  display: inline;
+  margin-inline: 0.25rem;
+  vertical-align: middle;
+}
+.audit pre {
+  max-width: 100%;
+  min-width: 0;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  margin-top: 0.5rem;
+  padding: 0.6rem;
+  border-radius: 0.6rem;
+  background: var(--sxp-surface);
+  font-size: 0.75rem;
+}
+.scope :is(.forms, .review) label {
+  color: var(--sxp-text);
+  min-width: 0;
+}
+.scope :is(.forms, .review) input {
+  min-width: 0;
+  width: 100%;
+  color: var(--sxp-text);
+  border-color: var(--sxp-line);
+  background: var(--sxp-bg);
+  font-size: 1rem;
+}
+.scope :is(.forms, .review) button {
+  min-height: 2.75rem;
+  max-width: 100%;
+  background: var(--sxp-gradient);
+  color: var(--sxp-white);
+}
+.scope :is(.forms, .review) button:disabled {
+  background: var(--sxp-tint);
+  color: var(--sxp-muted);
+  opacity: 1;
+  cursor: not-allowed;
+}
+.scope :is(input, button, summary):focus-visible {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 2px;
+}

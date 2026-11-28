@@ -1,0 +1,14 @@
+name: Verificar runtime existente da SorteX QA sem redeploy
+on:
+  push:
+    branches: [homologacao/web-ios-integrada]
+    paths: [.github/workflows/verify-isolated-web-ios-runtime.yml]
+permissions:
+  contents: read
+jobs:
+  probe-existing:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada'
+    uses: ./.github/workflows/sortex-hosted-qa-smoke.yml
+    with:
+      expected-api-sha: 48eeb85830c2dddab048796d7859200e65cc73f9
+      check-draft-cover: true

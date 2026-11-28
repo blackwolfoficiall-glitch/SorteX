@@ -1,2 +1,10 @@
 import RegistrationForm from "@/components/auth/RegistrationForm";
-export default function CadastroComprador() { return <RegistrationForm role="BUYER" />; }
+import RegistrationAccessScope from "../RegistrationAccessScope";
+
+export default function CadastroComprador() {
+  return (
+    <RegistrationAccessScope>
+      <RegistrationForm role="BUYER" />
+    </RegistrationAccessScope>
+  );
+}

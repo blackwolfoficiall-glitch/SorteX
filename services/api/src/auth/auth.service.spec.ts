@@ -11,6 +11,7 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from './auth.service';
 import { PasswordResetMailService } from './password-reset-mail.service';
+import { fingerprintRefreshToken } from './refresh-token-fingerprint';
 
 const user = {
   id: 'user-1',
@@ -342,7 +343,7 @@ describe('AuthService', () => {
       email: user.email,
       password: 'senha-segura',
     });
-    const refreshTokenHash = await bcrypt.hash(login.refreshToken, 4);
+    const refreshTokenHash = fingerprintRefreshToken(login.refreshToken);
 
     prisma.authSession.findUnique.mockResolvedValue({
       id: 'session-1',
@@ -357,7 +358,7 @@ describe('AuthService', () => {
     const refreshed = await service.refresh(login.refreshToken);
 
     expect(refreshed.accessToken).toBeTruthy();
-    expect(refreshed.refreshToken).toBeTruthy();
+    expect(refreshed.refreshToken).not.toBe(login.refreshToken);
     expect(prisma.authSession.updateMany).toHaveBeenLastCalledWith({
       where: {
         id: 'session-1',
@@ -365,7 +366,7 @@ describe('AuthService', () => {
         revokedAt: null,
       },
       data: {
-        refreshTokenHash: expect.any(String),
+        refreshTokenHash: fingerprintRefreshToken(refreshed.refreshToken),
         expiresAt: expect.any(Date),
       },
     });
@@ -384,7 +385,7 @@ describe('AuthService', () => {
     prisma.authSession.findUnique.mockResolvedValue({
       id: 'session-1',
       userId: user.id,
-      refreshTokenHash: await bcrypt.hash('outro-token', 4),
+      refreshTokenHash: fingerprintRefreshToken('outro-token'),
       expiresAt: new Date(Date.now() + 60_000),
       revokedAt: null,
       user,
@@ -420,7 +421,7 @@ describe('AuthService', () => {
       email: user.email,
       password: 'senha-segura',
     });
-    const refreshTokenHash = await bcrypt.hash(login.refreshToken, 4);
+    const refreshTokenHash = fingerprintRefreshToken(login.refreshToken);
 
     prisma.authSession.findUnique.mockResolvedValue({
       id: 'session-1',

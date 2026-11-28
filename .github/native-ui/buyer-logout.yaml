@@ -1,0 +1,16 @@
+appId: br.com.sortex.development
+name: Encerramento da sessão (PostgreSQL local)
+---
+- launchApp:
+    stopApp: false
+- tapOn:
+    text: "^Perfil(,.*)?$"
+- scrollUntilVisible:
+    element:
+      text: "Sair da conta"
+    direction: DOWN
+- tapOn: "Sair da conta"
+- extendedWaitUntil:
+    visible:
+      id: sortex-login-email
+    timeout: 45000

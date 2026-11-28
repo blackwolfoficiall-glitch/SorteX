@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,12 +12,18 @@ import {
   TicketStatus,
 } from '@prisma/client';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { publicCampaignResultStatus } from '../campaigns/public-campaign-result-visibility';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateInstantPrizeDto,
   PrizeTicketQueryDto,
   UpdateInstantPrizeDto,
 } from './dto/draw.dto';
+
+import {
+  CreateDraftInstantPrizeDto,
+  UpdateDraftInstantPrizeDto,
+} from './dto/draft-instant-prize.dto';
 
 @Injectable()
 export class InstantPrizeDetectionService {
@@ -293,6 +300,220 @@ export class InstantPrizeDetectionService {
       })),
     }));
   }
+  private async lockDraftPrizeCampaign(
+    tx: Prisma.TransactionClient,
+    campaignId: string,
+    organizerId: string,
+  ) {
+    const campaign = await tx.campaign.findFirst({
+      where: { id: campaignId, organizerId },
+      select: { totalNumbers: true, status: true, publishedAt: true },
+    });
+    if (!campaign) throw new NotFoundException('Campanha não encontrada.');
+    if (
+      campaign.status !== CampaignStatus.DRAFT ||
+      campaign.publishedAt !== null
+    )
+      throw new ConflictException(
+        'Somente rascunhos nunca publicados podem alterar estas cotas.',
+      );
+    // Every draft prize mutation shares the campaign row lock with publication.
+    const lock = await tx.campaign.updateMany({
+      where: {
+        id: campaignId,
+        organizerId,
+        status: CampaignStatus.DRAFT,
+        publishedAt: null,
+        totalNumbers: campaign.totalNumbers,
+      },
+      data: { updatedAt: new Date() },
+    });
+    if (lock.count !== 1)
+      throw new ConflictException(
+        'A campanha mudou. Atualize antes de alterar as cotas.',
+      );
+    return campaign;
+  }
+
+  private async draftPrize(
+    tx: Prisma.TransactionClient,
+    campaignId: string,
+    prizeId: string,
+    revision: string,
+  ) {
+    const prize = await tx.campaignInstantPrize.findFirst({
+      where: { id: prizeId, campaignId },
+    });
+    if (!prize) throw new NotFoundException('Cota premiada não encontrada.');
+    if (
+      prize.updatedAt.toISOString() !== revision ||
+      prize.foundCount > 0 ||
+      prize.winnerUserId !== null ||
+      (prize.status !== InstantPrizeStatus.AVAILABLE &&
+        prize.status !== InstantPrizeStatus.CANCELLED) ||
+      (await tx.instantPrizeResult.count({
+        where: { instantPrizeId: prizeId },
+      }))
+    )
+      throw new ConflictException(
+        'Esta cota mudou ou possui resultado. Atualize antes de continuar.',
+      );
+    if (prize.exactNumber !== null)
+      await this.ensureDraftPrizeNumberFree(
+        tx,
+        campaignId,
+        Number(prize.exactNumber),
+      );
+    return prize;
+  }
+
+  private async ensureDraftPrizeNumberFree(
+    tx: Prisma.TransactionClient,
+    campaignId: string,
+    number: number,
+  ) {
+    const ticket = await tx.ticket.findFirst({
+      where: {
+        campaignId,
+        number,
+        status: { in: [TicketStatus.RESERVED, TicketStatus.SOLD] },
+      },
+      select: { id: true },
+    });
+    if (ticket)
+      throw new ConflictException('A cota já está reservada ou vendida.');
+  }
+
+  createDraftPrizeTicket(
+    user: AuthenticatedUser,
+    campaignId: string,
+    dto: CreateDraftInstantPrizeDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const campaign = await this.lockDraftPrizeCampaign(
+        tx,
+        campaignId,
+        user.id,
+      );
+      const width = String(campaign.totalNumbers - 1).length;
+      if (
+        dto.exactNumber.length !== width ||
+        Number(dto.exactNumber) >= campaign.totalNumbers
+      )
+        throw new BadRequestException(
+          `Informe uma cota válida com ${width} dígitos.`,
+        );
+      const existing = await tx.campaignInstantPrize.findFirst({
+        where: { campaignId, exactNumber: dto.exactNumber },
+        select: { id: true },
+      });
+      if (existing)
+        throw new ConflictException(
+          'Esta cota já está cadastrada como premiada.',
+        );
+      await this.ensureDraftPrizeNumberFree(
+        tx,
+        campaignId,
+        Number(dto.exactNumber),
+      );
+      const prize = await tx.campaignInstantPrize.create({
+        data: {
+          campaignId,
+          exactNumber: dto.exactNumber,
+          description: dto.description.trim(),
+          value: dto.value,
+          type: dto.type,
+          quantity: 1,
+          generationRule: { origin: 'MANUAL' },
+        },
+      });
+      await this.auditDraftPrize(tx, user, prize.id, 'INSTANT_PRIZES_CREATED');
+      return { id: prize.id };
+    });
+  }
+
+  updateDraftPrizeTicket(
+    user: AuthenticatedUser,
+    campaignId: string,
+    prizeId: string,
+    dto: UpdateDraftInstantPrizeDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockDraftPrizeCampaign(tx, campaignId, user.id);
+      await this.draftPrize(tx, campaignId, prizeId, dto.revision);
+      const changed = await tx.campaignInstantPrize.updateMany({
+        where: {
+          id: prizeId,
+          campaignId,
+          updatedAt: new Date(dto.revision),
+          foundCount: 0,
+          status: {
+            in: [InstantPrizeStatus.AVAILABLE, InstantPrizeStatus.CANCELLED],
+          },
+          results: { none: {} },
+        },
+        data: {
+          description: dto.description.trim(),
+          value: dto.value,
+          type: dto.type,
+        },
+      });
+      if (changed.count !== 1)
+        throw new ConflictException(
+          'Esta cota mudou. Atualize antes de continuar.',
+        );
+      await this.auditDraftPrize(tx, user, prizeId, 'INSTANT_PRIZE_UPDATED');
+      return { id: prizeId };
+    });
+  }
+
+  removeDraftPrizeTicket(
+    user: AuthenticatedUser,
+    campaignId: string,
+    prizeId: string,
+    revision: string,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      await this.lockDraftPrizeCampaign(tx, campaignId, user.id);
+      await this.draftPrize(tx, campaignId, prizeId, revision);
+      const changed = await tx.campaignInstantPrize.deleteMany({
+        where: {
+          id: prizeId,
+          campaignId,
+          updatedAt: new Date(revision),
+          foundCount: 0,
+          status: {
+            in: [InstantPrizeStatus.AVAILABLE, InstantPrizeStatus.CANCELLED],
+          },
+          results: { none: {} },
+        },
+      });
+      if (changed.count !== 1)
+        throw new ConflictException(
+          'Esta cota mudou. Atualize antes de continuar.',
+        );
+      await this.auditDraftPrize(tx, user, prizeId, 'INSTANT_PRIZE_REMOVED');
+      return { id: prizeId };
+    });
+  }
+
+  private auditDraftPrize(
+    tx: Prisma.TransactionClient,
+    user: AuthenticatedUser,
+    prizeId: string,
+    action: string,
+  ) {
+    return tx.auditLog.create({
+      data: {
+        entityType: 'INSTANT_PRIZE',
+        entityId: prizeId,
+        action,
+        actorUserId: user.id,
+        actorRole: user.role,
+      },
+    });
+  }
+
   async createPrizeTickets(
     user: AuthenticatedUser,
     dto: CreateInstantPrizeDto,
@@ -526,48 +747,54 @@ export class InstantPrizeDetectionService {
       ? `(${digits.slice(-11, -9)}) ${digits.slice(-9, -8)}****-${digits.slice(-4)}`
       : 'Não informado';
   }
-  publicResults(slug: string) {
-    return this.prisma.instantPrizeResult
-      .findMany({
-        where: {
-          campaign: { slug },
-          instantPrize: { status: { in: ['FOUND', 'DELIVERED'] } },
-        },
-        select: {
-          winningNumber: true,
-          status: true,
-          identifiedAt: true,
-          buyer: { select: { name: true, city: true, state: true } },
-          instantPrize: {
-            select: { description: true, value: true, type: true },
+  async publicResults(slug: string) {
+    const visibleCampaign = { slug, status: publicCampaignResultStatus() };
+    const campaign = await this.prisma.campaign.findFirst({
+      where: visibleCampaign,
+      select: { id: true },
+    });
+    if (!campaign) throw new NotFoundException('Campanha não encontrada.');
+
+    const items = await this.prisma.instantPrizeResult.findMany({
+      where: {
+        campaignId: campaign.id,
+        // Reapply visibility when selecting results; a campaign may have been
+        // withdrawn after the initial existence check.
+        campaign: visibleCampaign,
+        instantPrize: {
+          status: {
+            in: [InstantPrizeStatus.FOUND, InstantPrizeStatus.DELIVERED],
           },
         },
-        orderBy: { identifiedAt: 'desc' },
-      })
-      .then((items) =>
-        items.map((item) => ({
-          ...item,
-          winningNumber: this.maskNumber(item.winningNumber),
-          buyer: {
-            name: this.publicName(item.buyer.name),
-            city: item.buyer.city,
-            state: item.buyer.state,
-          },
-          instantPrize: {
-            ...item.instantPrize,
-            value: Number(item.instantPrize.value),
-          },
-        })),
-      );
+      },
+      select: {
+        winningNumber: true,
+        status: true,
+        identifiedAt: true,
+        instantPrize: {
+          select: { description: true, value: true, type: true },
+        },
+      },
+      orderBy: { identifiedAt: 'desc' },
+    });
+    return items.map((item) => ({
+      winningNumber: this.maskNumber(item.winningNumber),
+      status: item.status,
+      identifiedAt: item.identifiedAt,
+      // Instant prizes have no verified public disclosure opt-in. Keep the
+      // existing public table shape, but do not read or serialize buyer data.
+      buyer: { name: 'Identidade preservada', city: null, state: null },
+      instantPrize: {
+        description: item.instantPrize.description,
+        value: Number(item.instantPrize.value),
+        type: item.instantPrize.type,
+      },
+    }));
   }
 
   private maskNumber(number: string) {
     if (number.length <= 2) return '*'.repeat(number.length);
     return `${number.slice(0, 1)}${'*'.repeat(Math.max(2, number.length - 2))}${number.slice(-1)}`;
-  }
-  private publicName(name: string) {
-    const parts = name.trim().split(/\s+/);
-    return parts.length > 1 ? `${parts[0]} ${parts.at(-1)?.[0]}.` : parts[0];
   }
   myResults(buyerId: string) {
     return this.prisma.instantPrizeResult.findMany({

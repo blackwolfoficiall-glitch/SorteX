@@ -5,12 +5,14 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  AdminPermission,
   OrganizerDocumentType,
   Prisma,
   UserRole,
   VerificationStatus,
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { effectiveAdminPermissions } from '../auth/policies/admin-authorization.policy';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { OrganizerStorageService } from './organizer-storage.service';
 import { UpdateOrganizerProfileDto } from './dto/update-organizer-profile.dto';
@@ -516,20 +518,24 @@ export class OrganizersService {
   }
 
   async getDocumentFile(documentId: string, user: AuthenticatedUser) {
+    const canReview =
+      user.role === UserRole.ADMIN &&
+      effectiveAdminPermissions(
+        user.adminTeamRole,
+        user.adminPermissions,
+      ).includes(AdminPermission.ORGANIZERS_REVIEW);
+    if (!canReview && user.role !== UserRole.ORGANIZER) {
+      throw new ForbiddenException('Você não pode acessar este documento.');
+    }
     const document = await this.prisma.organizerDocument.findUnique({
       where: { id: documentId },
       include: { organizerProfile: { select: { userId: true } } },
     });
     if (!document) throw new NotFoundException('Documento não encontrado.');
-    if (
-      user.role !== UserRole.ADMIN &&
-      document.organizerProfile.userId !== user.id
-    ) {
+    if (!canReview && document.organizerProfile.userId !== user.id) {
       throw new ForbiddenException('Você não pode acessar este documento.');
     }
-    if (user.role === UserRole.ADMIN && !user.adminTeamRole)
-      throw new ForbiddenException('Acesso administrativo inválido.');
-    if (user.role === UserRole.ADMIN)
+    if (canReview)
       await this.prisma.auditLog.create({
         data: {
           entityType: 'OrganizerDocument',

@@ -1,0 +1,104 @@
+.scope {
+  min-width: 0;
+  border-radius: 1.2rem;
+}
+.content {
+  display: grid;
+  min-width: 0;
+  gap: 0.9rem;
+  padding: clamp(0.5rem, 2vw, 1rem);
+  overflow-wrap: anywhere;
+}
+.mainPrize,
+.ticketSection,
+.content > section,
+.content > div > div {
+  min-width: 0;
+  padding: clamp(0.75rem, 2.4vw, 1.4rem);
+  border: 1px solid var(--sxp-line);
+  border-radius: 1rem;
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+}
+.mainPrize {
+  border-color: var(--sxp-accent);
+  background: var(--sxp-tint);
+}
+.mainPrize > p,
+.ticketSection > p,
+.content :global(.text-zinc-500),
+.content :global(.text-zinc-600) {
+  color: var(--sxp-muted);
+}
+.content :global(.text-violet-800),
+.content :global(.text-violet-950) {
+  color: var(--sxp-accent);
+}
+.content > section {
+  margin-top: 0;
+}
+.content :where(label) {
+  min-width: 0;
+  color: var(--sxp-text);
+}
+.content :where(input, select, textarea):not([type="file"], [type="checkbox"]) {
+  min-width: 0;
+  width: 100%;
+  padding-inline: 0.65rem;
+  border-color: var(--sxp-line);
+  background: var(--sxp-bg);
+  color: var(--sxp-text);
+  font-size: 1rem;
+}
+.content label:has(> select) {
+  overflow: hidden;
+}
+.content label:has(> select):focus-within {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 2px;
+}
+.content :is(input, button, textarea):focus-visible {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 2px;
+}
+.content :where(button) {
+  max-width: 100%;
+  min-width: 0;
+  white-space: normal;
+}
+.content :where(button:not([class*="bg-violet-"])) {
+  border-color: var(--sxp-line);
+}
+.content :where(button[class*="border"]):not([class*="bg-violet-"]) {
+  background: var(--sxp-bg);
+  color: var(--sxp-text);
+}
+.content
+  :where([class*="rounded-xl"][class*="bg-white"]):not(
+    input,
+    select,
+    textarea,
+    button
+  ) {
+  border-color: var(--sxp-line);
+  background: var(--sxp-bg);
+}
+.content :where([class*="overflow-x-auto"]) {
+  max-width: 100%;
+  min-width: 0;
+}
+.ticketHeading h4 {
+  color: var(--sxp-accent);
+}
+.status {
+  display: inline-block;
+  padding: 0.3rem 0.55rem;
+  border-radius: 1rem;
+  background: var(--sxp-tint);
+  color: var(--sxp-muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+.status[data-configured="true"] {
+  color: var(--sxp-success);
+}

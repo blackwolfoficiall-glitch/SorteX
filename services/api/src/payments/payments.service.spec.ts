@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-argument */
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   GatewayProvider,
@@ -14,6 +16,7 @@ import {
   TicketStatus,
   UserRole,
 } from '@prisma/client';
+import { createHash } from 'node:crypto';
 import { PaymentsService } from './payments.service';
 
 const buyer = {
@@ -120,6 +123,11 @@ describe('PaymentsService', () => {
   let service: PaymentsService;
   let prisma: any;
   let provider: any;
+  let ledger: { recordApprovedPayment: jest.Mock; recordReversal: jest.Mock };
+  let commissions: {
+    recordApprovedPayment: jest.Mock;
+    reversePayment: jest.Mock;
+  };
 
   beforeEach(() => {
     prisma = {
@@ -137,8 +145,13 @@ describe('PaymentsService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        updateMany: jest.fn(),
       },
       auditLog: { create: jest.fn() },
+      promotionUsage: {
+        updateMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       purchase: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
@@ -158,13 +171,18 @@ describe('PaymentsService', () => {
       parseWebhookEvent: jest.fn(),
       normalizeStatus: jest.fn(),
     };
+    ledger = { recordApprovedPayment: jest.fn(), recordReversal: jest.fn() };
+    commissions = {
+      recordApprovedPayment: jest.fn(),
+      reversePayment: jest.fn(),
+    };
     service = new PaymentsService(
       prisma,
       { get: jest.fn().mockReturnValue(provider) } as any,
       { calculate: jest.fn() } as any,
       { detectForPurchase: jest.fn() } as any,
-      { recordApprovedPayment: jest.fn() } as any,
-      { recordApprovedPayment: jest.fn(), reversePayment: jest.fn() } as any,
+      ledger as any,
+      commissions as any,
       { syncApprovedPayment: jest.fn() } as any,
       { evaluateReached: jest.fn() } as any,
     );
@@ -185,6 +203,158 @@ describe('PaymentsService', () => {
       expect.objectContaining({ amount: '10.00' }),
     );
     expect(result.pixCopyPaste).toBe('copy-paste');
+  });
+
+  describe('Pix nativo sandbox', () => {
+    const data = { purchaseId: 'purchase-1', acceptedTerms: true };
+    const originalEnv = process.env;
+    beforeEach(() => {
+      const token = 'APP_USR-test-fixture-not-a-credential';
+      process.env = {
+        ...originalEnv,
+        ENABLE_NATIVE_SANDBOX_PIX: '1',
+        APP_ENV: 'staging',
+        NEON_BRANCH_ID: 'br-weathered-forest-bccwn49d',
+        API_URL:
+          'https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech',
+        PAYMENT_ENV: 'sandbox',
+        FEATURE_REAL_PAYMENTS: 'false',
+        FEATURE_PAYOUTS: 'false',
+        MERCADO_PAGO_ACCESS_TOKEN: token,
+        MERCADO_PAGO_VERIFIED_TEST_TOKEN_SHA256: createHash('sha256')
+          .update(token)
+          .digest('hex'),
+        MERCADO_PAGO_WEBHOOK_SECRET_TEST: 'local-fixture',
+        MERCADO_PAGO_WEBHOOK_SECRET: '',
+        MERCADO_PAGO_WEBHOOK_SECRET_PRODUCTION: '',
+      };
+    });
+
+    afterEach(() => {
+      process.env = originalEnv;
+    });
+
+    it('recusa criação sem prova ou consentimento, antes de consultar a compra', async () => {
+      await expect(
+        service.createNativeSandboxPix(buyer, {
+          ...data,
+          acceptedTerms: false,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      delete process.env.MERCADO_PAGO_VERIFIED_TEST_TOKEN_SHA256;
+      expect(service.nativeSandboxPixConfig()).toMatchObject({
+        enabled: false,
+      });
+      await expect(
+        service.createNativeSandboxPix(buyer, data),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(prisma.payment.findUnique).not.toHaveBeenCalled();
+      expect(provider.createPixPayment).not.toHaveBeenCalled();
+    });
+
+    it('não adota pagamento já iniciado pelo checkout web', async () => {
+      prisma.payment.findUnique.mockResolvedValue(payment());
+      await expect(
+        service.createNativeSandboxPix(buyer, data),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(provider.createPixPayment).not.toHaveBeenCalled();
+    });
+
+    it('revalida o token antes de chamar o provedor', async () => {
+      (service as any).preparePayment = jest
+        .fn()
+        .mockImplementation(async () => {
+          process.env.MERCADO_PAGO_ACCESS_TOKEN = 'different-fixture';
+          return {
+            payment: payment({
+              providerPaymentId: null,
+              metadata: { nativeSandboxPix: true },
+            }),
+            existing: false,
+          };
+        });
+      await expect(
+        service.createNativeSandboxPix(buyer, data),
+      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      expect(provider.createPixPayment).not.toHaveBeenCalled();
+    });
+
+    it('não registra resposta sem ticket de teste e não fornece QR ou código bancário', async () => {
+      const attempt = payment({
+        providerPaymentId: null,
+        metadata: { nativeSandboxPix: true },
+      });
+      (service as any).preparePayment = jest
+        .fn()
+        .mockResolvedValue({ payment: attempt, existing: false });
+      provider.createPixPayment.mockResolvedValueOnce(
+        gatewayResult({
+          boletoUrl: 'https://www.mercadopago.com.br/payments/12345/ticket',
+        }),
+      );
+      await expect(
+        service.createNativeSandboxPix(buyer, data),
+      ).rejects.toBeInstanceOf(BadGatewayException);
+      expect(prisma.payment.update).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            providerPaymentId: expect.anything(),
+          }),
+        }),
+      );
+
+      provider.createPixPayment.mockResolvedValueOnce(
+        gatewayResult({
+          boletoUrl:
+            'https://www.mercadopago.com.br/sandbox/payments/12345/ticket',
+          status: PaymentStatus.APPROVED,
+        }),
+      );
+      prisma.payment.update.mockResolvedValue(
+        payment({ status: PaymentStatus.PROCESSING }),
+      );
+      const result = await service.createNativeSandboxPix(buyer, data);
+      expect(result).toMatchObject({
+        purchaseId: data.purchaseId,
+        environment: 'sandbox',
+        status: PaymentStatus.PROCESSING,
+      });
+      for (const field of [
+        'pixQrCode',
+        'pixCopyPaste',
+        'boletoUrl',
+        'providerPaymentId',
+      ])
+        expect(result).not.toHaveProperty(field);
+      expect(prisma.payment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            status: PaymentStatus.PROCESSING,
+            pixQrCode: null,
+            pixCopyPaste: null,
+            boletoUrl: null,
+            metadata: expect.objectContaining({ nativeSandboxPix: true }),
+          }),
+        }),
+      );
+    });
+
+    it('consulta somente o estado persistido da tentativa nativa do comprador', async () => {
+      prisma.payment.findFirst.mockResolvedValue(null);
+      await expect(
+        service.nativeSandboxPixStatus(data.purchaseId, buyer),
+      ).resolves.toBeNull();
+      expect(prisma.payment.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            buyerId: buyer.id,
+            purchaseId: data.purchaseId,
+            metadata: { path: ['nativeSandboxPix'], equals: true },
+          }),
+        }),
+      );
+      expect(provider.getPaymentStatus).not.toHaveBeenCalled();
+    });
   });
 
   it('cria cartão apenas com token seguro e sem persistir CVV', async () => {
@@ -327,12 +497,52 @@ describe('PaymentsService', () => {
     expect(provider.getPaymentStatus).not.toHaveBeenCalled();
   });
 
+  it('reusa evento registrado por outra entrega enquanto tentava criá-lo', async () => {
+    const event = { id: 'db-event-1', processed: true };
+    provider.parseWebhookEvent.mockReturnValue({
+      providerEventId: 'gateway-event-1',
+      eventType: 'order.updated',
+      resourceId: 'local-fixture-order',
+      payload: {},
+    });
+    prisma.paymentEvent.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(event);
+    prisma.paymentEvent.create.mockRejectedValueOnce(
+      new Prisma.PrismaClientKnownRequestError('Unique event', {
+        code: 'P2002',
+        clientVersion: 'test',
+      }),
+    );
+
+    await expect(
+      service.handleMercadoPagoWebhook({ body: {} }),
+    ).resolves.toEqual({
+      received: true,
+      duplicate: true,
+    });
+    expect(prisma.paymentEvent.findUnique).toHaveBeenLastCalledWith({
+      where: {
+        provider_providerEventId: {
+          provider: GatewayProvider.MERCADO_PAGO,
+          providerEventId: 'gateway-event-1',
+        },
+      },
+    });
+    expect(provider.getPaymentStatus).not.toHaveBeenCalled();
+  });
+
   it('confirma recebimento assinado de recurso não rastreado sem consultar provider', async () => {
     provider.parseWebhookEvent.mockReturnValue({
       providerEventId: 'event-simulator-1',
       eventType: 'order.updated',
       resourceId: '123456',
-      payload: { data: { id: '123456' } },
+      payload: {
+        data: {
+          id: '123456',
+          external_reference: 'sortex-00000000-0000-4000-8000-000000000000',
+        },
+      },
     });
     prisma.paymentEvent.findUnique.mockResolvedValue(null);
     prisma.paymentEvent.create.mockResolvedValue({
@@ -349,6 +559,7 @@ describe('PaymentsService', () => {
       ignored: true,
     });
     expect(provider.getPaymentStatus).not.toHaveBeenCalled();
+    expect(prisma.payment.findUnique).not.toHaveBeenCalled();
     expect(prisma.paymentEvent.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -422,7 +633,98 @@ describe('PaymentsService', () => {
         data: { status: TicketStatus.SOLD, reservedUntil: null },
       }),
     );
-    expect(result.status).toBe(PaymentStatus.APPROVED);
+    expect(result.payment.status).toBe(PaymentStatus.APPROVED);
+  });
+
+  it.each([PaymentStatus.REFUNDED, PaymentStatus.CHARGEBACK])(
+    'concilia %s integral após aprovação sem revender títulos',
+    async (status) => {
+      const approved = payment({
+        status: PaymentStatus.APPROVED,
+        purchase: { ...payment().purchase, status: PurchaseStatus.PAID },
+        campaign: { id: 'campaign-1', reservedNumbers: 0 },
+      });
+      prisma.payment.findFirst
+        .mockResolvedValueOnce(approved)
+        .mockResolvedValue({ ...approved, status });
+      prisma.payment.findUniqueOrThrow.mockResolvedValue({
+        ...approved,
+        status,
+      });
+      const result = await (service as any).processGatewayUpdate(
+        'event-reversal',
+        gatewayResult({ status }),
+      );
+      await (service as any).processGatewayUpdate(
+        'event-reversal-duplicate',
+        gatewayResult({ status }),
+      );
+      expect(result.payment.status).toBe(status);
+      expect(prisma.payment.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ status, activePurchaseKey: null }),
+        }),
+      );
+      expect(ledger.recordReversal).toHaveBeenCalledTimes(1);
+      expect(ledger.recordReversal).toHaveBeenCalledWith(
+        prisma,
+        approved.id,
+        status,
+      );
+      expect(commissions.reversePayment).toHaveBeenCalledTimes(1);
+      expect(prisma.ticket.updateMany).not.toHaveBeenCalled();
+      expect(prisma.ticket.deleteMany).not.toHaveBeenCalled();
+      expect(prisma.purchase.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('não reaprova cobrança estornada após atualização tardia', async () => {
+    const refunded = payment({
+      status: PaymentStatus.REFUNDED,
+      purchase: { ...payment().purchase, status: PurchaseStatus.PAID },
+      campaign: { id: 'campaign-1', reservedNumbers: 0 },
+    });
+    prisma.payment.findFirst.mockResolvedValue(refunded);
+    const result = await (service as any).processGatewayUpdate(
+      'event-stale',
+      gatewayResult({ status: PaymentStatus.APPROVED }),
+    );
+    expect(result.payment.status).toBe(PaymentStatus.REFUNDED);
+    expect(ledger.recordApprovedPayment).not.toHaveBeenCalled();
+    expect(prisma.payment.update).not.toHaveBeenCalled();
+    expect(prisma.ticket.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('não lança estorno sem liquidação anterior no ledger', async () => {
+    prisma.payment.findFirst.mockResolvedValue(payment());
+    await expect(
+      (service as any).processGatewayUpdate(
+        'event-unreconciled',
+        gatewayResult({ status: PaymentStatus.REFUNDED }),
+      ),
+    ).rejects.toThrow('sem aprovação local');
+    expect(ledger.recordReversal).not.toHaveBeenCalled();
+    expect(prisma.payment.update).not.toHaveBeenCalled();
+  });
+
+  it('encaminha estorno parcial para conciliação sem débito integral', async () => {
+    prisma.payment.findFirst.mockResolvedValue(
+      payment({
+        status: PaymentStatus.APPROVED,
+        purchase: { ...payment().purchase, status: PurchaseStatus.PAID },
+      }),
+    );
+    await expect(
+      (service as any).processGatewayUpdate(
+        'event-partial',
+        gatewayResult({
+          status: PaymentStatus.PROCESSING,
+          reconciliationIssue: 'PARTIAL_REFUND',
+        }),
+      ),
+    ).rejects.toThrow('Estorno parcial');
+    expect(ledger.recordReversal).not.toHaveBeenCalled();
+    expect(prisma.payment.update).not.toHaveBeenCalled();
   });
 
   it('rejeita webhook com valor divergente antes de alterar títulos', async () => {
@@ -478,7 +780,10 @@ describe('PaymentsService', () => {
     );
     await (service as any).processGatewayUpdate(
       'event-1',
-      gatewayResult({ status: PaymentStatus.EXPIRED }),
+      gatewayResult({
+        status: PaymentStatus.EXPIRED,
+        orderClosure: PaymentStatus.EXPIRED,
+      }),
     );
     expect(prisma.ticket.updateMany).not.toHaveBeenCalled();
     expect(prisma.ticket.deleteMany).toHaveBeenCalled();

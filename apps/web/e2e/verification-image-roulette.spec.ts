@@ -75,12 +75,16 @@ test("enquadramento persiste e roleta ativa aparece na campanha pública", async
   const menu = page.getByRole("dialog", { name: "Menu da campanha" });
   await expect(menu).toBeVisible();
   await expect(menu.getByRole("button", { name: "Meus títulos" })).toBeVisible();
-  await expect(menu.getByRole("link", { name: "Campanhas" })).toHaveAttribute("href", "/");
-  await expect(menu.getByRole("button", { name: "Consultar pedidos" })).toBeVisible();
-  await expect(menu.getByRole("link", { name: "Regulamento" })).toHaveAttribute("href", "#regulamento");
-  await expect(menu.getByRole("link", { name: "Política de Privacidade" })).toHaveAttribute("href", /\/privacidade\?returnTo=/);
-  await expect(menu.getByRole("link", { name: "Termos de Uso" })).toHaveAttribute("href", /\/termos\?returnTo=/);
-  await page.getByRole("button", { name: "Fechar menu" }).last().click();
+  const campaignsLink = menu.getByRole("link", { name: "Campanhas" });
+  await expect(campaignsLink).toHaveAttribute(
+    "href",
+    /\/o\/[^?]+\?view=campaigns(?:&|$)/,
+  );
+  await campaignsLink.click();
+  await expect(page.getByRole("heading", { name: "Campanhas", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: /Voltar para a campanha/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/campanha/${slug}$`));
+  await expect(page.locator("#regulamento").getByText("Descrição e regulamento")).toBeVisible();
   await page.getByTestId("public-campaign-header").getByRole("button", { name: "Meus Títulos" }).click();
   await expect(page.getByRole("dialog", { name: "Meus Títulos" })).toBeVisible();
   await expect(page.getByText("Entre para consultar seus títulos nesta campanha.")).toBeVisible();
@@ -95,8 +99,11 @@ test("enquadramento persiste e roleta ativa aparece na campanha pública", async
   await expect(page.getByTestId("roulette-purchase-summary")).toContainText("100 títulos");
   await expect(page.getByTestId("roulette-purchase-summary")).toContainText("1 giro");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  await expect(page.getByText("Powered by SorteX")).toBeVisible();
+  await expect(page.getByText(/© SorteX 20\d{2}.*Todos os direitos reservados./)).toBeVisible();
   await page.getByRole("button", { name: "Informações" }).click();
+  await expect(page.getByRole("button", { name: "Consultar pedidos" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Política de Privacidade" })).toHaveAttribute("href", /\/privacidade\?returnTo=/);
+  await expect(page.getByRole("link", { name: "Termos de Uso" })).toHaveAttribute("href", /\/termos\?returnTo=/);
   await expect(page.getByRole("link", { name: "Excluir dados" })).toHaveAttribute("href", /\/privacidade\?returnTo=.*#exclusao-de-dados/);
   await expect(page.getByRole("button", { name: "Voltar ao topo" })).toBeVisible();
 });

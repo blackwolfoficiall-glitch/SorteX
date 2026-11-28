@@ -14,7 +14,7 @@ import {
 } from '../common/brazilian-documents';
 import { validateMunicipality } from '../locations/locations';
 import * as bcrypt from 'bcrypt';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { authConfig } from './auth.config';
 import { LoginDto } from './dto/login.dto';
@@ -28,6 +28,10 @@ import type {
   RefreshTokenPayload,
 } from './types/token-payload.type';
 import { PasswordResetMailService } from './password-reset-mail.service';
+import {
+  fingerprintRefreshToken,
+  matchesRefreshToken,
+} from './refresh-token-fingerprint';
 
 const publicUserSelect = {
   id: true,
@@ -472,7 +476,7 @@ export class AuthService {
     await this.prisma.authSession.update({
       where: { id: session.id },
       data: {
-        refreshTokenHash: await bcrypt.hash(tokens.refreshToken, 12),
+        refreshTokenHash: fingerprintRefreshToken(tokens.refreshToken),
       },
     });
     await this.securityAudit(
@@ -522,7 +526,7 @@ export class AuthService {
     await store.authSession.update({
       where: { id: session.id },
       data: {
-        refreshTokenHash: await bcrypt.hash(tokens.refreshToken, 12),
+        refreshTokenHash: fingerprintRefreshToken(tokens.refreshToken),
       },
     });
     await store.auditLog.create({
@@ -562,10 +566,7 @@ export class AuthService {
       throw new UnauthorizedException('Sessão inválida ou expirada.');
     }
 
-    const matches = await bcrypt.compare(
-      refreshToken,
-      session.refreshTokenHash,
-    );
+    const matches = matchesRefreshToken(refreshToken, session.refreshTokenHash);
 
     if (!matches) {
       await this.revokeSession(session.id);
@@ -585,7 +586,7 @@ export class AuthService {
         revokedAt: null,
       },
       data: {
-        refreshTokenHash: await bcrypt.hash(tokens.refreshToken, 12),
+        refreshTokenHash: fingerprintRefreshToken(tokens.refreshToken),
         expiresAt: this.refreshTokenExpirationDate(),
       },
     });
@@ -748,6 +749,7 @@ export class AuthService {
       }),
       this.jwtService.signAsync(refreshPayload, {
         secret: authConfig.refreshSecret(),
+        jwtid: randomUUID(),
         expiresIn: authConfig.refreshTokenTtlSeconds(),
       }),
     ]);

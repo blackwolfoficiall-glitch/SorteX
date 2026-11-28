@@ -2,145 +2,143 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Clock3, LoaderCircle, Ticket } from "lucide-react";
-import Card from "@/components/ui/Card";
-import ReservationCountdown from "@/components/purchases/ReservationCountdown";
+import { ArrowUpRight, Clock3, LoaderCircle, Ticket } from "lucide-react";
+import { useAuthorizedUser } from "@/components/auth/RoleGate";
+import PremiumScope from "@/components/premium/PremiumScope";
 import { getMyPurchases } from "@/lib/purchases/client";
 import type { Purchase, PurchaseStatus } from "@/lib/purchases/types";
+import { purchaseStatusLabels } from "@/lib/purchases/status";
+import styles from "./buyer-purchases-premium.module.css";
 
 const tabs: Array<{ label: string; status?: PurchaseStatus }> = [
   { label: "Todas" },
-  { label: "Ativas", status: "RESERVED" },
+  { label: "Reservadas", status: "RESERVED" },
   { label: "Aguardando", status: "AWAITING_PAYMENT" },
+  { label: "Pendentes", status: "PENDING" },
   { label: "Pagas", status: "PAID" },
   { label: "Expiradas", status: "EXPIRED" },
   { label: "Canceladas", status: "CANCELLED" },
+  { label: "Estornadas", status: "REFUNDED" },
 ];
-const labels: Record<PurchaseStatus, string> = {
-  PENDING: "Pendente",
-  RESERVED: "Reservada",
-  AWAITING_PAYMENT: "Aguardando pagamento",
-  PAID: "Paga",
-  EXPIRED: "Expirada",
-  CANCELLED: "Cancelada",
-  REFUNDED: "Estornada",
-};
+type Selection = { status?: PurchaseStatus };
+type ListResult =
+  | { selection: Selection; items: Purchase[] }
+  | { selection: Selection; failed: true };
+
+const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const number = new Intl.NumberFormat("pt-BR");
+const date = new Intl.DateTimeFormat("pt-BR", {
+  dateStyle: "short",
+  timeStyle: "short",
+  timeZone: "America/Sao_Paulo",
+});
+
+function BuyerPurchase({ purchase }: { purchase: Purchase }) {
+  const paid = purchase.status === "PAID";
+  const open = purchase.status === "RESERVED" || purchase.status === "AWAITING_PAYMENT";
+  const shownDate = open ? purchase.expiresAt : purchase.confirmedAt && paid ? purchase.confirmedAt : purchase.createdAt;
+  const label = open ? "Prazo previsto" : purchase.confirmedAt && paid ? "Confirmada em" : "Pedido criado em";
+  const issued = paid ? purchase.tickets.filter((ticket) => ticket.status === "SOLD") : [];
+
+  return (
+    <li className={styles.row}>
+      <article className={styles.card}>
+        <header className={styles.cardHead}>
+          <span className={styles.icon}><Ticket size={19} aria-hidden="true" /></span>
+          <div>
+            <span className={styles.badge} data-status={purchase.status}>{purchaseStatusLabels[purchase.status]}</span>
+            <h2>{purchase.campaign.title}</h2>
+          </div>
+        </header>
+        <dl className={styles.facts}>
+          <div><dt>Títulos no pedido</dt><dd>{number.format(purchase.quantity)}</dd></div>
+          <div><dt>{paid ? "Valor confirmado" : "Valor do pedido"}</dt><dd>{money.format(purchase.total)}</dd></div>
+        </dl>
+        <p className={styles.date}><Clock3 size={14} aria-hidden="true" /> <span>{label}: <time dateTime={shownDate}>{date.format(new Date(shownDate))}</time></span></p>
+        {issued.length > 0 ? (
+          <div className={styles.issued}>
+            <p>Títulos emitidos</p>
+            <ul role="list" aria-label="Números emitidos">
+              {issued.slice(0, 12).map((ticket) => <li key={ticket.number}>{ticket.number}</li>)}
+            </ul>
+            {issued.length > 12 && <p>Mais {number.format(issued.length - 12)} no detalhe</p>}
+          </div>
+        ) : paid ? <p className={styles.date}>Sem números emitidos nesta lista.</p> : null}
+        <Link className={styles.action} href={`/comprador/compras/${purchase.id}`} aria-label={`Ver compra: ${purchase.campaign.title}`}>
+          Ver compra <ArrowUpRight size={16} aria-hidden="true" />
+        </Link>
+      </article>
+    </li>
+  );
+}
 
 export default function MeusNumerosPage() {
-  const [status, setStatus] = useState<PurchaseStatus>();
-  const [items, setItems] = useState<Purchase[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  useEffect(() => {
-    getMyPurchases(status)
-      .then(setItems)
-      .catch((cause) =>
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Falha ao carregar suas compras.",
-        ),
-      )
-      .finally(() => setLoading(false));
-  }, [status]);
-  function selectStatus(next?: PurchaseStatus) {
-    setLoading(true);
-    setError("");
-    setStatus(next);
-  }
+  const user = useAuthorizedUser();
   return (
-    <main className="mx-auto max-w-5xl p-5 md:py-10">
-      <p className="text-sm font-bold uppercase tracking-wider text-violet-700">
-        Área do comprador
-      </p>
-      <h1 className="mt-2 text-3xl font-black">Meus títulos</h1>
-      <div className="mt-5 flex gap-2 overflow-auto pb-2">
+    <PremiumScope className={styles.page}>
+      <PurchaseHistory key={user?.id ?? ""} />
+    </PremiumScope>
+  );
+}
+
+function PurchaseHistory() {
+  const [selection, setSelection] = useState<Selection>({});
+  const [result, setResult] = useState<ListResult>();
+  const current = result?.selection === selection ? result : undefined;
+
+  useEffect(() => {
+    let active = true;
+    getMyPurchases(selection.status)
+      .then((items) => { if (active) setResult({ selection, items }); })
+      .catch(() => { if (active) setResult({ selection, failed: true }); });
+    return () => { active = false; };
+  }, [selection]);
+
+  function selectStatus(next?: PurchaseStatus) {
+    setSelection((previous) => previous.status === next ? previous : { status: next });
+  }
+
+  return (
+    <div className={styles.wrap}>
+      <header className={styles.hero}>
+        <div>
+          <p className={styles.kicker}>Área do comprador</p>
+          <h1>Meus títulos</h1>
+          <p>Acompanhe suas compras e consulte os números que já foram emitidos.</p>
+        </div>
+        <Ticket size={32} aria-hidden="true" />
+      </header>
+      <section className={styles.filters} aria-label="Filtrar compras por situação">
         {tabs.map((tab) => (
-          <button
-            key={tab.label}
-            onClick={() => selectStatus(tab.status)}
-            className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-bold ${status === tab.status ? "bg-violet-700 text-white" : "bg-white text-zinc-600"}`}
-          >
+          <button key={tab.label} type="button" aria-pressed={selection.status === tab.status} className={styles.control} onClick={() => selectStatus(tab.status)}>
             {tab.label}
           </button>
         ))}
-      </div>
-      {error && (
-        <p className="mt-5 rounded-2xl bg-red-50 p-4 text-red-700">{error}</p>
-      )}
-      {loading ? (
-        <div className="flex h-52 items-center justify-center">
-          <LoaderCircle className="animate-spin text-violet-700" />
-        </div>
-      ) : items.length === 0 ? (
-        <Card className="mt-6 p-10 text-center">
-          <Ticket className="mx-auto text-violet-400" size={42} />
-          <h2 className="mt-4 font-black">Nenhuma compra nesta categoria</h2>
-        </Card>
-      ) : (
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
-          {items.map((purchase) => (
-            <Link
-              key={purchase.id}
-              href={`/comprador/compras/${purchase.id}`}
-            >
-              <Card className="h-full p-5 transition hover:-translate-y-0.5 hover:shadow-md">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-bold text-violet-700">
-                      {labels[purchase.status]}
-                    </span>
-                    <h2 className="mt-3 text-lg font-black">
-                      {purchase.campaign.title}
-                    </h2>
-                  </div>
-                  <Ticket className="text-violet-600" />
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <p className="text-zinc-500">Quantidade</p>
-                    <strong>{purchase.quantity.toLocaleString("pt-BR")}</strong>
-                  </div>
-                  <div>
-                    <p className="text-zinc-500">Valor</p>
-                    <strong>
-                      R$ {purchase.total.toFixed(2).replace(".", ",")}
-                    </strong>
-                  </div>
-                </div>
-                <p className="mt-4 flex items-center gap-2 text-xs text-zinc-500">
-                  <Clock3 size={14} />
-                  {purchase.status === "AWAITING_PAYMENT" ? (
-                    <>
-                      Reserva:{" "}
-                      <ReservationCountdown expiresAt={purchase.expiresAt} />
-                    </>
-                  ) : (
-                    new Date(
-                      purchase.confirmedAt || purchase.createdAt,
-                    ).toLocaleString("pt-BR")
-                  )}
-                </p>
-                <div className="mt-3 flex max-h-20 flex-wrap gap-1 overflow-hidden">
-                  {purchase.tickets.slice(0, 12).map((ticket) => (
-                    <span
-                      key={ticket.number}
-                      className="rounded bg-zinc-100 px-2 py-1 text-[10px] font-bold"
-                    >
-                      {ticket.number}
-                    </span>
-                  ))}
-                  {purchase.tickets.length > 12 && (
-                    <span className="px-2 py-1 text-[10px] text-zinc-500">
-                      +{purchase.tickets.length - 12}
-                    </span>
-                  )}
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
-    </main>
+      </section>
+      <section aria-label="Histórico de compras">
+        {!current ? (
+          <div role="status" className={styles.state}>
+            <LoaderCircle aria-hidden="true" size={20} className={styles.spinner} /> Carregando compras…
+          </div>
+        ) : "failed" in current ? (
+          <div className={styles.state}>
+            <p role="alert">Não foi possível carregar suas compras.</p>
+            <button type="button" className={styles.control} onClick={() => setSelection((previous) => ({ ...previous }))}>Tentar novamente</button>
+          </div>
+        ) : current.items.length === 0 ? (
+          <div className={styles.state}>
+            <Ticket aria-hidden="true" size={28} />
+            <h2>{selection.status ? "Nenhuma compra nesta categoria" : "Você ainda não tem compras"}</h2>
+            {selection.status
+              ? <button type="button" className={styles.control} onClick={() => selectStatus()}>Ver todas</button>
+              : <Link className={styles.control} href="/comprador/sorteios">Explorar campanhas</Link>}
+          </div>
+        ) : (
+          <ul role="list" className={styles.list}>
+            {current.items.map((purchase) => <BuyerPurchase key={purchase.id} purchase={purchase} />)}
+          </ul>
+        )}
+      </section>
+    </div>
   );
 }

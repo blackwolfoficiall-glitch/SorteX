@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Request, Response } from 'express';
+import { safeRequestPath } from './safe-request-path';
 @Catch()
 export class SafeExceptionFilter implements ExceptionFilter {
   catch(error: unknown, host: ArgumentsHost) {
@@ -44,7 +45,7 @@ export class SafeExceptionFilter implements ExceptionFilter {
       code,
       message,
       requestId,
-      path: req.originalUrl,
+      path: safeRequestPath(req.originalUrl),
       timestamp: new Date().toISOString(),
     };
     if (

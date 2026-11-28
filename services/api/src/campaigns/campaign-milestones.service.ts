@@ -7,6 +7,7 @@ import {
 import {
   CampaignMilestoneStatus,
   LotteryDrawStatus,
+  LotterySourceType,
   Prisma,
   TicketStatus,
   UserRole,
@@ -18,7 +19,34 @@ import {
   type DrawRuleDefinition,
 } from '../draws/draw-rule-engine.service';
 import { PrismaService } from '../prisma/prisma.service';
+import {
+  CAMPAIGN_DRAW_TIME_ZONE,
+  civilDrawInstant,
+} from './campaign-sales-window';
 import type { SaveCampaignMilestonesDto } from './dto/campaign-milestone.dto';
+import { publicCampaignResultStatus } from './public-campaign-result-visibility';
+
+const brasiliaDayFormatter = new Intl.DateTimeFormat('en', {
+  timeZone: CAMPAIGN_DRAW_TIME_ZONE,
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
+function brasiliaDayMarker(value: Date) {
+  const parts = Object.fromEntries(
+    brasiliaDayFormatter
+      .formatToParts(value)
+      .map(({ type, value: part }) => [type, part]),
+  );
+  return new Date(`${parts.year}-${parts.month}-${parts.day}T00:00:00.000Z`);
+}
+
+function nextDayMarker(value: Date) {
+  const marker = brasiliaDayMarker(value);
+  marker.setUTCDate(marker.getUTCDate() + 1);
+  return marker;
+}
 
 type MilestoneWithWinner = Prisma.CampaignMilestonePrizeGetPayload<{
   include: {
@@ -46,7 +74,7 @@ export class CampaignMilestonesService {
     const campaign = await this.prisma.campaign.findFirst({
       where: {
         slug,
-        status: { in: ['PUBLISHED', 'SOLD_OUT', 'DRAWN', 'FINISHED'] },
+        status: publicCampaignResultStatus(),
       },
       select: { id: true, milestoneWinnersRemainEligible: true },
     });
@@ -254,18 +282,61 @@ export class CampaignMilestonesService {
     if (!milestone.eligibleTickets.length)
       throw new BadRequestException('A fotografia elegível está vazia.');
 
+    const now = new Date();
+    if (
+      !milestone.snapshotAt ||
+      !Number.isFinite(milestone.snapshotAt.getTime()) ||
+      milestone.snapshotAt > now
+    )
+      throw new BadRequestException(
+        'A data da fotografia elegível não foi confirmada.',
+      );
+    if (milestone.scheduledAt && milestone.scheduledAt > now)
+      throw new BadRequestException(
+        'A data programada desta meta ainda não chegou.',
+      );
+    const cutoff =
+      milestone.scheduledAt && milestone.scheduledAt > milestone.snapshotAt
+        ? milestone.scheduledAt
+        : milestone.snapshotAt;
+    const nextDay = nextDayMarker(cutoff);
+    const nextDayStart = civilDrawInstant(
+      nextDay.toISOString().slice(0, 10),
+      '00:00',
+    );
+    if (!nextDayStart)
+      throw new BadRequestException(
+        'Não foi possível confirmar a data de referência da meta.',
+      );
+
     const lottery = await this.prisma.lotteryDraw.findFirst({
       where: {
+        provider: 'LOTERIA_FEDERAL',
         status: { in: [LotteryDrawStatus.VERIFIED, LotteryDrawStatus.LOCKED] },
-        ...(milestone.scheduledAt
-          ? { drawDate: { gte: milestone.scheduledAt } }
-          : {}),
+        OR: [
+          {
+            // The official CAIXA import stores the civil day as midnight UTC,
+            // not the hour of the extraction. Require its saved source proof.
+            sourceType: LotterySourceType.OFFICIAL_API,
+            sourceDocumentHash: { not: null },
+            sourcePrizes: { not: Prisma.AnyNull },
+            drawDate: { gte: nextDay, lte: brasiliaDayMarker(now) },
+          },
+          {
+            // Manually recorded ISO dates do not preserve the input precision.
+            // Treat them conservatively as instants; neither the separate clock
+            // nor review timestamps prove the order of events on the cutoff day.
+            sourceType: { not: LotterySourceType.OFFICIAL_API },
+            drawDate: { gte: nextDayStart, lte: now },
+            NOT: { drawDate: nextDayMarker(now) },
+          },
+        ],
       },
-      orderBy: { drawDate: 'asc' },
+      orderBy: [{ drawDate: 'asc' }, { id: 'asc' }],
     });
     if (!lottery)
       throw new NotFoundException(
-        'Ainda não existe resultado verificado para esta meta.',
+        'Ainda não existe resultado verificado de um dia posterior à fotografia elegível para esta meta.',
       );
     const rule = (milestone.campaign.publishedRuleSnapshot ??
       milestone.campaign.drawRuleTemplate?.ruleDefinition ??

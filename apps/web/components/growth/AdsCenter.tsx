@@ -25,11 +25,13 @@ import {
   Settings2,
   X,
 } from "lucide-react";
+import AdsConfirmedSales from "./AdsConfirmedSales";
+import PremiumScope from "@/components/premium/PremiumScope";
+import styles from "./ads-premium.module.css";
 import { getMyCampaigns } from "@/lib/campaigns/client";
 import type { Campaign } from "@/lib/campaigns/types";
 import {
   adAction,
-  adsDashboard,
   createAd,
   duplicateAd,
   generateAdStrategy,
@@ -40,7 +42,6 @@ import {
   syncAd,
   updateAd,
   type AdvisorAdStrategy,
-  type AdsDashboardData,
   type MetaAdsIntegration,
   type SortexAd,
 } from "@/lib/growth/client";
@@ -102,7 +103,6 @@ export default function AdsCenter() {
   const router = useRouter();
   const [items, setItems] = useState<SortexAd[]>([]),
     [campaigns, setCampaigns] = useState<Campaign[]>([]),
-    [stats, setStats] = useState<AdsDashboardData>({}),
     [meta, setMeta] = useState<MetaAdsIntegration>({
       status: "NOT_CONNECTED",
       sandbox: true,
@@ -116,13 +116,8 @@ export default function AdsCenter() {
     [notice, setNotice] = useState(""),
     [editingId, setEditingId] = useState<string | null>(null),
     [strategy, setStrategy] = useState<AdvisorAdStrategy | null>(null);
-  const [period, setPeriod] = useState("30D"),
-    [campaignFilter, setCampaignFilter] = useState(""),
-    [platformFilter, setPlatformFilter] = useState("ALL"),
-    [adTypeFilter, setAdTypeFilter] = useState(""),
-    [startDate, setStartDate] = useState(""),
-    [endDate, setEndDate] = useState("");
   const [integrations, setIntegrations] = useState<OrganizerIntegration[]>([]),
+    [metaStatusKnown, setMetaStatusKnown] = useState(false),
     [showModeHelp, setShowModeHelp] = useState(false),
     [showHowItWorks, setShowHowItWorks] = useState(false),
     [comingSoon, setComingSoon] = useState<string | null>(null),
@@ -131,26 +126,20 @@ export default function AdsCenter() {
     setLoading(true);
     setError("");
     try {
-      const dashboardQuery = new URLSearchParams({
-        period,
-        ...(campaignFilter ? { campaignId: campaignFilter } : {}),
-        ...(platformFilter !== "ALL" ? { platform: platformFilter } : {}),
-        ...(adTypeFilter ? { adType: adTypeFilter } : {}),
-        ...(period === "CUSTOM" && startDate ? { startDate } : {}),
-        ...(period === "CUSTOM" && endDate ? { endDate } : {}),
-      });
-      const [a, c, s, m, connectedIntegrations] = await Promise.all([
+      const [ads, campaignList, metaStatus, connections] = await Promise.allSettled([
         listAds(),
         getMyCampaigns(),
-        adsDashboard(`?${dashboardQuery.toString()}`),
         metaAdsStatus(),
         listIntegrations(),
       ]);
-      setItems(a.items);
-      setCampaigns(c);
-      setStats(s);
-      setMeta(m);
-      setIntegrations(connectedIntegrations);
+      if (ads.status === "fulfilled") setItems(ads.value.items);
+      if (campaignList.status === "fulfilled") setCampaigns(campaignList.value);
+      setMetaStatusKnown(metaStatus.status === "fulfilled");
+      if (metaStatus.status === "fulfilled") setMeta(metaStatus.value);
+      if (connections.status === "fulfilled") setIntegrations(connections.value);
+      if ([ads, campaignList, metaStatus, connections].some((item) => item.status === "rejected"))
+        setError("Não foi possível carregar parte dos dados de gerenciamento de mídia.");
+      const c = campaignList.status === "fulfilled" ? campaignList.value : [];
       const requested =
         typeof window === "undefined"
           ? null
@@ -183,7 +172,7 @@ export default function AdsCenter() {
   useEffect(() => {
     const timer = window.setTimeout(() => void loadLatest(), 0);
     return () => window.clearTimeout(timer);
-  }, [period, campaignFilter, platformFilter, adTypeFilter, startDate, endDate]);
+  }, []);
   function toggle(channel: string) {
     setForm((v) => ({
       ...v,
@@ -374,177 +363,51 @@ export default function AdsCenter() {
           ? "bg-white"
           : "bg-amber-300";
   return (
-    <div className="mx-auto w-full max-w-[1500px] overflow-x-hidden pb-12">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <PremiumScope className={styles.page}>
+      <header className={styles.hero}>
         <div>
-          <p className="text-xs font-black uppercase tracking-[.2em] text-violet-600">
-            Gerenciador de mídia
-          </p>
-          <h1 className="mt-2 text-3xl font-black">SorteX Ads</h1>
-          <p className="mt-2 max-w-2xl text-zinc-500">
-            A IA sugere. Somente você revisa e autoriza a execução.
+          <p className={styles.eyebrow}>Mídia e origem das vendas</p>
+          <h1 className={styles.title}>SorteX Ads</h1>
+          <p className={styles.copy}>
+            Compare pedidos pagos na SorteX e veja o que é possível medir por origem.
+            Métricas verificadas de mídia são exibidas separadamente quando disponíveis.
           </p>
         </div>
-        <div className="relative flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
-          <button
-            onClick={() => setShowModeHelp((value) => !value)}
-            className={`flex min-h-9 items-center justify-center gap-2 rounded-full px-4 text-xs font-black ${metaConnected ? "bg-green-50 text-green-700" : "bg-zinc-100 text-zinc-700"}`}
-          >
-            <span
-              className={`h-2 w-2 rounded-full ${metaConnected ? "bg-green-500" : "bg-zinc-400"}`}
-            />
-            {metaConnected ? "Modo Produção" : "Modo Teste"}
-          </button>
-          {showModeHelp && (
-            <div className="absolute right-0 top-11 z-20 w-72 rounded-2xl border bg-white p-4 text-xs leading-5 text-zinc-600 shadow-xl">
-              {metaConnected
-                ? "Campanhas aprovadas podem ser publicadas na conta Meta conectada."
-                : "Você pode criar e testar campanhas sem publicação externa ou cobrança."}
-            </div>
-          )}
-          <button
-            onClick={() => setOpen(true)}
-            className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 font-bold text-white"
-          >
-            <Plus size={18} />
+        <div className={styles.heroActions}>
+          <div className={styles.mode}>
+            <button
+              type="button"
+              aria-expanded={showModeHelp}
+              onClick={() => setShowModeHelp((value) => !value)}
+              className={styles.secondary}
+            >
+              <HelpCircle size={17} aria-hidden="true" />
+              {loading ? "Consultando modo" : !metaStatusKnown ? "Modo não confirmado" : metaConnected ? "Meta conectada" : "Modo Teste"}
+            </button>
+            {showModeHelp && (
+              <p className={styles.modeHelp}>
+                {!metaStatusKnown
+                  ? "O estado de gerenciamento externo ainda não foi confirmado."
+                  : metaConnected
+                    ? "Conexão ativa não substitui a autorização para publicar nem comprova o desempenho de mídia."
+                    : "Rascunhos e ativações em sandbox não são anúncios externos e não geram cobrança."}
+              </p>
+            )}
+          </div>
+          <button type="button" onClick={() => setOpen(true)} className={styles.primary}>
+            <Plus size={18} aria-hidden="true" />
             Criar campanha
           </button>
+          <a href="#area-de-gerenciamento-ads" className={styles.secondary}>Rascunhos e conexões</a>
         </div>
       </header>
-      <section
-        aria-labelledby="ads-intelligence-title"
-        className="mt-6 rounded-[2rem] border bg-white p-5 shadow-sm md:p-7"
-      >
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-xs font-black uppercase tracking-[.18em] text-violet-600">
-              Dashboard unificado
-            </p>
-            <h2 id="ads-intelligence-title" className="mt-1 text-2xl font-black">
-              Inteligência de marketing
-            </h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              Métricas reais das plataformas conectadas e das campanhas
-              rastreadas pela SorteX.
-            </p>
-          </div>
-          <div className="flex max-w-full gap-2 overflow-x-auto pb-1">
-            {[
-              ["TODAY", "Hoje"],
-              ["7D", "7 dias"],
-              ["30D", "30 dias"],
-              ["90D", "90 dias"],
-              ["CUSTOM", "Personalizado"],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={period === value}
-                onClick={() => setPeriod(value)}
-                className={`shrink-0 rounded-xl px-4 py-2 text-sm font-bold transition ${period === value ? "bg-violet-700 text-white" : "bg-zinc-100 text-zinc-700 hover:bg-violet-50"}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          <label className="text-sm font-semibold text-zinc-700">
-            Campanha SorteX
-            <select
-              value={campaignFilter}
-              onChange={(event) => setCampaignFilter(event.target.value)}
-              className="mt-2 h-11 w-full rounded-xl border bg-white px-3"
-            >
-              <option value="">Todas as campanhas</option>
-              {campaigns.map((campaign) => (
-                <option key={campaign.id} value={campaign.id}>
-                  {campaign.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm font-semibold text-zinc-700">
-            Plataforma
-            <select
-              value={platformFilter}
-              onChange={(event) => setPlatformFilter(event.target.value)}
-              className="mt-2 h-11 w-full rounded-xl border bg-white px-3"
-            >
-              <option value="ALL">Todas as plataformas</option>
-              <option value="META_ADS">Meta Ads</option>
-              <option value="INSTAGRAM">Instagram</option>
-              <option value="FACEBOOK">Facebook</option>
-              <option value="WHATSAPP">WhatsApp Business</option>
-              <option value="YOUTUBE">YouTube</option>
-              <option value="GOOGLE">Google Ads</option>
-            </select>
-          </label>
-          <label className="text-sm font-semibold text-zinc-700">
-            Tipo de anúncio
-            <select
-              value={adTypeFilter}
-              onChange={(event) => setAdTypeFilter(event.target.value)}
-              className="mt-2 h-11 w-full rounded-xl border bg-white px-3"
-            >
-              <option value="">Todos os objetivos</option>
-              {Object.entries(objectives).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        {period === "CUSTOM" && (
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <Field label="Período inicial">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-              />
-            </Field>
-            <Field label="Período final">
-              <input
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-              />
-            </Field>
-          </div>
-        )}
-        <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
-          <Stat label="Investimento" value={money.format(stats.spent || 0)} />
-          <Stat label="Alcance" value={stats.reach || 0} />
-          <Stat label="Impressões" value={stats.impressions || 0} />
-          <Stat label="CTR" value={ratio(stats.clicks, stats.impressions)} />
-          <Stat
-            label="CPC"
-            value={money.format(
-              stats.clicks ? (stats.spent || 0) / stats.clicks : 0,
-            )}
-          />
-          <Stat label="Conversões" value={stats.sales || 0} />
-          <Stat
-            label="ROAS"
-            value={
-              stats.spent
-                ? `${((stats.revenue || 0) / stats.spent).toFixed(2)}x`
-                : "—"
-            }
-          />
-        </div>
-        <div className="mt-6 grid gap-5 xl:grid-cols-[1.3fr_1fr]">
-          <DailyEvolution rows={stats.daily || []} />
-          <AiMarketingSummary data={stats} />
-        </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {(stats.platforms || []).map((platform) => (
-            <PlatformMetrics key={platform.key} platform={platform} />
-          ))}
-        </div>
-      </section>
+      <AdsConfirmedSales campaigns={campaigns} />
+      <section id="area-de-gerenciamento-ads" className={styles.management} aria-labelledby="ads-management-title">
+        <header>
+          <p className={styles.eyebrow}>Área de trabalho</p>
+          <h2 id="ads-management-title">Rascunhos e conexões</h2>
+          <p className={styles.copy}>As conexões abaixo são de gerenciamento. Elas não habilitam por si só a leitura de mídia no relatório.</p>
+        </header>
       {!metaConnected ? (
         <section className="mt-6 overflow-hidden rounded-[2rem] border border-violet-100 bg-gradient-to-br from-violet-950 via-violet-800 to-fuchsia-700 p-6 text-white shadow-xl md:p-8">
           <div className="grid gap-7 lg:grid-cols-[1fr_auto] lg:items-center">
@@ -557,14 +420,11 @@ export default function AdsCenter() {
                 Conecte sua conta Meta
               </h2>
               <p className="mt-2 max-w-2xl text-violet-100">
-                Conecte sua conta para publicar anúncios diretamente no
-                Instagram e Facebook sem sair da SorteX.
+                A conexão identifica sua conta. Ela não confirma elegibilidade para anúncios nem libera métricas de mídia no relatório.
               </p>
               <div className="mt-5 grid gap-2 text-sm sm:grid-cols-2">
-                <span>✓ Publicar campanhas</span>
-                <span>✓ Gerenciar anúncios</span>
-                <span>✓ Acompanhar métricas</span>
-                <span>✓ Controlar orçamento</span>
+                <span>Acesso e aprovação do anunciante</span>
+                <span>Permissões verificadas pela plataforma</span>
               </div>
             </div>
             <div className="flex flex-col gap-2">
@@ -601,7 +461,7 @@ export default function AdsCenter() {
                 Meta conectada
               </span>
               <h2 className="mt-4 text-2xl font-black">
-                Sua mídia está pronta para produção
+                Conta conectada para gerenciamento
               </h2>
               <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
                 <ConnectionDetail
@@ -742,29 +602,6 @@ export default function AdsCenter() {
           />
         </div>
       </section>
-      {items.length > 0 && (
-        <section className="mt-8 grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-7">
-          <Stat label="Campanhas ativas" value={stats.active} />
-          <Stat label="Investimento" value={money.format(stats.spent || 0)} />
-          <Stat label="Receita" value={money.format(stats.revenue || 0)} />
-          <Stat label="Conversões" value={stats.sales} />
-          <Stat label="CTR" value={ratio(stats.clicks, stats.impressions)} />
-          <Stat
-            label="CPM"
-            value={money.format(
-              stats.impressions
-                ? ((stats.spent || 0) / stats.impressions) * 1000
-                : 0,
-            )}
-          />
-          <Stat
-            label="CPC"
-            value={money.format(
-              stats.clicks ? (stats.spent || 0) / stats.clicks : 0,
-            )}
-          />
-        </section>
-      )}
       {loading ? (
         <div className="grid h-72 place-items-center">
           <LoaderCircle className="animate-spin text-violet-600" />
@@ -788,27 +625,13 @@ export default function AdsCenter() {
                   {statuses[ad.status] || ad.status}
                 </span>
               </div>
-              <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                <Mini label="Alcance" value={ad.reach || 0} />
-                <Mini label="Cliques" value={ad.clicks} />
-                <Mini
-                  label="CTR"
-                  value={`${Number(ad.ctr || 0).toFixed(2)}%`}
-                />
-                <Mini label="CPC" value={money.format(ad.cpc || 0)} />
-                <Mini label="Vendas" value={ad.approvedSales} />
-                <Mini
-                  label="ROAS"
-                  value={
-                    ad.spent
-                      ? `${(ad.attributedRevenue / ad.spent).toFixed(2)}x`
-                      : "—"
-                  }
-                />
-              </div>
+              <p className="mt-3 text-xs text-zinc-600">
+                Este anúncio não possui métricas de período verificadas neste relatório.
+              </p>
               <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   onClick={() => edit(ad)}
+                  aria-label="Editar campanha de mídia"
                   className="rounded-xl border p-2"
                 >
                   <Settings2 size={16} />
@@ -816,6 +639,7 @@ export default function AdsCenter() {
                 {!["LIVE_ACTIVE", "SANDBOX_ACTIVE"].includes(ad.status) && (
                   <button
                     onClick={() => void action(ad.id, "activate")}
+                    aria-label="Ativar campanha de mídia"
                     className="rounded-xl border p-2 text-green-700"
                   >
                     <Play size={16} />
@@ -824,6 +648,7 @@ export default function AdsCenter() {
                 {["LIVE_ACTIVE", "SANDBOX_ACTIVE"].includes(ad.status) && (
                   <button
                     onClick={() => void action(ad.id, "pause")}
+                    aria-label="Pausar campanha de mídia"
                     className="rounded-xl border p-2 text-amber-700"
                   >
                     <Pause size={16} />
@@ -831,6 +656,7 @@ export default function AdsCenter() {
                 )}
                 <button
                   onClick={() => void duplicateAd(ad.id).then(load)}
+                  aria-label="Duplicar campanha de mídia"
                   className="rounded-xl border p-2"
                 >
                   <Copy size={16} />
@@ -847,6 +673,7 @@ export default function AdsCenter() {
                 <a
                   href={`/s/${ad.code}`}
                   target="_blank"
+                  rel="noopener noreferrer"
                   className="ml-auto rounded-xl bg-violet-50 px-3 py-2 text-sm font-bold text-violet-700"
                 >
                   Link rastreado
@@ -864,7 +691,7 @@ export default function AdsCenter() {
             Você ainda não possui campanhas publicadas.
           </h2>
           <p className="mx-auto mt-2 max-w-lg text-zinc-500">
-            Conecte sua conta Meta e publique sua primeira campanha.
+            Você pode preparar um rascunho sem publicar nem investir em anúncios.
           </p>
           <button
             onClick={() => setOpen(true)}
@@ -874,8 +701,9 @@ export default function AdsCenter() {
           </button>
         </div>
       )}
+      </section>
       {open && (
-        <div className="fixed inset-0 z-[90] overflow-y-auto bg-black/55 p-0 sm:p-4">
+        <div className={`${styles.legacyDialog} fixed inset-0 z-[90] overflow-y-auto bg-black/55 p-0 sm:p-4`}>
           <form
             onSubmit={(e) => void save(e)}
             className="relative mx-auto min-h-full w-full bg-white p-5 sm:my-5 sm:min-h-0 sm:max-w-4xl sm:rounded-3xl md:p-7"
@@ -883,6 +711,7 @@ export default function AdsCenter() {
             <button
               type="button"
               onClick={close}
+              aria-label="Fechar editor de campanha"
               className="absolute right-4 top-4 rounded-full p-2"
             >
               <X />
@@ -961,7 +790,7 @@ export default function AdsCenter() {
           onClose={() => setComingSoon(null)}
         />
       )}
-    </div>
+    </PremiumScope>
   );
 }
 function payloadFrom(f: typeof empty) {
@@ -1347,231 +1176,6 @@ function stringList(value: unknown) {
     ? value.filter((item): item is string => typeof item === "string")
     : [];
 }
-function DailyEvolution({
-  rows,
-}: {
-  rows: Array<{
-    date: string;
-    clicks: number;
-    conversions: number;
-    revenue: number;
-  }>;
-}) {
-  const maximum = Math.max(1, ...rows.map((row) => row.clicks));
-  return (
-    <article className="rounded-3xl bg-zinc-50 p-5">
-      <h3 className="font-black">Evolução diária</h3>
-      <p className="mt-1 text-xs text-zinc-500">
-        Cliques e conversões registrados no período.
-      </p>
-      {rows.length ? (
-        <div className="mt-5 flex min-h-44 items-end gap-2 overflow-x-auto">
-          {rows.map((row) => (
-            <div
-              key={row.date}
-              className="flex min-w-12 flex-1 flex-col items-center gap-2"
-              title={`${row.clicks} cliques · ${row.conversions} conversões`}
-            >
-              <span className="text-[10px] font-bold text-zinc-500">
-                {row.clicks}
-              </span>
-              <span
-                className="w-full min-w-8 rounded-t-lg bg-gradient-to-t from-violet-700 to-fuchsia-500"
-                style={{
-                  height: `${Math.max(8, (row.clicks / maximum) * 120)}px`,
-                }}
-              />
-              <span className="text-[10px] text-zinc-500">
-                {new Date(`${row.date}T12:00:00`).toLocaleDateString("pt-BR", {
-                  day: "2-digit",
-                  month: "2-digit",
-                })}
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="mt-5 rounded-2xl bg-white p-5 text-sm text-zinc-500">
-          Ainda não há eventos suficientes neste período.
-        </p>
-      )}
-    </article>
-  );
-}
-
-function AiMarketingSummary({ data }: { data: AdsDashboardData }) {
-  const recommendations = data.recommendations;
-  return (
-    <article className="rounded-3xl bg-gradient-to-br from-violet-950 to-violet-700 p-5 text-white">
-      <div className="flex items-center gap-2">
-        <Bot size={20} />
-        <h3 className="font-black">IA SorteX analisa</h3>
-      </div>
-      <div className="mt-4 space-y-3 text-sm">
-        <InsightLine
-          label="Melhor canal"
-          value={recommendations?.bestChannel?.name || "Histórico insuficiente"}
-        />
-        <InsightLine
-          label="Canal a revisar"
-          value={recommendations?.worstChannel?.name || "Histórico insuficiente"}
-        />
-        <InsightLine
-          label="Maior retorno"
-          value={
-            recommendations?.campaignWithHighestReturn?.title ||
-            "Sem investimento atribuído"
-          }
-        />
-        <InsightLine
-          label="Previsão para 30 dias"
-          value={
-            recommendations?.forecast
-              ? money.format(recommendations.forecast.next30Days)
-              : "Histórico insuficiente"
-          }
-        />
-        <InsightLine
-          label="Melhor horário"
-          value={
-            recommendations?.idealHour
-              ? `${String(recommendations.idealHour.hour).padStart(2, "0")}:00 · ${recommendations.idealHour.conversions} conversões`
-              : "Histórico insuficiente"
-          }
-        />
-        <InsightLine
-          label="Cidade que mais converte"
-          value={recommendations?.topCities[0]?.name || "Dados indisponíveis"}
-        />
-        <InsightLine
-          label="Público mais eficiente"
-          value={
-            recommendations?.efficientAudiences[0]?.name ||
-            "Dados indisponíveis"
-          }
-        />
-        <InsightLine
-          label="Campanhas abaixo da média"
-          value={
-            recommendations?.underperformingCampaigns.length
-              ? recommendations.underperformingCampaigns
-                  .map((item) => item.title)
-                  .join(", ")
-              : "Nenhuma identificada"
-          }
-        />
-        {recommendations?.investmentSuggestion && (
-          <p className="rounded-2xl bg-white/10 p-3">
-            {recommendations.investmentSuggestion}
-          </p>
-        )}
-        {(recommendations?.unavailable || []).map((message) => (
-          <p key={message} className="text-xs text-violet-200">
-            {message}
-          </p>
-        ))}
-      </div>
-    </article>
-  );
-}
-
-function InsightLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-3 border-b border-white/10 pb-3">
-      <span className="text-violet-200">{label}</span>
-      <b className="text-right">{value}</b>
-    </div>
-  );
-}
-
-function PlatformMetrics({
-  platform,
-}: {
-  platform: NonNullable<AdsDashboardData["platforms"]>[number];
-}) {
-  const entries = Object.entries(platform.metrics)
-    .filter(([, value]) => value != null)
-    .slice(0, 6);
-  return (
-    <article className="rounded-3xl border bg-white p-5">
-      <div className="flex items-center justify-between gap-3">
-        <h3 className="font-black">{platform.name}</h3>
-        <span
-          className={`rounded-full px-3 py-1 text-xs font-bold ${platform.connected ? "bg-emerald-50 text-emerald-700" : "bg-zinc-100 text-zinc-600"}`}
-        >
-          {platform.connected ? "Conectado" : "Integração necessária"}
-        </span>
-      </div>
-      {entries.length ? (
-        <dl className="mt-4 grid grid-cols-2 gap-3">
-          {entries.map(([key, value]) => (
-            <div key={key} className="rounded-xl bg-zinc-50 p-3">
-              <dt className="text-[11px] text-zinc-500">{metricLabel(key)}</dt>
-              <dd className="mt-1 font-black">
-                {formatMetric(key, Number(value))}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : (
-        <p className="mt-4 text-sm text-zinc-500">
-          Métricas disponíveis após conectar a API oficial e sincronizar a
-          conta.
-        </p>
-      )}
-    </article>
-  );
-}
-
-function metricLabel(value: string) {
-  return (
-    {
-      campaigns: "Campanhas",
-      investment: "Investimento",
-      reach: "Alcance",
-      impressions: "Impressões",
-      clicks: "Cliques",
-      conversions: "Conversões",
-      revenue: "Receita atribuída",
-      ctr: "CTR",
-      cpc: "CPC",
-      cpm: "CPM",
-      roas: "ROAS",
-      costPerConversion: "Custo por conversão",
-      sent: "Enviadas",
-      delivered: "Entregues",
-      read: "Lidas",
-      replied: "Respondidas",
-      followers: "Seguidores",
-      views: "Visualizações",
-      engagement: "Engajamento",
-      subscribers: "Inscritos",
-    }[value] || value
-  );
-}
-
-function formatMetric(key: string, value: number) {
-  if (["investment", "revenue", "cpc", "cpm", "costPerConversion"].includes(key))
-    return money.format(value);
-  if (key === "ctr") return `${value.toFixed(2)}%`;
-  if (key === "roas") return `${value.toFixed(2)}x`;
-  return new Intl.NumberFormat("pt-BR").format(value);
-}
-
-function Stat({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | number | undefined;
-}) {
-  return (
-    <div className="min-w-0 rounded-2xl border bg-white p-4">
-      <small className="block truncate text-zinc-500">{label}</small>
-      <b className="mt-2 block break-words text-xl">{value ?? 0}</b>
-    </div>
-  );
-}
 function Mini({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="min-w-0 rounded-xl bg-white p-3">
@@ -1593,9 +1197,6 @@ function Field({
       {children}
     </label>
   );
-}
-function ratio(a = 0, b = 0) {
-  return b ? `${((a / b) * 100).toFixed(2)}%` : "0%";
 }
 function ConnectionDetail({ label, value }: { label: string; value: string }) {
   return (

@@ -1,0 +1,123 @@
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) {
+  min-height: 100vh;
+  padding: 4.75rem clamp(.75rem, 3vw, 2rem) 2rem;
+}
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-wrap {
+  display: grid;
+  gap: clamp(1rem, 2vw, 1.5rem);
+  width: min(100%, 78rem);
+  margin-inline: auto;
+  min-width: 0;
+}
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) :is(.sx-au-results, .sx-au-list, .sx-au-fields) { display: grid; gap: .75rem; min-width: 0; }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-hero {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: .85rem;
+  padding: clamp(1rem, 3vw, 1.8rem);
+  background-image: linear-gradient(137deg, #5923c1, #214fc1);
+}
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-hero > div { flex: 1 1 12rem; min-width: 0; }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-hero > svg { flex: none; }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-hero p:last-child { margin-block-start: .25rem; font-size: .91rem; }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-eyebrow {
+  text-transform: uppercase;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .085em;
+  margin-block-end: .3rem;
+}
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-refresh { margin-inline-start: auto; }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-filters { display: grid; gap: .7rem; padding: clamp(.8rem, 3vw, 1.25rem); }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-fields label {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: .3rem;
+  min-width: 0;
+  font-size: .82rem;
+  font-weight: 750;
+}
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-input { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-input svg {
+  position: absolute;
+  inset-inline-start: .7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--sxp-accent);
+  pointer-events: none;
+}
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-fields :is(input, select) {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.8rem;
+  padding: .5rem .65rem;
+  border: 1px solid var(--sxp-muted);
+  border-radius: var(--sxp-button-radius);
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+  font-size: .92rem;
+}
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-input input { padding-inline-start: 2.2rem; }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-state {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: .65rem;
+  min-height: 6rem;
+  padding: 1rem;
+  text-align: center;
+}
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-error [role="alert"] { color: var(--sxp-error); }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-spinner { color: var(--sxp-accent); }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-row {
+  display: grid;
+  gap: .85rem;
+  min-width: 0;
+  padding: clamp(.8rem, 2vw, 1.1rem);
+  overflow-wrap: anywhere;
+}
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-name {
+  color: var(--sxp-accent);
+  text-align: start;
+  text-decoration: underline;
+  text-decoration-thickness: .06em;
+  text-underline-offset: .18em;
+  overflow-wrap: anywhere;
+}
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .65rem;
+  font-size: .82rem;
+}
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-meta dt { color: var(--sxp-muted); font-weight: 650; }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-meta dd { margin-block-start: .15rem; font-weight: 750; }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) :is(.sx-au-actions, .sx-au-pages) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .55rem;
+}
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-pages { justify-content: center; }
+:is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) :is(a, button, input, select):focus-visible {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 2px;
+}
+@media (min-width: 34rem) {
+  :is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-search { grid-column: 1 / -1; }
+  :is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-meta { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 64rem) {
+  :is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) { padding-block-start: 2rem; }
+}
+@media (min-width: 78rem) {
+  :is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-fields { grid-template-columns: minmax(0, 1.2fr) repeat(4, minmax(0, 1fr)); }
+  :is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-search { grid-column: auto; }
+  :is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1.7fr) minmax(0, .85fr); align-items: start; }
+  :is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-actions { justify-content: flex-end; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :is(.sx-admin-users, .sx-admin-campaigns, .sx-admin-payments, .sx-admin-casework) .sx-au-spinner { animation: spin 1s linear infinite; }
+}

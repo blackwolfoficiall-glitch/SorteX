@@ -1,0 +1,60 @@
+name: Bootstrap isolado SorteX Web + iOS
+
+on:
+  push:
+    branches: [homologacao/web-ios-integrada]
+    paths:
+      - .github/workflows/bootstrap-isolated-web-ios.yml
+      - services/api/scripts/bootstrap-isolated-qa.cjs
+      - services/api/scripts/migrate-isolated-qa.cjs
+  workflow_dispatch:
+
+permissions:
+  contents: read
+concurrency:
+  group: sortex-web-ios-qa-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  bootstrap:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event.repository.private == false
+    environment: sortex-web-ios-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Exigir configuração protegida
+        env:
+          QA_ENABLE: ${{ vars.SORTEX_QA_BOOTSTRAP }}
+          SORTEX_QA_DATABASE_URL: ${{ secrets.SORTEX_QA_DATABASE_URL }}
+          SORTEX_QA_NEON_API_KEY: ${{ secrets.SORTEX_QA_NEON_API_KEY }}
+        run: |
+          if [ "$QA_ENABLE" != "yes" ] || [ -z "$SORTEX_QA_DATABASE_URL" ] || [ -z "$SORTEX_QA_NEON_API_KEY" ]; then
+            echo "Bootstrap não executado. Configure o ambiente GitHub sortex-web-ios-qa, restrito à branch candidata."
+            exit 1
+          fi
+      - run: npm ci --include=dev --no-audit --no-fund
+      - run: node --test scripts/migrate-isolated-qa.test.cjs scripts/bootstrap-isolated-qa.test.cjs
+      - name: Validar projeto Neon QA antes de qualquer migração
+        env:
+          SORTEX_QA_NEON_API_KEY: ${{ secrets.SORTEX_QA_NEON_API_KEY }}
+        run: node scripts/bootstrap-isolated-qa.cjs --preflight
+      - run: npx --no-install prisma generate && npm run build:neon
+        env:
+          DATABASE_URL: postgresql://validation:validation@127.0.0.1:5432/sortex_build
+      - name: Migrar somente o Neon QA
+        env:
+          SORTEX_QA_DATABASE_URL: ${{ secrets.SORTEX_QA_DATABASE_URL }}
+        run: node scripts/migrate-isolated-qa.cjs --apply
+      - name: Publicar somente no Neon QA e verificar a API
+        env:
+          SORTEX_QA_NEON_API_KEY: ${{ secrets.SORTEX_QA_NEON_API_KEY }}
+        run: node scripts/bootstrap-isolated-qa.cjs

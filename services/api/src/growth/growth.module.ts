@@ -9,7 +9,9 @@ import {
 } from './growth.controller';
 import { GrowthService } from './growth.service';
 import { AiAdvisorService } from './ai-advisor.service';
+import { AdvisorModelService } from './advisor-model.service';
 import { MetaAdsService } from './meta-ads.service';
+import { AiUsageQuotaService } from './ai-usage-quota.service';
 @Module({
   imports: [PrismaModule],
   controllers: [
@@ -19,6 +21,12 @@ import { MetaAdsService } from './meta-ads.service';
     SortexAdTrackController,
     AiSortexController,
   ],
-  providers: [GrowthService, AiAdvisorService, MetaAdsService],
+  providers: [
+    GrowthService,
+    AiAdvisorService,
+    AdvisorModelService,
+    AiUsageQuotaService,
+    MetaAdsService,
+  ],
 })
 export class GrowthModule {}

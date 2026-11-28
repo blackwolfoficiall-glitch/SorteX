@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { ArrowUpRight, MessageSquare, UserRound } from "lucide-react";
 import { AuthShell } from "@/components/auth/AuthShell";
+import PremiumScope from "@/components/premium/PremiumScope";
+import styles from "./public-contact-premium.module.css";
+
 export default function ContactPage() {
   return (
     <AuthShell
@@ -8,35 +11,29 @@ export default function ContactPage() {
       description="Encontre o caminho para acompanhar sua conta e suas campanhas."
       backHref="/"
     >
-      <div className="sx-choice-grid">
-        <Link href="/login" className="sx-choice-card">
-          <UserRound size={24} />
-          <div>
-            <h2>Já faço parte da SorteX</h2>
-            <p>
-              Entre na sua conta para acessar o painel e os canais internos de
-              suporte.
-            </p>
-          </div>
-          <ArrowUpRight size={18} />
-        </Link>
-        <div className="sx-choice-card">
-          <MessageSquare size={24} />
-          <div>
-            <h2>Canal público em preparação</h2>
-            <p>
-              O contato público será informado aqui após confirmação. Ainda não
-              há telefone ou e-mail oficial publicado nesta página.
-            </p>
-          </div>
+      <PremiumScope className={styles.contact}>
+        <div className={styles.options}>
+          <Link href="/login" className={styles.account} aria-labelledby="contact-account" aria-describedby="contact-account-help">
+            <span className={styles.icon}><UserRound size={22} aria-hidden="true" /></span>
+            <div>
+              <h2 id="contact-account">Já faço parte da SorteX</h2>
+              <p id="contact-account-help">Entre na sua conta para acessar o painel e os canais internos de suporte.</p>
+            </div>
+            <ArrowUpRight className={styles.arrow} size={17} aria-hidden="true" />
+          </Link>
+          <section className={styles.pending} aria-labelledby="contact-public">
+            <span className={styles.icon}><MessageSquare size={22} aria-hidden="true" /></span>
+            <div>
+              <h2 id="contact-public">Canal público em preparação</h2>
+              <p>O contato público será informado aqui após confirmação. Ainda não há telefone ou e-mail oficial publicado nesta página.</p>
+            </div>
+          </section>
         </div>
-      </div>
-      <p className="mt-6 text-xs leading-6 text-zinc-500">
-        Dúvidas iniciais?{" "}
-        <Link href="/#duvidas" className="font-semibold text-violet-700">
-          Consulte as perguntas frequentes.
-        </Link>
-      </p>
+        <p className={styles.faq}>
+          Dúvidas iniciais?{" "}
+          <Link href="/#duvidas">Consulte as perguntas frequentes.</Link>
+        </p>
+      </PremiumScope>
     </AuthShell>
   );
 }

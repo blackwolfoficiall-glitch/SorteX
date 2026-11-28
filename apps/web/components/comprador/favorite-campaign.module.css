@@ -1,0 +1,45 @@
+.card {
+  display: block;
+  min-width: 0;
+  border-radius: .9rem;
+  color: var(--sxp-text);
+}
+.cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  aspect-ratio: 16 / 10;
+  max-height: 17rem;
+  color: var(--sxp-accent);
+  background: var(--sxp-tint);
+  border-radius: .85rem;
+}
+.photo { object-fit: cover; }
+.price {
+  position: absolute;
+  left: .5rem;
+  top: .5rem;
+  padding: .3rem .65rem;
+  border: 1px solid var(--sxp-line);
+  border-radius: 2rem;
+  background: var(--sxp-surface);
+  color: var(--sxp-accent);
+  font-size: .8rem;
+  font-weight: 800;
+}
+.body { display: grid; gap: .4rem; padding: .85rem .55rem; }
+.organizer, .metrics, .metrics span {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  color: var(--sxp-muted);
+  font-size: .8rem;
+}
+.organizer svg, .metrics svg { flex: none; color: var(--sxp-accent); }
+.title { font-size: 1.1rem; font-weight: 800; line-height: 1.35; }
+.card:hover .title { text-decoration: underline; text-underline-offset: .15em; }
+.track { margin-top: .4rem; height: .4rem; overflow: hidden; border-radius: 2rem; background: var(--sxp-tint); }
+.fill { height: 100%; background: var(--sxp-gradient); border-radius: inherit; }
+.metrics { justify-content: space-between; flex-wrap: wrap; }
+.card:focus-visible { outline: 2px solid var(--sxp-focus); outline-offset: 2px; }

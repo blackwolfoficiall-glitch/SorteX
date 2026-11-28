@@ -1,5 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import PremiumScope from "@/components/premium/PremiumScope";
+import homeHero from "./public-home-premium-hero.module.css";
 import {
   DashboardIllustration,
   CrmIllustration,
@@ -149,64 +151,50 @@ export default function ProductHome() {
       </div>
       <main id="conteudo">
         <div className="sx-dark-top">
-          <section className="sx-container sx-hero">
-            <div className="sx-hero-copy">
-              <p className="sx-eyebrow">
-                <span className="sx-live-dot" />
-                GESTÃO PARA QUEM ORGANIZA
-              </p>
-              <h1>
-                Sua campanha,
-                <br />
-                em outro <em>nível.</em>
-              </h1>
-              <p className="sx-lead">
-                Campanhas, vendas e relacionamento com seus clientes em um só
-                lugar. Acompanhe os resultados e encontre o próximo passo da sua
-                operação com a SorteX.
-              </p>
-              <div className="sx-hero-actions">
-                <Link
-                  className="sx-button sx-button-purple"
-                  href="/cadastro/organizador"
-                >
-                  Quero organizar <ArrowUpRight size={18} />
-                </Link>
-                <Link className="sx-quiet-link" href="/cadastro/comprador">
-                  Quero participar <ArrowRight size={17} />
-                </Link>
+          <PremiumScope className={homeHero.surface}>
+            <section className={`sx-container ${homeHero.hero}`} aria-labelledby="home-heading">
+              <div className={homeHero.ticket}>
+                <p className={homeHero.kicker}>
+                  <span className="sx-live-dot" aria-hidden="true" />
+                  GESTÃO PARA QUEM ORGANIZA
+                </p>
+                <h1 id="home-heading">
+                  Sua campanha,
+                  <br />
+                  em outro <em>nível.</em>
+                </h1>
+                <p className={homeHero.lead}>
+                  Campanhas, vendas e relacionamento com seus clientes em um só
+                  lugar. Acompanhe os resultados e encontre o próximo passo da sua
+                  operação com a SorteX.
+                </p>
+                <div className={homeHero.actions}>
+                  <Link className={`${homeHero.action} ${homeHero.primary}`} href="/cadastro/organizador">
+                    Quero organizar <ArrowUpRight size={18} aria-hidden="true" />
+                  </Link>
+                  <Link className={homeHero.action} href="/cadastro/comprador">
+                    Quero participar <ArrowRight size={17} aria-hidden="true" />
+                  </Link>
+                </div>
+                <a className={homeHero.discover} href="#por-dentro">
+                  <ArrowDown size={16} aria-hidden="true" />
+                  Veja a SorteX por dentro
+                </a>
               </div>
-              <a className="sx-discover" href="#por-dentro">
-                <span>
-                  <ArrowDown size={15} />
-                </span>
-                Veja a SorteX por dentro
-              </a>
-            </div>
-            <div className="sx-product-stage">
-              <div className="sx-stage-label">
-                <span>
-                  <LayoutDashboard size={15} />
-                  Seu espaço de gestão
-                </span>
-                <span className="sx-small-tag">Visão ilustrada</span>
-              </div>
-              <div className="sx-hero-illustration">
+              <div className={homeHero.stage}>
+                <div className={homeHero.stageHeading}>
+                  <span><LayoutDashboard size={16} aria-hidden="true" /> Seu espaço de gestão</span>
+                  <span className={homeHero.stageTag}>Visão ilustrada</span>
+                </div>
                 <DashboardIllustration hero />
+                <div className={homeHero.legend}>
+                  <span><Check size={15} aria-hidden="true" /> Campanhas</span>
+                  <span><Check size={15} aria-hidden="true" /> Participantes</span>
+                  <span><Check size={15} aria-hidden="true" /> Resultados</span>
+                </div>
               </div>
-              <div className="sx-stage-caption">
-                <span>
-                  <Check size={14} /> Campanhas
-                </span>
-                <span>
-                  <Check size={14} /> Participantes
-                </span>
-                <span>
-                  <Check size={14} /> Resultados
-                </span>
-              </div>
-            </div>
-          </section>
+            </section>
+          </PremiumScope>
           <div className="sx-container sx-capabilities">
             <span>
               Sua operação conectada.

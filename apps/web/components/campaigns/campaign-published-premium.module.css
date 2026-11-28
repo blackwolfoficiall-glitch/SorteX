@@ -1,0 +1,128 @@
+.scope {
+  min-width: 0;
+  border-radius: 1.5rem;
+}
+.content {
+  width: min(100%, 54rem);
+  min-width: 0;
+  margin-inline: auto;
+  padding: clamp(0.65rem, 2.4vw, 1.5rem);
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  overflow-wrap: anywhere;
+}
+.state,
+.ticket {
+  min-width: 0;
+  border: 1px solid var(--sxp-line);
+  border-radius: 1.25rem;
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+  box-shadow: var(--sxp-shadow);
+}
+.state {
+  display: grid;
+  justify-items: center;
+  gap: 0.85rem;
+  text-align: center;
+  padding: 1.15rem;
+}
+.state [role="alert"] {
+  color: var(--sxp-error);
+}
+.state svg {
+  color: var(--sxp-accent);
+}
+.banner {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  padding: clamp(1rem, 3vw, 1.85rem);
+  text-align: center;
+  border-radius: 1.2rem 1.2rem 0 0;
+  background: var(--sxp-gradient);
+  color: var(--sxp-white);
+}
+.banner p {
+  font-size: 0.875rem;
+}
+.details {
+  min-width: 0;
+  padding: clamp(0.8rem, 3vw, 1.5rem);
+  text-align: center;
+}
+.details h2 {
+  margin-top: 0.4rem;
+  font-size: 1.3rem;
+  font-weight: 850;
+}
+.badge {
+  display: inline-block;
+  padding: 0.3rem 0.6rem;
+  border-radius: 1rem;
+  background: var(--sxp-tint);
+  color: var(--sxp-success);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+.linkBox {
+  margin: 1rem 0;
+  padding: 0.7rem;
+  min-width: 0;
+  border: 1px solid var(--sxp-line);
+  border-radius: 1rem;
+  background: var(--sxp-bg);
+  text-align: start;
+}
+.linkBox > p {
+  margin-bottom: 0.35rem;
+  color: var(--sxp-muted);
+  font-size: 0.85rem;
+  font-weight: 750;
+}
+.linkBox input,
+.linkBox button {
+  min-width: 0;
+  border-color: var(--sxp-line);
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+}
+.linkBox input {
+  font-size: 1rem;
+}
+.linkBox :where(input, button):focus-visible,
+.share button:focus-visible {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 2px;
+}
+.actions {
+  display: grid;
+  gap: 0.65rem;
+}
+@media (min-width: 48rem) {
+  .actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.share,
+.share > div {
+  min-width: 0;
+  height: 100%;
+}
+.share > div > button {
+  width: 100%;
+  max-width: 100%;
+  min-height: 2.75rem;
+  background: var(--sxp-accent);
+}
+.share > div > div {
+  max-width: 100%;
+  border-color: var(--sxp-line);
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+}
+.share > div > div :is(a, button):hover {
+  background: var(--sxp-tint);
+}
+.share > div > div > p:first-child {
+  color: var(--sxp-muted);
+}

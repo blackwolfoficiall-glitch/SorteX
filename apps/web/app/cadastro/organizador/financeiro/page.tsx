@@ -1,113 +1,46 @@
-"use client";
-
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-
+import Link from "next/link";
 import ProgressSteps from "@/components/organizador/ProgressSteps";
 import GatewayCard from "@/components/organizador/GatewayCard";
 import FinancialSummary from "@/components/organizador/FinancialSummary";
-import ContinueButton from "@/components/organizador/ContinueButton";
+
+const unavailableGateways = [
+  { nome: "Stone", descricao: "Sem integração de cobrança nesta versão." },
+  { nome: "PagBank", descricao: "Sem integração de cobrança nesta versão." },
+  { nome: "Pagar.me", descricao: "Sem integração de cobrança nesta versão." },
+  { nome: "Asaas", descricao: "Sem integração de cobrança nesta versão." },
+];
 
 export default function FinanceiroPage() {
-  const router = useRouter();
-
-  const [gatewaySelecionado, setGatewaySelecionado] =
-    useState("Mercado Pago");
-
-  const [conectado, setConectado] =
-    useState(true);
-
-  function configurarGateway(gateway: string) {
-    setGatewaySelecionado(gateway);
-    setConectado(true);
-  }
-
-  function finalizar() {
-    router.push("/cadastro/organizador/confirmacao");
-  }
-
   return (
     <main className="mx-auto max-w-2xl space-y-6 p-6">
-
       <ProgressSteps etapa={2} />
 
       <div className="rounded-3xl border bg-white p-6 shadow-sm">
-        <h1 className="text-3xl font-bold">
-          Configuração Financeira
-        </h1>
-
+        <h1 className="text-3xl font-bold">Configuração Financeira</h1>
         <p className="mt-2 text-zinc-500">
-          Escolha o gateway que irá processar os pagamentos das suas campanhas.
+          Esta versão não conecta sua conta de recebimento. Você pode continuar
+          para o painel sem configurar um gateway.
         </p>
       </div>
 
       <GatewayCard
         nome="Mercado Pago"
-        logo=""
-        descricao="Mais utilizado na SorteX"
-        pix="0,99%"
-        credito="4,99%"
-        debito="1,99%"
-        recomendado
-        conectado={gatewaySelecionado === "Mercado Pago"}
-        onConfigurar={() => configurarGateway("Mercado Pago")}
+        descricao="Adaptador de teste para Pix e cartão. Cobranças reais desabilitadas."
+        detailsHref="/organizador/gateways/mercado-pago"
       />
 
-      <GatewayCard
-        nome="Stone"
-        logo=""
-        descricao="Recebimento rápido"
-        pix="1,19%"
-        credito="4,79%"
-        debito="1,99%"
-        conectado={gatewaySelecionado === "Stone"}
-        onConfigurar={() => configurarGateway("Stone")}
-      />
+      {unavailableGateways.map((gateway) => (
+        <GatewayCard key={gateway.nome} {...gateway} />
+      ))}
 
-      <GatewayCard
-        nome="PagBank"
-        logo=""
-        descricao="Conta digital"
-        pix="0,99%"
-        credito="4,99%"
-        debito="1,99%"
-        conectado={gatewaySelecionado === "PagBank"}
-        onConfigurar={() => configurarGateway("PagBank")}
-      />
+      <FinancialSummary />
 
-      <GatewayCard
-        nome="Pagar.me"
-        logo=""
-        descricao="Gateway profissional"
-        pix="0,99%"
-        credito="4,49%"
-        debito="1,89%"
-        conectado={gatewaySelecionado === "Pagar.me"}
-        onConfigurar={() => configurarGateway("Pagar.me")}
-      />
-
-      <GatewayCard
-        nome="Asaas"
-        logo=""
-        descricao="PIX, boleto e cartão"
-        pix="0,99%"
-        credito="4,89%"
-        debito="1,99%"
-        conectado={gatewaySelecionado === "Asaas"}
-        onConfigurar={() => configurarGateway("Asaas")}
-      />
-
-      <FinancialSummary
-        metodo="Gateway conectado"
-        gateway={gatewaySelecionado}
-        conectado={conectado}
-      />
-
-      <ContinueButton
-        enabled={conectado}
-        onClick={finalizar}
-      />
-
+      <Link
+        href="/dashboard"
+        className="block rounded-3xl bg-violet-700 py-5 text-center text-lg font-bold text-white transition hover:bg-violet-800"
+      >
+        Ir para o painel
+      </Link>
     </main>
   );
 }

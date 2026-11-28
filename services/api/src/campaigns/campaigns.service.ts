@@ -1,15 +1,29 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { CampaignStatus, DrawBasis, Prisma, UserRole } from '@prisma/client';
+import {
+  CampaignStatus,
+  DrawBasis,
+  Prisma,
+  PromotionType,
+  UserRole,
+} from '@prisma/client';
 import { randomInt } from 'node:crypto';
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
+import { DrawRuleEngineService } from '../draws/draw-rule-engine.service';
 import { OrganizerStorageService } from '../organizers/organizer-storage.service';
 import type { UploadedOrganizerFile } from '../organizers/types/uploaded-file.type';
 import { PrismaService } from '../prisma/prisma.service';
+import { coverRevision } from './cover-revision';
+import {
+  authoredDrawSchedule,
+  campaignDrawInstant,
+  campaignSalesWindow,
+} from './campaign-sales-window';
 import { CreateCampaignDto } from './dto/create-campaign.dto';
 import { CreateDrawRuleTemplateDto } from './dto/create-draw-rule-template.dto';
 import type { CampaignMediaTarget } from './dto/upload-campaign-media.dto';
@@ -242,6 +256,7 @@ export class CampaignsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: OrganizerStorageService,
+    private readonly drawRuleEngine: DrawRuleEngineService,
   ) {}
 
   async create(user: AuthenticatedUser, data: CreateCampaignDto) {
@@ -335,6 +350,48 @@ export class CampaignsService {
       : undefined;
 
     const campaign = await this.prisma.$transaction(async (transaction) => {
+      const changingDraftRange =
+        current.status === CampaignStatus.DRAFT &&
+        data.totalNumbers !== undefined &&
+        data.totalNumbers !== current.totalNumbers;
+      if (
+        (data.instantPrizes && current.status === CampaignStatus.DRAFT) ||
+        changingDraftRange
+      ) {
+        const lock = await transaction.campaign.updateMany({
+          where: {
+            id,
+            organizerId: user.id,
+            status: CampaignStatus.DRAFT,
+            publishedAt: null,
+            totalNumbers: current.totalNumbers,
+            updatedAt: current.updatedAt,
+          },
+          data: { updatedAt: new Date() },
+        });
+        if (!lock.count)
+          throw new ConflictException(
+            'O rascunho mudou. Atualize as cotas premiadas antes de continuar.',
+          );
+        if (changingDraftRange && !data.instantPrizes) {
+          const total = data.totalNumbers!;
+          const width = String(Math.max(0, total - 1)).length;
+          const prizes = await transaction.campaignInstantPrize.findMany({
+            where: { campaignId: id },
+            select: { exactNumber: true },
+          });
+          if (
+            prizes.some(
+              ({ exactNumber }) =>
+                exactNumber !== null &&
+                (exactNumber.length !== width || Number(exactNumber) >= total),
+            )
+          )
+            throw new BadRequestException(
+              'A quantidade informada não comporta as cotas premiadas já cadastradas.',
+            );
+        }
+      }
       if (
         data.promotions &&
         current.status !== CampaignStatus.PUBLISHED &&
@@ -404,7 +461,7 @@ export class CampaignsService {
       return transaction.campaign.update({
         where: { id },
         data: {
-          ...this.scalarData(data),
+          ...this.scalarData(data, current),
           title: data.title,
           slug,
           milestoneWinnersRemainEligible: data.milestoneWinnersRemainEligible,
@@ -452,6 +509,11 @@ export class CampaignsService {
         'Seu cadastro precisa estar aprovado para publicar campanhas.',
       );
     }
+    if (current.publicationBlocked) {
+      throw new ForbiddenException(
+        'A publicação desta campanha está bloqueada.',
+      );
+    }
     if (
       current.status !== CampaignStatus.DRAFT &&
       current.status !== CampaignStatus.PENDING_REVIEW &&
@@ -461,6 +523,8 @@ export class CampaignsService {
         'Somente campanhas em rascunho ou pausadas podem ser publicadas.',
       );
     }
+    const reactivating = current.status === CampaignStatus.PAUSED;
+    if (reactivating) this.requireOriginalPublication(current);
     const missing = this.publishChecklist(current);
     if (missing.length) {
       throw new BadRequestException(
@@ -468,17 +532,38 @@ export class CampaignsService {
       );
     }
 
-    const campaign = await this.prisma.campaign.update({
-      where: { id },
-      data: {
-        status: CampaignStatus.PUBLISHED,
-        publishedAt: new Date(),
-        publishedRuleSnapshot: (current.drawRuleTemplate?.ruleDefinition ??
-          current.customDrawRule) as Prisma.InputJsonValue,
-      },
-      include: campaignInclude,
-    });
-    return this.serialize(campaign);
+    try {
+      const campaign = await this.prisma.campaign.update({
+        where: {
+          id,
+          status: current.status,
+          publicationBlocked: false,
+          ...(reactivating ? { publishedAt: current.publishedAt } : {}),
+        },
+        data: {
+          status: CampaignStatus.PUBLISHED,
+          ...(reactivating
+            ? {}
+            : {
+                publishedAt: new Date(),
+                publishedRuleSnapshot: (current.drawRuleTemplate
+                  ?.ruleDefinition ??
+                  current.customDrawRule) as Prisma.InputJsonValue,
+              }),
+        },
+        include: campaignInclude,
+      });
+      return this.serialize(campaign);
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      )
+        throw new ConflictException(
+          'A situação da campanha mudou. Atualize antes de tentar novamente.',
+        );
+      throw error;
+    }
   }
 
   async pause(id: string, user: AuthenticatedUser) {
@@ -541,6 +626,7 @@ export class CampaignsService {
         numberSelectionMode: source.numberSelectionMode,
         drawDate: source.drawDate,
         drawTime: source.drawTime,
+        drawTimeZone: source.drawTimeZone,
         drawBasis: source.drawBasis,
         drawRuleTemplateId: source.drawRuleTemplateId,
         customDrawRule: source.customDrawRule ?? undefined,
@@ -557,7 +643,11 @@ export class CampaignsService {
         },
         promotions: {
           create: source.promotions
-            .filter((promotion) => !promotion.isPopular)
+            .filter(
+              (promotion) =>
+                promotion.type === PromotionType.PACKAGE &&
+                !promotion.isPopular,
+            )
             .map((promotion) => ({
               name: promotion.name,
               numberQuantity: promotion.numberQuantity,
@@ -610,8 +700,24 @@ export class CampaignsService {
     target: CampaignMediaTarget,
     files: UploadedOrganizerFile[],
     instantPrizeId?: string,
+    expectedDraftCoverRevision?: string,
   ) {
     const current = await this.findOwned(id, user.id);
+    if (expectedDraftCoverRevision !== undefined) {
+      if (target !== 'COVER') {
+        throw new BadRequestException('A revisão se aplica apenas à capa.');
+      }
+      if (
+        current.status !== CampaignStatus.DRAFT ||
+        current.publishedAt !== null ||
+        (coverRevision(current.coverImage) ?? 'none') !==
+          expectedDraftCoverRevision
+      ) {
+        throw new ConflictException(
+          'O rascunho ou a capa mudou. Atualize antes de enviar.',
+        );
+      }
+    }
     this.ensureCampaignEditable(current.status);
     if (!files.length) throw new BadRequestException('Selecione um arquivo.');
     if (target !== 'GALLERY' && files.length > 1) {
@@ -627,6 +733,37 @@ export class CampaignsService {
         }),
       ),
     );
+
+    if (expectedDraftCoverRevision !== undefined) {
+      // Recheck at the write: a browser/admin may publish or replace while
+      // the image is being stored. Never mutate a previously published cover.
+      const outcome = await this.prisma.campaign.updateMany({
+        where: {
+          id,
+          organizerId: user.id,
+          status: CampaignStatus.DRAFT,
+          publishedAt: null,
+          coverImage: current.coverImage,
+        },
+        data: { coverImage: saved[0].storageKey },
+      });
+      if (!outcome.count) {
+        throw new ConflictException(
+          'O rascunho ou a capa mudou. Atualize antes de enviar.',
+        );
+      }
+      const readback = await this.getOwned(id, user);
+      if (
+        readback.status !== CampaignStatus.DRAFT ||
+        readback.publishedAt !== null ||
+        readback.coverImageRevision !== coverRevision(saved[0].storageKey)
+      ) {
+        throw new ConflictException(
+          'O rascunho ou a capa mudou. Atualize antes de enviar.',
+        );
+      }
+      return readback;
+    }
 
     if (target === 'GALLERY') {
       const start = await this.prisma.campaignImage.count({
@@ -848,6 +985,7 @@ export class CampaignsService {
       },
       campaigns: campaigns.map(({ coverImage, ...campaign }) => ({
         ...campaign,
+        coverImageRevision: coverRevision(coverImage),
         coverImageUrl: coverImage
           ? `/public/campaigns/media/${campaign.id}/cover`
           : null,
@@ -907,8 +1045,9 @@ export class CampaignsService {
     campaignId: string,
     kind:
       'cover' | 'video' | 'main-prize' | 'gallery' | 'instant' | 'milestone',
-    mediaId?: string,
-    user?: AuthenticatedUser,
+    mediaId: string | undefined,
+    user: AuthenticatedUser | undefined,
+    audience: 'public' | 'owner',
   ) {
     const campaign = await this.prisma.campaign.findFirst({
       where: { id: campaignId },
@@ -922,10 +1061,12 @@ export class CampaignsService {
       },
     });
     if (!campaign) throw new NotFoundException('Campanha não encontrada.');
+    const hasPrivateAccess =
+      campaign.organizerId === user?.id || user?.role === UserRole.ADMIN;
     if (
-      campaign.status !== CampaignStatus.PUBLISHED &&
-      campaign.organizerId !== user?.id &&
-      user?.role !== UserRole.ADMIN
+      audience === 'public'
+        ? campaign.status !== CampaignStatus.PUBLISHED
+        : !hasPrivateAccess
     ) {
       throw new ForbiddenException('Você não pode acessar esta mídia.');
     }
@@ -957,8 +1098,7 @@ export class CampaignsService {
       const isReferenced = campaign.milestonePrizes.some(
         (milestone) => milestone.imageUrl === imageUrl,
       );
-      const canPreview =
-        campaign.organizerId === user?.id || user?.role === UserRole.ADMIN;
+      const canPreview = audience === 'owner' && hasPrivateAccess;
       if (!isReferenced && !canPreview)
         throw new NotFoundException('Mídia não encontrada.');
       storageKey = `campaigns/${campaignId}/${mediaId}`;
@@ -982,7 +1122,19 @@ export class CampaignsService {
     return campaign;
   }
 
-  private scalarData(data: CreateCampaignDto) {
+  private scalarData(data: CreateCampaignDto, current?: CampaignPayload) {
+    let drawSchedule: ReturnType<typeof authoredDrawSchedule>;
+    try {
+      drawSchedule = authoredDrawSchedule(
+        data.drawDate,
+        data.drawTime,
+        current,
+      );
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Data do sorteio inválida.',
+      );
+    }
     return {
       shortDescription: data.shortDescription,
       description: data.description,
@@ -998,7 +1150,7 @@ export class CampaignsService {
       minimumPurchase: data.minimumPurchase,
       maximumPurchasePerBuyer: data.maximumPurchasePerBuyer,
       numberSelectionMode: data.numberSelectionMode,
-      drawDate: data.drawDate ? new Date(data.drawDate) : undefined,
+      ...drawSchedule,
       drawTime: data.drawTime,
       drawBasis: data.drawBasis,
       drawRuleTemplateId: data.drawRuleTemplateId,
@@ -1248,10 +1400,36 @@ export class CampaignsService {
     }
   }
 
+  private requireOriginalPublication(campaign: CampaignPayload) {
+    if (
+      !campaign.publishedAt ||
+      !Number.isFinite(campaign.publishedAt.getTime())
+    )
+      throw new ConflictException(
+        'A data da publicação original não está disponível. Solicite revisão antes de reativar.',
+      );
+    if (
+      campaign.drawBasis === DrawBasis.MANUAL_RESULT &&
+      campaign.publishedRuleSnapshot === null
+    )
+      return;
+    try {
+      this.drawRuleEngine.validatePublishedSnapshot(
+        campaign.publishedRuleSnapshot,
+      );
+    } catch {
+      throw new ConflictException(
+        'A regra da publicação original está ausente ou inválida. Solicite revisão antes de reativar.',
+      );
+    }
+  }
+
   private publishChecklist(campaign: CampaignPayload) {
     const hasRule =
       campaign.drawBasis === DrawBasis.MANUAL_RESULT ||
-      Boolean(campaign.drawRuleTemplateId || campaign.customDrawRule);
+      (campaign.status === CampaignStatus.PAUSED
+        ? Boolean(campaign.publishedRuleSnapshot)
+        : Boolean(campaign.drawRuleTemplateId || campaign.customDrawRule));
     return [
       ['título', campaign.title],
       ['regulamento', campaign.regulation],
@@ -1260,7 +1438,10 @@ export class CampaignsService {
       ['valor estimado do prêmio', campaign.estimatedPrizeValue],
       ['imagem principal do prêmio', campaign.coverImage],
       ['data do sorteio', campaign.drawDate],
-      ['horário do sorteio', campaign.drawTime],
+      [
+        'horário do sorteio',
+        campaign.drawTime && campaignDrawInstant(campaign),
+      ],
       ['início das vendas', campaign.salesStartAt],
       ['regra de sorteio', hasRule],
       ['quantidade total válida', campaign.totalNumbers > 0],
@@ -1592,6 +1773,8 @@ export class CampaignsService {
       campaign;
     return {
       ...safeCampaign,
+      scheduledDrawAt: campaignDrawInstant(campaign)?.toISOString() ?? null,
+      salesWindow: campaignSalesWindow(campaign),
       numberPrice: Number(campaign.numberPrice),
       cashAlternative:
         campaign.cashAlternative == null
@@ -1602,6 +1785,7 @@ export class CampaignsService {
           ? null
           : Number(campaign.estimatedPrizeValue),
       grossRevenue: Number(campaign.grossRevenue),
+      coverImageRevision: coverRevision(coverImage),
       coverImageUrl: coverImage
         ? `/public/campaigns/media/${campaign.id}/cover`
         : null,
@@ -1657,6 +1841,8 @@ export class CampaignsService {
       promotions: campaign.promotions
         .filter(
           (promotion) =>
+            promotion.type === PromotionType.PACKAGE &&
+            promotion.packagePrice.gt(0) &&
             !promotion.isPopular &&
             promotion.name.trim().toLocaleLowerCase('pt-BR') !==
               'mais popular' &&
@@ -1708,7 +1894,22 @@ export class CampaignsService {
   }
 
   private serializePublic(campaign: CampaignPayload) {
-    const serialized = this.serialize(campaign);
+    const owned = this.serialize(campaign);
+    const serialized = {
+      ...owned,
+      // Keep the public prize cards, but not the exact selector, generation
+      // metadata or winner identifiers. Award evidence has a separate masked route.
+      instantPrizes: owned.instantPrizes.map((prize) => ({
+        id: prize.id,
+        description: prize.description,
+        value: prize.value,
+        type: prize.type,
+        quantity: prize.quantity,
+        status: prize.status,
+        foundCount: prize.foundCount,
+        imageUrl: prize.imageUrl,
+      })),
+    };
     const customization = serialized.customization;
     const configuration =
       customization?.configuration &&

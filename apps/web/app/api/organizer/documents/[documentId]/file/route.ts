@@ -11,6 +11,8 @@ export async function GET(
   return new Response(response.body, {
     status: response.status,
     headers: {
+      "Cache-Control": "private, no-store",
+      "X-Content-Type-Options": "nosniff",
       "Content-Type":
         response.headers.get("content-type") || "application/octet-stream",
       "Content-Disposition":

@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  Header,
   Param,
   Patch,
   Post,
@@ -39,22 +40,32 @@ export class BuyerController {
   ) {
     return this.buyer.updateProfile(user.id, body);
   }
-  @Get('favorites') favorites(@CurrentUser() user: AuthenticatedUser) {
+  // The /private paths fail closed if the Web/App are ahead of the backend:
+  // an older API must never turn a private save into a CRM lead.
+  @Get(['favorites/private', 'favorites'])
+  @Header('Cache-Control', 'private, no-store')
+  favorites(@CurrentUser() user: AuthenticatedUser) {
     return this.buyer.favorites(user.id);
   }
-  @Post('favorites/:campaignId') favorite(
+  @Post(['favorites/private/:campaignId', 'favorites/:campaignId'])
+  @Header('Cache-Control', 'private, no-store')
+  favorite(
     @CurrentUser() user: AuthenticatedUser,
     @Param('campaignId') id: string,
   ) {
     return this.buyer.favorite(user.id, id);
   }
-  @Delete('favorites/:campaignId') unfavorite(
+  @Delete(['favorites/private/:campaignId', 'favorites/:campaignId'])
+  @Header('Cache-Control', 'private, no-store')
+  unfavorite(
     @CurrentUser() user: AuthenticatedUser,
     @Param('campaignId') id: string,
   ) {
     return this.buyer.unfavorite(user.id, id);
   }
-  @Get('notifications') notifications(@CurrentUser() user: AuthenticatedUser) {
+  @Get('notifications')
+  @Header('Cache-Control', 'private, no-store')
+  notifications(@CurrentUser() user: AuthenticatedUser) {
     return this.buyer.notifications(user.id);
   }
   @Post('notifications/read-all') readAll(

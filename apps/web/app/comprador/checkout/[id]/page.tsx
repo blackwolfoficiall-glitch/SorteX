@@ -5,14 +5,14 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
+  ArrowLeft,
   CreditCard,
   LoaderCircle,
   QrCode,
   ShieldCheck,
   Ticket,
 } from "lucide-react";
-import Button from "@/components/ui/Button";
-import Card from "@/components/ui/Card";
+import PremiumScope from "@/components/premium/PremiumScope";
 import MercadoPagoCardBrick from "@/components/payments/MercadoPagoCardBrick";
 import PixPaymentView from "@/components/payments/PixPaymentView";
 import ReservationCountdown from "@/components/purchases/ReservationCountdown";
@@ -24,7 +24,11 @@ import {
 } from "@/lib/payments/client";
 import type { Payment } from "@/lib/payments/types";
 import { cancelPurchase, getPurchase } from "@/lib/purchases/client";
+import { purchaseStatusLabels } from "@/lib/purchases/status";
 import type { Purchase } from "@/lib/purchases/types";
+import styles from "./buyer-checkout-premium.module.css";
+
+const money = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 
 export default function CheckoutPage() {
   const { id } = useParams<{ id: string }>();
@@ -133,175 +137,121 @@ export default function CheckoutPage() {
     }
   }
 
-  if (!purchase && !error) {
-    return (
-      <main className="flex min-h-[60vh] items-center justify-center">
-        <LoaderCircle className="animate-spin text-violet-700" />
-      </main>
-    );
-  }
-
+  const isOpen = purchase?.status === "RESERVED" || purchase?.status === "AWAITING_PAYMENT";
   return (
-    <main className="mx-auto max-w-5xl p-5 md:py-10">
-      <p className="text-sm font-bold uppercase tracking-wider text-violet-700">
-        Checkout seguro · Sandbox
-      </p>
-      <h1 className="mt-2 text-3xl font-black">Finalize sua participação</h1>
-      {error && (
-        <p className="mt-5 flex items-start gap-2 rounded-2xl bg-red-50 p-4 text-red-700">
-          <AlertCircle className="mt-0.5 shrink-0" size={18} /> {error}
-        </p>
-      )}
-      {purchase && (
-        <div className="mt-6 grid gap-5 lg:grid-cols-[1fr_420px]">
-          <div className="space-y-5">
-            <Card className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-black">
-                    {purchase.campaign.title}
-                  </h2>
-                  <p className="mt-1 text-sm text-zinc-500">
-                    {purchase.quantity.toLocaleString("pt-BR")} títulos
-                    reservados
-                  </p>
-                </div>
-                <Ticket className="text-violet-700" />
-              </div>
-              <div className="mt-5 rounded-2xl bg-violet-50 p-4 text-center">
-                <p className="text-sm text-violet-700">
-                  Tempo restante da reserva
-                </p>
-                <p className="mt-1 text-3xl">
-                  <ReservationCountdown expiresAt={purchase.expiresAt} />
-                </p>
-              </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <Summary label="Subtotal" value={purchase.subtotal} />
-                <Summary label="Desconto" value={purchase.discount} success />
-                <Summary label="Total" value={purchase.total} strong />
-              </div>
-              {purchase.buyer?.phone && <p className="mt-5 text-sm text-zinc-600"><strong>WhatsApp:</strong> {formatPhone(purchase.buyer.phone)}</p>}
-              <div className="mt-5 rounded-2xl border border-violet-100 bg-violet-50 p-4 text-sm font-bold text-violet-800">
-                Seus números serão disponibilizados após a confirmação do pagamento.
-              </div>
-            </Card>
-            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border bg-white p-4">
-              <input
-                type="checkbox"
-                checked={acceptedTerms}
-                onChange={(event) => setAcceptedTerms(event.target.checked)}
-                className="mt-1 h-4 w-4 accent-violet-700"
-              />
-              <span className="text-sm leading-6 text-zinc-600">
-                Li e aceito o regulamento da campanha e os termos de pagamento
-                em ambiente de teste.
-              </span>
-            </label>
-            <p className="flex items-center gap-2 text-xs text-zinc-500">
-              <ShieldCheck size={15} /> O valor é recalculado no backend e nunca
-              depende do navegador.
-            </p>
+    <PremiumScope className={styles.page}>
+      <div className={styles.wrap}>
+        <Link href="/comprador/meus-numeros" className={styles.control}>
+          <ArrowLeft aria-hidden="true" size={17} /> Voltar aos meus títulos
+        </Link>
+        <header className={styles.hero}>
+          <div>
+            <p className={styles.kicker}>Checkout · Ambiente de teste</p>
+            <h1>Finalize sua participação</h1>
+            <p>Use somente dados de teste. Não faça pagamentos reais.</p>
           </div>
-          <Card className="h-fit p-6">
-            {purchase.status === "EXPIRED" ? <div className="text-center"><AlertCircle className="mx-auto text-amber-600" size={38}/><h2 className="mt-3 text-lg font-black">O tempo da sua reserva terminou.</h2><p className="mt-2 text-sm text-zinc-600">Escolha novamente a quantidade para continuar.</p><Link href={`/campanha/${purchase.campaign.slug}`}><Button className="mt-5 w-full">Iniciar nova reserva</Button></Link></div> : payment?.method === "PIX" && payment.status !== "REJECTED" ? (
-              <PixPaymentView
-                payment={payment}
-                refreshing={refreshing}
-                refreshError={refreshError}
-                onRefresh={refreshStatus}
-              />
-            ) : (
-              <>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setMethod("PIX")}
-                    className={`rounded-xl border p-3 text-sm font-bold ${method === "PIX" ? "border-violet-600 bg-violet-50 text-violet-700" : ""}`}
-                  >
-                    <QrCode className="mx-auto mb-1" /> PIX
-                  </button>
-                  <button
-                    onClick={() => setMethod("CARD")}
-                    className={`rounded-xl border p-3 text-sm font-bold ${method === "CARD" ? "border-violet-600 bg-violet-50 text-violet-700" : ""}`}
-                  >
-                    <CreditCard className="mx-auto mb-1" /> Cartão
-                  </button>
-                </div>
-                {method === "PIX" ? (
-                  <Button
-                    className="mt-5 h-14 w-full"
-                    disabled={!acceptedTerms || busy}
-                    onClick={payPix}
-                  >
-                    {busy && <LoaderCircle className="animate-spin" />}
-                    Gerar PIX de teste
-                  </Button>
-                ) : (
-                  <div className="mt-5">
-                    {!acceptedTerms ? (
-                      <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
-                        Aceite os termos para abrir o formulário seguro.
-                      </p>
-                    ) : (
-                      <MercadoPagoCardBrick
-                        purchaseId={purchase.id}
-                        amount={purchase.total}
-                        enabled={acceptedTerms}
-                        onPayment={receivePayment}
-                      />
-                    )}
+          <Ticket size={31} aria-hidden="true" />
+        </header>
+        {!purchase && !error && <div className={styles.state} role="status">
+          <LoaderCircle className={styles.spinner} size={20} aria-hidden="true" /> Carregando reserva…
+        </div>}
+        {error && <p role="alert" className={styles.error}>
+          <AlertCircle aria-hidden="true" size={18} /> {error}
+        </p>}
+        {purchase && (
+          <div className={styles.grid}>
+            <div className={styles.summaryColumn}>
+              <section className={styles.card} aria-labelledby="checkout-campaign">
+                <header className={styles.cardHead}>
+                  <div>
+                    <span className={styles.badge}>{purchaseStatusLabels[purchase.status]}</span>
+                    <h2 id="checkout-campaign">{purchase.campaign.title}</h2>
+                    <p>{purchase.quantity.toLocaleString("pt-BR")} {purchase.quantity === 1 ? "título" : "títulos"} no pedido</p>
                   </div>
-                )}
-                {payment?.status === "REJECTED" && (
-                  <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
-                    Pagamento rejeitado:{" "}
-                    {payment.failureReason || "tente outro cartão"}.
-                  </p>
-                )}
-              </>
-            )}
-            {purchase.status !== "EXPIRED" && <Button
-              variant="ghost"
-              className="mt-4 w-full"
-              disabled={busy}
-              onClick={cancel}
-            >
-              Cancelar e voltar
-            </Button>}
-            <Link
-              href="/comprador/meus-numeros"
-              className="mt-3 block text-center text-sm font-bold text-violet-700"
-            >
-              Ver meus títulos
-            </Link>
-          </Card>
-        </div>
-      )}
-    </main>
+                  <span className={styles.icon}><Ticket size={20} aria-hidden="true" /></span>
+                </header>
+                {isOpen && <div className={styles.timer}>
+                  <p>Tempo restante da reserva</p>
+                  <div><ReservationCountdown expiresAt={purchase.expiresAt} /></div>
+                </div>}
+                <dl className={styles.facts}>
+                  <Summary label="Subtotal" value={purchase.subtotal} />
+                  <Summary label="Desconto" value={purchase.discount} />
+                  <Summary label="Total do pedido" value={purchase.total} strong />
+                </dl>
+                {purchase.buyer?.phone && <p className={styles.muted}><strong>WhatsApp:</strong> {formatPhone(purchase.buyer.phone)}</p>}
+                <p className={styles.notice}>Seus números serão disponibilizados após a confirmação do pagamento.</p>
+              </section>
+              <label className={styles.terms}>
+                <input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} />
+                <span>Li e aceito o regulamento da campanha e os termos de pagamento em ambiente de teste.</span>
+              </label>
+              <p className={styles.security}><ShieldCheck size={16} aria-hidden="true" /> O valor é recalculado no backend e não depende do navegador.</p>
+            </div>
+            <section className={styles.card} aria-labelledby="checkout-payment">
+              <h2 id="checkout-payment">Pagamento</h2>
+              {purchase.status === "EXPIRED" ? (
+                <div className={styles.expired}>
+                  <AlertCircle aria-hidden="true" size={30} />
+                  <h3>O tempo da sua reserva terminou.</h3>
+                  <p>Escolha novamente a quantidade para continuar.</p>
+                  <Link href={`/campanha/${purchase.campaign.slug}`} className={`${styles.control} ${styles.primary} ${styles.full}`}>
+                    Iniciar nova reserva
+                  </Link>
+                </div>
+              ) : payment?.method === "PIX" && payment.status !== "REJECTED" ? (
+                <div className={styles.pix}>
+                  <PixPaymentView payment={payment} refreshing={refreshing} refreshError={refreshError} onRefresh={refreshStatus} />
+                </div>
+              ) : (
+                <>
+                  <div className={styles.methods} role="group" aria-label="Forma de pagamento">
+                    <button type="button" aria-pressed={method === "PIX"} onClick={() => setMethod("PIX")} className={styles.control}>
+                      <QrCode size={19} aria-hidden="true" /> Pix
+                    </button>
+                    <button type="button" aria-pressed={method === "CARD"} onClick={() => setMethod("CARD")} className={styles.control}>
+                      <CreditCard size={19} aria-hidden="true" /> Cartão
+                    </button>
+                  </div>
+                  {method === "PIX" ? (
+                    <button type="button" className={`${styles.control} ${styles.primary} ${styles.full}`} disabled={!acceptedTerms || busy} onClick={payPix}>
+                      {busy && <LoaderCircle className={styles.spinner} size={19} aria-hidden="true" />}
+                      Gerar Pix de teste
+                    </button>
+                  ) : (
+                    <div>
+                      {!acceptedTerms ? <p className={styles.notice}>Aceite os termos para abrir o formulário seguro.</p> : (
+                        <MercadoPagoCardBrick purchaseId={purchase.id} amount={purchase.total} enabled={acceptedTerms} onPayment={receivePayment} />
+                      )}
+                    </div>
+                  )}
+                  {payment?.status === "REJECTED" && <p role="alert" className={styles.error}>
+                    Pagamento rejeitado: {payment.failureReason || "tente outro cartão"}.
+                  </p>}
+                </>
+              )}
+              {purchase.status !== "EXPIRED" && <button type="button" className={`${styles.control} ${styles.full}`} disabled={busy} onClick={cancel}>
+                Cancelar e voltar
+              </button>}
+              <Link href="/comprador/meus-numeros" className={`${styles.control} ${styles.full}`}>Ver meus títulos</Link>
+            </section>
+          </div>
+        )}
+      </div>
+    </PremiumScope>
   );
 }
 
-function Summary({
-  label,
-  value,
-  success,
-  strong,
-}: {
-  label: string;
-  value: number;
-  success?: boolean;
-  strong?: boolean;
-}) {
+function Summary({ label, value, strong }: { label: string; value: number; strong?: boolean }) {
   return (
-    <div className="rounded-xl bg-zinc-50 p-3">
-      <p className="text-xs text-zinc-500">{label}</p>
-      <p
-        className={`mt-1 ${strong ? "text-2xl font-black" : "font-bold"} ${success ? "text-green-700" : ""}`}
-      >
-        R$ {value.toFixed(2).replace(".", ",")}
-      </p>
+    <div data-total={strong || undefined}>
+      <dt>{label}</dt>
+      <dd>{money.format(value)}</dd>
     </div>
   );
 }
 
-function formatPhone(value:string){const digits=value.replace(/\D/g,"").replace(/^55/,"");return digits.length===11?`(${digits.slice(0,2)}) ${digits.slice(2,7)}-${digits.slice(7)}`:value}
+function formatPhone(value: string) {
+  const digits = value.replace(/\D/g, "").replace(/^55/, "");
+  return digits.length === 11 ? `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}` : value;
+}

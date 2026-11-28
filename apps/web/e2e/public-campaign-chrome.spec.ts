@@ -159,8 +159,14 @@ test("alinhamentos da marca, falha da imagem e estados das metas são determiní
   ]};
   await page.route(`**/api/public/campaigns/${source!.slug}`,route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(milestoneBody)}),{times:1});
   await page.goto(`/campanha/${source!.slug}`);
-  const states=await page.getByTestId("milestone-card").evaluateAll(cards=>cards.map(card=>({percentage:Number(card.getAttribute("data-milestone-percentage")),state:card.getAttribute("data-milestone-state")})));
-  expect(states).toEqual([
+  const milestoneCards = page.getByTestId("milestone-card");
+  await expect(milestoneCards).toHaveCount(milestoneBody.milestonePrizes.length);
+  await expect.poll(() => milestoneCards.evaluateAll(
+    (cards) => cards.map((card) => ({
+      percentage: Number(card.getAttribute("data-milestone-percentage")),
+      state: card.getAttribute("data-milestone-state"),
+    })),
+  )).toEqual([
     {percentage:20,state:"DRAWN"},
     {percentage:30,state:"RELEASED"},
     {percentage:40,state:"SCHEDULED"},
@@ -223,6 +229,23 @@ test("respeita as seis ordens possíveis das três premiações", async ({ page,
     milestonePrizes:[{id:"milestone-order",name:"Meta teste",description:null,imageUrl:null,imageCrop:null,videoUrl:null,estimatedValue:null,percentage:50,scheduledAt:null,status:"WAITING",reachedAt:null,drawnAt:null,eligibleTicketCount:0,winner:null}],
     customization:{...(campaign.customization||{}),useOrganizerDefaults:false,configuration:{...(campaign.customization?.configuration||{}),buttonColor:"#FDE68A",roulette:{enabled:true,rules:[{id:"roulette-order",minQuantity:100,rounds:1}]}}},
   };
+  // This test supplies visual fixtures; real API persistence is covered
+  // separately without route interception.
+  const routePattern = `**/api/public/campaigns/${source!.slug}`;
+  async function showFixture(body: unknown) {
+    await page.unroute(routePattern);
+    await page.route(routePattern, (route) =>
+      route.fulfill({ status: 200, json: body }),
+    );
+    await page.goto(`/campanha/${source!.slug}`);
+    await expect(page.getByTestId("reward-sections")).toBeAttached();
+  }
+  const visualOrder = () => page.locator("[data-reward-section]").evaluateAll(
+    (elements) => elements
+      .map((element) => ({ key: element.getAttribute("data-reward-section"), top: element.getBoundingClientRect().top }))
+      .sort((first, second) => first.top - second.top)
+      .map((item) => item.key),
+  );
   const permutations=[
     ["INSTANT_WIN","MILESTONES","ROULETTE"],
     ["INSTANT_WIN","ROULETTE","MILESTONES"],
@@ -232,13 +255,10 @@ test("respeita as seis ordens possíveis das três premiações", async ({ page,
     ["ROULETTE","MILESTONES","INSTANT_WIN"],
   ];
   for(const rewardSectionsOrder of permutations){
-    await page.route(`**/api/public/campaigns/${source!.slug}`,route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify({...base,rewardSectionsOrder})}),{times:1});
-    await page.goto(`/campanha/${source!.slug}`);
+    await showFixture({ ...base, rewardSectionsOrder });
     await expect(page.getByTestId("roulette-combos-badge")).toHaveCSS("background-color","rgb(253, 230, 138)");
     await expect(page.getByTestId("roulette-combos-badge")).toHaveCSS("color","rgb(17, 24, 39)");
-    const visualOrder=await page.locator("[data-reward-section]").evaluateAll(elements=>elements.map(element=>({key:element.getAttribute("data-reward-section"),top:element.getBoundingClientRect().top})).sort((first,second)=>first.top-second.top).map(item=>item.key));
-    expect(visualOrder).toEqual(rewardSectionsOrder);
-    expect(new Set(visualOrder).size).toBe(3);
+    await expect.poll(visualOrder).toEqual(rewardSectionsOrder);
     expect(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth)).toBe(true);
   }
   const activityScenarios=[
@@ -251,9 +271,7 @@ test("respeita as seis ordens possíveis das três premiações", async ({ page,
   ];
   for(const scenario of activityScenarios){
     const body={...base,rewardSectionsOrder:["ROULETTE","INSTANT_WIN","MILESTONES"],instantPrizes:scenario.instant?base.instantPrizes:[],milestonePrizes:scenario.milestones?base.milestonePrizes:[],customization:{...base.customization,configuration:{...base.customization.configuration,roulette:{...base.customization.configuration.roulette,enabled:scenario.roulette}}}};
-    await page.route(`**/api/public/campaigns/${source!.slug}`,route=>route.fulfill({status:200,contentType:"application/json",body:JSON.stringify(body)}),{times:1});
-    await page.goto(`/campanha/${source!.slug}`);
-    const active=await page.locator("[data-reward-section]").evaluateAll(elements=>elements.map(element=>({key:element.getAttribute("data-reward-section"),top:element.getBoundingClientRect().top})).sort((first,second)=>first.top-second.top).map(item=>item.key));
-    expect(active).toEqual(scenario.expected);
+    await showFixture(body);
+    await expect.poll(visualOrder).toEqual(scenario.expected);
   }
 });

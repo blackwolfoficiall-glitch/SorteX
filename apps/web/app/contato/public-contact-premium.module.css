@@ -1,0 +1,32 @@
+.contact {
+  min-width: 0; display: grid; gap: .72rem; padding: clamp(.55rem, 2vw, .85rem);
+  border: 1px solid var(--sxp-line); border-radius: var(--sxp-panel-radius); box-shadow: var(--sxp-shadow);
+}
+.contact a:focus-visible { outline: 2px solid var(--sxp-focus); outline-offset: 3px; }
+.options { min-width: 0; display: grid; gap: .55rem; }
+.account, .pending {
+  position: relative; display: grid; gap: .48rem .55rem; align-items: start; min-width: 0;
+  border-radius: var(--sxp-panel-radius); padding: clamp(.58rem, 2vw, .85rem); text-decoration: none;
+}
+.account {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  background: linear-gradient(128deg, #5925b6 8%, #2447b9 90%); color: #fff; border: 1px solid transparent;
+  transition: box-shadow 145ms ease;
+}
+.account:hover { box-shadow: inset 0 0 0 1px #fff; }
+.pending { grid-template-columns: auto minmax(0, 1fr); background: var(--sxp-surface); color: var(--sxp-text); border: 1px solid var(--sxp-line); }
+.icon { display: grid; place-items: center; width: 2.32rem; height: 2.32rem; border-radius: .72rem; color: var(--sxp-accent); background: var(--sxp-tint); }
+.account .icon { color: #fff; background: #ffffff27; }
+.arrow { margin-top: .2rem; }
+.contact h2 { margin: 0; font-family: var(--sxp-font-heading); font-size: .97rem; font-weight: 800; line-height: 1.28; overflow-wrap: anywhere; }
+.contact p { margin: .24rem 0 0; font-size: .79rem; line-height: 1.45; overflow-wrap: anywhere; }
+.pending p, .contact .faq { color: var(--sxp-muted); }
+.contact .faq { margin: 0; padding: .1rem .2rem; }
+.contact .faq a { display: inline-flex; align-items: center; min-height: 2.75rem; color: var(--sxp-accent); font-weight: 780; text-decoration: underline; text-underline-offset: .16em; }
+@media (max-width: 25rem) {
+  .contact .account { grid-template-columns: auto minmax(0, 1fr); }
+  .arrow { grid-column: 2; justify-self: end; margin: 0; }
+  .icon { width: 1.85rem; height: 1.85rem; }
+  .icon svg { width: 1rem; height: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) { .contact .account { transition: none; } }

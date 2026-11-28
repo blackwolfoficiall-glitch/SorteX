@@ -2,7 +2,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/set-state-in-effect */
 
 import {
-  FormEvent,
+  type FormEvent,
+  type KeyboardEvent,
   Suspense,
   useEffect,
   useMemo,
@@ -10,6 +11,8 @@ import {
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import PremiumScope from "@/components/premium/PremiumScope";
+import "./communication-premium.css";
 import {
   cancelCommunication,
   abandonedReservations,
@@ -119,7 +122,7 @@ const channelOptions: Array<{
 
 export default function ComunicacaoPage() {
   return (
-    <Suspense fallback={<p className="p-10">Carregando comunicação...</p>}>
+    <Suspense fallback={<PremiumScope className="sx-communication"><p role="status" className="sx-premium-muted">Carregando comunicação…</p></PremiumScope>}>
       <CommunicationContent />
     </Suspense>
   );
@@ -128,7 +131,7 @@ export default function ComunicacaoPage() {
 function CommunicationContent() {
   const query = useSearchParams();
   const router = useRouter();
-  const activeTabButton = useRef<HTMLButtonElement>(null);
+  const tabList = useRef<HTMLDivElement>(null);
   const tab = queryTab[query.get("tab") || ""] || "OVERVIEW";
   const [contactRows, setContactRows] = useState<CrmContact[]>([]);
   const [segmentRows, setSegmentRows] = useState<Segment[]>([]);
@@ -139,7 +142,7 @@ function CommunicationContent() {
   const [message, setMessage] = useState("");
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [abandonedCount, setAbandonedCount] = useState(0);
+  const [abandonedCount, setAbandonedCount] = useState<number | null>(null);
   const [organizerName, setOrganizerName] = useState("Organizador");
   const load = async () => {
     setLoading(true);
@@ -161,11 +164,7 @@ function CommunicationContent() {
         templates(),
         communications(),
         listIntegrations(),
-        abandonedReservations("?limit=5").catch(() => ({
-          items: [],
-          total: 0,
-          pages: 0,
-        })),
+        abandonedReservations("?limit=5").catch(() => null),
         getPersonalization().catch(() => null),
       ]);
       setContactRows(contactResult.items);
@@ -174,9 +173,8 @@ function CommunicationContent() {
       setTemplateRows(nextTemplates);
       setHistory(nextHistory);
       setIntegrations(nextIntegrations);
-      setAbandonedCount(abandoned.total);
-      if (identity?.brand.publicName)
-        setOrganizerName(identity.brand.publicName.split(" ")[0]);
+      setAbandonedCount(abandoned?.total ?? null);
+      setOrganizerName(identity?.brand?.publicName?.trim().split(/\s+/)[0] || "Organizador");
     } catch {
       setLoadError("Não foi possível carregar esta área.");
     } finally {
@@ -186,13 +184,19 @@ function CommunicationContent() {
   useEffect(() => {
     void load();
   }, []);
-  useEffect(() => {
-    activeTabButton.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-      inline: "center",
-    });
-  }, [tab]);
+  function tabKeys(event: KeyboardEvent<HTMLDivElement>) {
+    const controls = Array.from(tabList.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []);
+    const active = controls.indexOf(document.activeElement as HTMLButtonElement);
+    const index = event.key === "Home" ? 0
+      : event.key === "End" ? controls.length - 1
+      : event.key === "ArrowRight" ? (active + 1) % controls.length
+      : event.key === "ArrowLeft" ? (active + controls.length - 1) % controls.length
+      : -1;
+    if (index >= 0) {
+      event.preventDefault();
+      controls[index]?.focus();
+    }
+  }
   function navigate(next: Tab, filter?: string) {
     const params = new URLSearchParams(query.toString());
     params.set("tab", tabQuery[next]);
@@ -216,27 +220,21 @@ function CommunicationContent() {
           )
         : history;
   return (
-    <main className="min-h-screen overflow-x-hidden bg-zinc-100 p-3 sm:p-5 lg:p-8">
+    <PremiumScope className="sx-communication">
       <div className="mx-auto max-w-7xl">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <p className="text-sm font-bold uppercase text-violet-700">
-              Relacionamento
-            </p>
-            <h1 className="text-2xl font-black sm:text-3xl">
+            <p className="sx-premium-badge">Relacionamento · sandbox</p>
+            <h1 className="sx-premium-title mt-2">
               Comunicação inteligente
             </h1>
-            <p className="mt-1 text-zinc-500">
-              Converse com seus compradores, recupere vendas e automatize
-              relacionamentos em um único lugar.
+            <p className="sx-premium-muted mt-1">
+              Prepare modelos, revise públicos e consulte registros de teste. Esta área não envia mensagens externas.
             </p>
-            <span className="mt-2 inline-flex rounded-full bg-violet-100 px-3 py-1 text-[11px] font-black text-violet-700">
-              Powered by IA SorteX
-            </span>
           </div>
           <button
             onClick={() => navigate("NEW")}
-            className="min-h-12 w-full rounded-xl bg-violet-700 px-5 py-3 font-bold text-white sm:w-auto"
+            className="sx-premium-button" data-variant="primary"
           >
             Nova comunicação
           </button>
@@ -244,34 +242,39 @@ function CommunicationContent() {
         {message && (
           <p
             role="status"
-            className="mt-4 rounded-xl bg-green-50 p-3 font-bold text-green-700"
+            className="sx-communication-notice mt-4"
           >
             {message}
           </p>
         )}
         <div
-          className="mt-5 flex snap-x snap-mandatory gap-2 overflow-x-auto rounded-2xl border bg-white p-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="sx-premium-surface sx-communication-tabs mt-5"
+          ref={tabList} onKeyDown={tabKeys}
           role="tablist"
           aria-label="Seções de Comunicação"
         >
           {tabs.map(([value, label]) => (
             <button
               key={value}
-              ref={tab === value ? activeTabButton : undefined}
+              type="button"
               role="tab"
+              id={`sx-communication-tab-${value}`}
+              aria-controls="sx-communication-tab-content"
+              tabIndex={tab === value ? 0 : -1}
               aria-selected={tab === value}
               aria-current={tab === value ? "page" : undefined}
               onClick={() => navigate(value)}
-              className={`flex min-h-11 shrink-0 snap-center items-center gap-2 whitespace-nowrap rounded-xl border px-4 text-sm font-bold outline-none transition focus-visible:ring-4 focus-visible:ring-violet-200 ${tab === value ? "border-violet-700 bg-violet-700 text-white shadow-sm" : "border-transparent bg-zinc-50 text-violet-700 hover:bg-violet-50"}`}
+              className="sx-communication-tab"
             >
               {(() => {
                 const Icon = tabIcons[value];
-                return <Icon size={16} />;
+                return <Icon size={16} aria-hidden="true" />;
               })()}
               {label}
             </button>
           ))}
         </div>
+        <div id="sx-communication-tab-content" role="tabpanel" aria-labelledby={`sx-communication-tab-${tab}`} aria-busy={loading} tabIndex={0}>
         {loading ? (
           <PanelSkeleton />
         ) : loadError ? (
@@ -342,8 +345,9 @@ function CommunicationContent() {
               setMessage={setMessage}
             />
           ) : null)}
+        </div>
       </div>
-    </main>
+    </PremiumScope>
   );
 }
 
@@ -545,7 +549,7 @@ function Composer({
     }
   }
   return (
-    <section className="mt-5 overflow-hidden rounded-2xl border bg-white shadow-sm sm:rounded-3xl">
+    <section className="sx-premium-surface mt-5" aria-labelledby="sx-communication-composer">
       {showAi && (
         <AiMessageAssistant
           campaigns={campaigns}
@@ -555,12 +559,12 @@ function Composer({
       )}
       <div className="flex justify-between gap-3 border-b p-4 sm:p-6">
         <div>
-          <h2 className="text-xl font-black">Nova comunicação</h2>
+          <h2 id="sx-communication-composer" className="sx-premium-section">Nova comunicação</h2>
           <p className="text-sm text-zinc-500">
             Configure o público e confira a prévia antes de confirmar.
           </p>
         </div>
-        <button onClick={close} className="font-bold text-zinc-500">
+        <button onClick={close} className="sx-premium-button">
           Fechar
         </button>
       </div>
@@ -586,9 +590,9 @@ function Composer({
             ),
           )}
         </div>
-        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-200">
+        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-zinc-200" role="progressbar" aria-label="Etapas da comunicação" aria-valuemin={0} aria-valuemax={6} aria-valuenow={step}>
           <div
-            className="h-full rounded-full bg-violet-700 transition-all"
+            className="sx-communication-meter h-full rounded-full"
             style={{ width: `${(step / 6) * 100}%` }}
           />
         </div>
@@ -639,7 +643,7 @@ function Composer({
                   >
                     <button
                       type="button"
-                      disabled={!available}
+                      disabled={!available} aria-pressed={selected}
                       onClick={() => {
                         setChannels((current) =>
                           selected
@@ -654,12 +658,12 @@ function Composer({
                       <strong className="mt-2 block text-sm">{label}</strong>
                       <small className="mt-1 block text-[11px]">
                         {official
-                          ? "Canal oficial conectado"
+                          ? "Conexão registrada; sandbox nesta tela"
                           : available
                             ? selected
                               ? "Selecionado em sandbox"
                               : "Disponível em sandbox"
-                            : "Em breve"}
+                            : "Indisponível neste ambiente"}
                       </small>
                       {selected && (
                         <Check className="absolute right-2 top-2" size={16} />
@@ -670,7 +674,7 @@ function Composer({
                         href="/dashboard/integracoes"
                         className="mt-2 inline-block text-[11px] font-black text-violet-700"
                       >
-                        Conectar canal
+                        Ver integrações
                       </a>
                     )}
                   </div>
@@ -785,7 +789,7 @@ function Composer({
             }
             description={
               step === 4
-                ? "Use a IA SorteX, um modelo ou escreva livremente."
+                ? "Use um modelo local ou escreva livremente."
                 : step === 5
                   ? "Valide o conteúdo em cada canal selecionado."
                   : "Confira público, canais e modo antes de confirmar."
@@ -798,13 +802,13 @@ function Composer({
                     <button
                       type="button"
                       onClick={() => setShowAi(true)}
-                      className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-violet-700 to-fuchsia-600 px-5 font-bold text-white"
+                      className="sx-premium-button" data-variant="primary"
                     >
-                      <Bot size={19} />
-                      Gerar mensagem com IA
+                      <Bot size={19} aria-hidden="true" />
+                      Sugerir texto de um modelo local
                     </button>
                     <span className="text-xs text-zinc-500">
-                      Gera três opções, versões curta e longa e CTA.
+                      Três opções de rascunho baseadas em modelos, sem provedor externo.
                     </span>
                   </div>
                   <QuickPrompts
@@ -892,11 +896,6 @@ function Composer({
                     </div>
                   </label>
                 </>
-              )}
-              {error && (
-                <p className="lg:col-span-2 rounded-xl bg-red-50 p-3 text-red-700">
-                  {error}
-                </p>
               )}
               {step === 5 && preview && (
                 <div className="lg:col-span-2 rounded-2xl bg-violet-50 p-4">
@@ -1024,7 +1023,8 @@ function Composer({
             </div>
           </Step>
         )}
-        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 flex items-center justify-between gap-3 border-t bg-white/95 p-4 backdrop-blur sm:-mx-6 sm:-mb-6 sm:px-6">
+        {error && <p role="alert" className="rounded-xl bg-red-50 p-3">{error}</p>}
+        <div className="sx-communication-composer-actions sticky bottom-0 z-10 -mx-4 -mb-4 flex items-center justify-between gap-3 border-t p-4 sm:-mx-6 sm:-mb-6 sm:px-6">
           <button
             type="button"
             onClick={() =>
@@ -1167,7 +1167,11 @@ function HistoryPanel({
                 <p className="whitespace-pre-wrap text-sm">{item.content}</p>
                 <p className="mt-2 text-xs text-zinc-500">
                   Resultado:{" "}
-                  {item.failureReason || "Aguardando processamento sandbox"}
+                  {item.failureReason || (item.status === "DRAFT" ? "Rascunho não processado."
+                    : item.status === "SKIPPED" ? "Registro de sandbox; não enviado externamente."
+                    : item.status === "CANCELLED" ? "Agendamento cancelado."
+                    : item.status === "FAILED" ? "Falha sem motivo informado."
+                    : "Aguardando processamento sandbox")}
                 </p>
               </div>
             )}
@@ -1243,12 +1247,14 @@ function TemplatesPanel({
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="Nome"
+          aria-label="Nome do template"
           className="input mt-4"
         />
         <select
           value={channel}
           onChange={(event) => setChannel(event.target.value)}
           className="input mt-3"
+          aria-label="Canal do template"
         >
           <option value="WHATSAPP">WhatsApp</option>
           <option value="EMAIL">E-mail</option>
@@ -1258,6 +1264,7 @@ function TemplatesPanel({
           value={subject}
           onChange={(event) => setSubject(event.target.value)}
           placeholder="Assunto"
+          aria-label="Assunto do template"
           className="input mt-3"
         />
         <textarea
@@ -1265,6 +1272,7 @@ function TemplatesPanel({
           value={content}
           onChange={(event) => setContent(event.target.value)}
           placeholder="Conteúdo"
+          aria-label="Conteúdo do template"
           className="mt-3 min-h-32 w-full rounded-xl border p-3"
         />
         <button className="mt-3 rounded-xl bg-violet-700 px-5 py-3 font-bold text-white">
@@ -1462,7 +1470,7 @@ function Overview({
 }: {
   organizerName: string;
   history: Communication[];
-  abandonedCount: number;
+  abandonedCount: number | null;
   campaigns: Campaign[];
   integrations: OrganizerIntegration[];
   navigate: (tab: Tab, filter?: string) => void;
@@ -1477,11 +1485,11 @@ function Overview({
     campaign = campaigns[0];
   const analysisUrl = `/dashboard/ia?analysis=abandoned-reservations&origin=communication${campaign ? `&campaignId=${campaign.id}` : ""}`;
   const opportunities = [
-    ...(abandonedCount > 0
+    ...((abandonedCount ?? 0) > 0
       ? [
           {
             title: "Reservas abandonadas",
-            detail: `${abandonedCount} reserva(s) podem receber uma comunicação de recuperação.`,
+            detail: `${abandonedCount} reserva(s) para revisar antes de preparar um rascunho.`,
             action: () =>
               routerPush(
                 `/dashboard/comunicacao?tab=new&audience=ABANDONED&ai=1${campaign ? `&campaignId=${campaign.id}` : ""}`,
@@ -1501,13 +1509,12 @@ function Overview({
   ];
   return (
     <section className="mt-5 space-y-5">
-      <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-violet-950 via-violet-800 to-fuchsia-700 p-6 text-white sm:p-8">
+      <div className="sx-premium-ticket sx-communication-hero p-5 sm:p-8">
         <p className="text-sm font-bold text-violet-200">
           Olá, {organizerName}.
         </p>
-        <h2 className="mt-2 max-w-3xl text-2xl font-black sm:text-3xl">
-          Existem oportunidades de comunicação que podem gerar novas vendas
-          hoje.
+        <h2 className="sx-premium-title mt-2 max-w-3xl">
+          Revise a comunicação da sua operação
         </h2>
         <p className="mt-3 max-w-2xl text-sm text-violet-100">
           O resumo abaixo usa somente contatos, campanhas e comunicações
@@ -1525,7 +1532,7 @@ function Overview({
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-black uppercase tracking-wide text-violet-600">
-                Oportunidades de hoje
+                Oportunidades da operação
               </p>
               <h3 className="mt-1 text-xl font-black">O que merece atenção</h3>
             </div>
@@ -1560,21 +1567,21 @@ function Overview({
             </div>
           ) : (
             <p className="mt-6 rounded-2xl bg-zinc-50 p-6 text-center text-sm text-zinc-500">
-              Nenhuma oportunidade de comunicação encontrada hoje.
+              {abandonedCount === null ? "Não foi possível consultar as reservas abandonadas agora." : "Nenhuma oportunidade de comunicação nos registros consultados."}
             </p>
           )}
         </article>
         <article className="rounded-3xl border border-violet-200 bg-violet-50 p-5 sm:p-6">
           <p className="text-xs font-black uppercase tracking-wide text-violet-700">
-            IA SorteX recomenda
+            Sugestão baseada em regras
           </p>
           <h3 className="mt-2 text-xl font-black">
-            {abandonedCount > 0
+            {(abandonedCount ?? 0) > 0
               ? "Priorize a recuperação de reservas"
               : "Mantenha sua comunicação organizada"}
           </h3>
           <p className="mt-3 text-sm leading-6 text-zinc-600">
-            {abandonedCount > 0
+            {(abandonedCount ?? 0) > 0
               ? `Há ${abandonedCount} reserva(s) abandonada(s). Prepare uma mensagem curta e revise antes de processar no sandbox.`
               : queued > 0
                 ? `Você possui ${queued} comunicação(ões) agendada(s). Revise datas e público antes do processamento.`
@@ -1582,15 +1589,13 @@ function Overview({
           </p>
           <dl className="mt-4 grid gap-2 text-xs">
             <DetailRow
-              label="Canal recomendado"
-              value={
-                whatsapp ? "WhatsApp Business" : "Conecte um canal oficial"
-              }
+              label="WhatsApp Business"
+              value={whatsapp ? "Conexão registrada; sem envio nesta tela" : "Sem conexão registrada"}
             />
             <DetailRow
               label="Público"
               value={
-                abandonedCount > 0 ? "Reservas abandonadas" : "Não definido"
+                (abandonedCount ?? 0) > 0 ? "Reservas abandonadas" : "Não definido"
               }
             />
             <DetailRow
@@ -1602,7 +1607,7 @@ function Overview({
             <button
               onClick={() =>
                 routerPush(
-                  `/dashboard/comunicacao?tab=new${abandonedCount > 0 ? "&audience=ABANDONED" : ""}&ai=1`,
+                  `/dashboard/comunicacao?tab=new${(abandonedCount ?? 0) > 0 ? "&audience=ABANDONED" : ""}&ai=1`,
                 )
               }
               className="rounded-xl bg-violet-700 px-4 py-2 text-sm font-black text-white"
@@ -1647,7 +1652,7 @@ function Overview({
         <h3 className="text-xl font-black">Resumo operacional</h3>
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <Stat
-            label="Mensagens registradas"
+            label="Registros consultados"
             value={history.length}
             onClick={() => navigate("HISTORY")}
           />
@@ -1697,16 +1702,16 @@ function ChannelStatus({
       <Channel
         name="WhatsApp Business"
         status={
-          whatsapp?.status === "CONNECTED" ? "Conectado" : "Não conectado"
+          whatsapp?.status === "CONNECTED" ? "Conexão registrada; sem envio nesta tela" : "Disponível somente para sandbox"
         }
         active={whatsapp?.status === "CONNECTED"}
       />
-      <Channel name="E-mail" status="Não conectado" />
-      <Channel name="Push" status="Em preparação" />
-      <Channel name="SMS" status="Não conectado" />
-      <Channel name="Telegram" status="Em breve" />
-      <Channel name="Instagram Direct" status="Em breve" />
-      <Channel name="Messenger" status="Em breve" />
+      <Channel name="E-mail" status="Disponível somente para sandbox" />
+      <Channel name="Push" status="Indisponível neste ambiente" />
+      <Channel name="SMS" status="Disponível somente para sandbox" />
+      <Channel name="Telegram" status="Indisponível neste ambiente" />
+      <Channel name="Instagram Direct" status="Indisponível neste ambiente" />
+      <Channel name="Messenger" status="Indisponível neste ambiente" />
     </div>
   );
   return (
@@ -1715,7 +1720,7 @@ function ChannelStatus({
         <summary className="cursor-pointer list-none font-black">
           Status dos canais{" "}
           <span className="ml-1 text-xs font-normal text-zinc-500">
-            Veja quais canais estão disponíveis para envio.
+            Consulte os canais de teste. Nenhum realiza envio externo nesta tela.
           </span>
         </summary>
         {channels}
@@ -1723,7 +1728,7 @@ function ChannelStatus({
       <section className="hidden rounded-2xl border bg-white p-5 sm:block">
         <h2 className="font-black">Status dos canais</h2>
         <p className="mt-1 text-sm text-zinc-500">
-          Veja quais canais estão disponíveis para envio.
+          Consulte os canais de teste. Nenhum realiza envio externo nesta tela.
         </p>
         {channels}
       </section>
@@ -1774,28 +1779,27 @@ function MetricsPanel({
           Ainda não há dados suficientes.
         </h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-zinc-500">
-          Conecte um canal oficial para começar a acompanhar métricas de
-          entrega, leitura, clique e conversão.
+          Este módulo consulta registros internos. Não há métricas verificadas de entrega, leitura, clique ou conversão.
         </p>
         <button
           onClick={connect}
           className="mt-5 rounded-xl bg-violet-700 px-5 py-3 font-black text-white"
         >
-          Conectar canal
+          Ver integrações
         </button>
       </section>
     );
   return (
     <section className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_1fr]">
       <article className="rounded-2xl border bg-white p-5">
-        <h2 className="text-lg font-black">Desempenho por canal</h2>
+        <h2 className="sx-premium-section">Registros consultados por canal</h2>
         <div className="mt-4 space-y-3">
           {channels.map((channel) => {
             const total = history.filter(
               (item) => item.channel === channel,
             ).length;
             const width = history.length
-              ? Math.max(4, (total / history.length) * 100)
+              ? (total / history.length) * 100
               : 0;
             return (
               <div key={channel}>
@@ -1815,10 +1819,9 @@ function MetricsPanel({
         </div>
       </article>
       <article className="rounded-2xl border bg-white p-5">
-        <h2 className="text-lg font-black">Métricas oficiais</h2>
+        <h2 className="sx-premium-section">Métricas de entrega indisponíveis</h2>
         <p className="mt-3 text-sm leading-6 text-zinc-500">
-          Os indicadores usam somente eventos devolvidos pelos canais
-          conectados. Nenhum resultado é estimado.
+          A conexão registrada não comprova entrega, leitura, clique nem conversão. Os totais ao lado são registros internos, não resultados do provedor.
         </p>
       </article>
     </section>
@@ -1836,7 +1839,7 @@ function Step({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border bg-zinc-50/70 p-3 sm:p-5">
+    <section className="sx-communication-inset p-3 sm:p-5">
       <div className="mb-4 flex items-center gap-3">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-700 text-sm font-black text-white">
           {number}
@@ -1853,17 +1856,15 @@ function Step({
 }
 function PanelSkeleton() {
   return (
-    <div className="mt-5 animate-pulse space-y-4 rounded-3xl border bg-white p-6">
-      <div className="h-7 w-56 rounded bg-zinc-200" />
-      <div className="h-28 rounded-2xl bg-zinc-100" />
-      <div className="h-52 rounded-2xl bg-zinc-100" />
-    </div>
+    <p role="status" className="sx-premium-surface sx-communication-state sx-premium-muted mt-5">
+      Consultando registros de comunicação…
+    </p>
   );
 }
 function ErrorPanel({ retry }: { retry: () => void }) {
   return (
-    <div className="mt-5 rounded-3xl border bg-white p-10 text-center">
-      <h2 className="text-xl font-black">
+    <div className="sx-premium-surface sx-communication-state mt-5 text-center">
+      <h2 role="alert" className="sx-premium-section">
         Não foi possível carregar esta área.
       </h2>
       <p className="mt-2 text-sm text-zinc-500">
@@ -1871,7 +1872,7 @@ function ErrorPanel({ retry }: { retry: () => void }) {
       </p>
       <button
         onClick={retry}
-        className="mt-5 rounded-xl bg-violet-700 px-5 py-3 font-black text-white"
+        className="sx-premium-button mt-5" data-variant="primary"
       >
         Tentar novamente
       </button>

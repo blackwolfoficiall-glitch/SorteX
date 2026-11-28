@@ -1,13 +1,19 @@
 import { expect, test } from "@playwright/test";
+import { createSyntheticCampaign } from "./fixtures/synthetic-campaign";
 
 test("cota premiada cria, edita, pausa, reativa, filtra e persiste", async ({ page }) => {
-  const number = String(1000 + (Date.now() % 8000));
+  const campaign = await createSyntheticCampaign(page.request, "Cota premiada", {
+    publish: true,
+    fields: { totalNumbers: 10_000 },
+  });
+  const number = "1600";
   const prize = `Prêmio E2E ${number}`;
   const editedPrize = `${prize} atualizado`;
 
   await page.goto("/dashboard/ganhadores");
   await page.getByRole("button", { name: "Adicionar cota premiada", exact: true }).click();
   const wizard = page.getByRole("dialog");
+  await wizard.getByText(campaign.title, { exact: true }).click();
   await page.getByRole("button", { name: "Avançar" }).click();
   await wizard.getByRole("textbox", { name: "Número da cota" }).fill(number);
   await page.getByRole("button", { name: "Avançar" }).click();
@@ -18,7 +24,13 @@ test("cota premiada cria, edita, pausa, reativa, filtra e persiste", async ({ pa
   await page.getByRole("button", { name: "Ativar agora" }).click();
   await page.getByRole("button", { name: "Avançar" }).click();
   page.once("dialog", (dialog) => dialog.accept());
+  const activation = page.waitForResponse(
+    (response) => response.request().method() === "POST" &&
+      response.url().endsWith("/api/draws/organizer/prize-tickets"),
+  );
   await page.getByRole("button", { name: "Ativar", exact: true }).click();
+  const result = await activation;
+  expect(result.ok(), await result.text()).toBeTruthy();
   await expect(page.getByText("Cota premiada ativada.")).toBeVisible();
 
   await page.locator('[data-status-card="available"]').click();

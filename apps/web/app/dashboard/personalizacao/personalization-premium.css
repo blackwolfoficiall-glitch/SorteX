@@ -1,0 +1,72 @@
+.sx-personalization {
+  max-width: 102rem;
+  min-width: 0;
+  margin-inline: auto;
+  padding: clamp(0.68rem, 2.3vw, 1.55rem);
+  border-radius: var(--sxp-panel-radius);
+  background-image: radial-gradient(ellipse at top left, var(--sxp-tint), transparent 43rem);
+  overflow-wrap: anywhere;
+}
+.sx-personalization h1 { font-size: clamp(1.9rem, 5vw, 2.85rem); }
+.sx-personalization-header > div, .sx-personalization-actions, .sx-personalization-editor :is(form, fieldset, label) { min-width: 0; min-inline-size: 0; }
+.sx-personalization-actions [data-unsaved] { color: var(--sxp-accent); }
+.sx-personalization-actions [aria-live]:not([data-unsaved]) { color: var(--sxp-success); }
+.sx-personalization-actions button svg { flex: none; }
+.sx-personalization-tab {
+  min-height: var(--sxp-action-height);
+  padding: 0.45rem 0.7rem;
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-button-radius);
+  font-size: 0.87rem;
+  font-weight: 750;
+  text-align: start;
+}
+.sx-personalization-tab[aria-pressed="true"] { background: var(--sxp-tint); color: var(--sxp-accent); border-color: var(--sxp-accent); }
+.sx-personalization-editor { min-width: 0; max-width: 100%; }
+.sx-personalization-editor h2:not([data-sx-brand-preview] *) { font-family: var(--sxp-font-heading); }
+.sx-personalization .sx-personalization-editor :is(.text-zinc-400, .text-zinc-500, .text-zinc-600, .text-zinc-700):not([data-sx-brand-preview] *) { color: var(--sxp-muted); }
+.sx-personalization .sx-personalization-editor :is(.text-zinc-800, .text-zinc-900):not([data-sx-brand-preview] *) { color: var(--sxp-text); }
+.sx-personalization .sx-personalization-editor :is(.text-violet-600, .text-violet-700):not([data-sx-brand-preview] *) { color: var(--sxp-accent); }
+.sx-personalization .sx-personalization-editor :is(.text-red-600, .text-amber-700):not([data-sx-brand-preview] *) { color: var(--sxp-error); }
+.sx-personalization .sx-personalization-editor :is(.bg-white, .bg-zinc-50):not([data-sx-brand-preview] *) { background-color: var(--sxp-bg); }
+.sx-personalization .sx-personalization-editor :is(.bg-violet-50, .bg-violet-100, .bg-violet-50\/40, .bg-amber-50):not([data-sx-brand-preview] *) { background-color: var(--sxp-tint); }
+.sx-personalization .sx-personalization-editor :is(.border, .border-zinc-200, .border-violet-200):not([data-sx-brand-preview] *) { border-color: var(--sxp-line); }
+.sx-personalization .sx-personalization-editor .bg-violet-600:not([data-sx-brand-preview] *),
+.sx-personalization .sx-personalization-editor .bg-violet-700:not([data-sx-brand-preview] *) { background: var(--sxp-gradient); color: var(--sxp-white); }
+.sx-personalization .sx-personalization-select,
+.sx-personalization .sx-personalization-editor :is(input:not([type="color"], [type="checkbox"], [type="radio"], [type="range"]), select, textarea):not([data-sx-brand-preview] *) {
+  background: var(--sxp-surface);
+  color: var(--sxp-text);
+  border-color: var(--sxp-line);
+  max-width: 100%;
+  min-width: 0;
+  min-inline-size: 0;
+  font-size: 1rem;
+}
+.sx-personalization .sx-personalization-editor :is(input[type="range"], input[type="checkbox"], input[type="radio"]):not([data-sx-brand-preview] *) {
+  accent-color: var(--sxp-accent);
+}
+.sx-personalization :is(button, a, input, select, textarea, summary):not([data-sx-brand-preview] *):focus-visible,
+.sx-personalization .sx-personalization-editor label:has(input:focus-visible):not([data-sx-brand-preview] *) {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 2px;
+}
+.sx-personalization .sx-personalization-editor :is(pre, output):not([data-sx-brand-preview] *) { max-width: 100%; }
+.sx-personalization-state { padding: clamp(0.9rem, 3vw, 1.55rem); }
+.sx-personalization-state :is(p, button) { margin-top: 0.65rem; }
+.sx-personalization-error { color: var(--sxp-error); font-weight: 750; }
+.sx-personalization-error:not(.sx-personalization-state *) { padding: 0.65rem; border-radius: var(--sxp-button-radius); background: var(--sxp-tint); }
+/* Preserve the preview's prior outer color scheme and font. The iframe is a
+ * separate document and is controlled solely by the customer's preview payload. */
+.sx-personalization [data-sx-brand-preview] { color: #18181b; color-scheme: normal; font-family: Arial, Helvetica, sans-serif; }
+.sx-personalization div[data-sx-brand-preview] { background: #fff; border-radius: var(--sxp-button-radius); padding: 0.48rem; }
+@media (hover: hover) {
+  .sx-personalization-tab:hover { background: var(--sxp-tint); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sx-personalization :not([data-sx-brand-preview], [data-sx-brand-preview] *) {
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,5 +1,299 @@
 "use client";
-import { FormEvent,use,useEffect,useState } from "react";import Link from "next/link";import { ArrowLeft,LoaderCircle,Trophy } from "lucide-react";import { getMiniCampaign,recordMiniCampaignResult } from "@/lib/organizer-platform/client";
-type Detail={name:string;status:string;maxTickets:number;soldTickets:number;mainCampaign:{title:string};orders:Array<{id:string;code:string;status:string;quantity:number;total:string|number;buyer:{name:string}}>;result:null|{winningNumber:number;winner:null|{name:string}}};const money=new Intl.NumberFormat("pt-BR",{style:"currency",currency:"BRL"});
-export default function Page({params}:{params:Promise<{id:string}>}){const{id}=use(params);const[data,setData]=useState<Detail|null>(null),[error,setError]=useState(""),[number,setNumber]=useState(""),[notes,setNotes]=useState(""),[busy,setBusy]=useState(false);const load=()=>getMiniCampaign(id).then(v=>setData(v as unknown as Detail)).catch(c=>setError(c instanceof Error?c.message:"Mini Campanha não encontrada."));useEffect(()=>{void load()},[id]);async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError("");try{await recordMiniCampaignResult(id,Number(number),notes||undefined);await load()}catch(c){setError(c instanceof Error?c.message:"Não foi possível registrar o resultado.")}finally{setBusy(false)}}if(!data&&!error)return <div className="grid h-72 place-items-center"><LoaderCircle className="animate-spin text-violet-600"/></div>;if(!data)return <div className="rounded-3xl bg-red-50 p-6 text-red-700">{error}</div>;return <div className="mx-auto max-w-6xl"><Link href="/dashboard/mini-campanhas" className="inline-flex items-center gap-2 text-sm font-bold text-violet-700"><ArrowLeft size={17}/>Voltar</Link><div className="mt-5 flex justify-between"><div><p className="text-xs font-black uppercase text-violet-600">Mini Campanha</p><h1 className="mt-2 text-3xl font-black">{data.name}</h1><p className="text-zinc-500">Vinculada a {data.mainCampaign.title}</p></div><span className="h-fit rounded-full bg-violet-50 px-4 py-2 text-sm font-black text-violet-700">{data.status}</span></div>{error&&<p className="mt-5 rounded-2xl bg-red-50 p-4 text-red-700">{error}</p>}<div className="mt-6 grid gap-4 sm:grid-cols-3"><Info label="Estoque" value={`${data.soldTickets}/${data.maxTickets}`}/><Info label="Pedidos" value={String(data.orders.length)}/><Info label="Status" value={data.result?"Resultado registrado":"Aguardando resultado"}/></div>{data.result?<section className="mt-6 rounded-3xl bg-green-50 p-6 text-green-900"><Trophy/><h2 className="mt-3 text-xl font-black">Número vencedor: {data.result.winningNumber}</h2><p>{data.result.winner?.name||"Sem ganhador identificado"}</p></section>:<form onSubmit={submit} className="mt-6 grid gap-3 rounded-3xl border bg-white p-6 sm:grid-cols-[180px_1fr_auto]"><label className="text-sm font-bold">Número vencedor<input required type="number" min={0} value={number} onChange={e=>setNumber(e.target.value)} className="mt-2 h-11 w-full rounded-xl border px-3"/></label><label className="text-sm font-bold">Observação<input value={notes} onChange={e=>setNotes(e.target.value)} className="mt-2 h-11 w-full rounded-xl border px-3"/></label><button disabled={busy||!data.orders.length} className="mt-7 h-11 rounded-xl bg-violet-600 px-5 font-bold text-white disabled:opacity-40">Registrar resultado</button></form>}<section className="mt-6 overflow-hidden rounded-3xl border bg-white"><h2 className="border-b p-5 text-xl font-black">Pedidos próprios</h2>{data.orders.length?data.orders.map(order=><div key={order.id} className="grid gap-2 border-b p-5 last:border-0 md:grid-cols-4"><div><b>{order.buyer.name}</b><span className="block text-xs text-zinc-500">#{order.code}</span></div><span>{order.quantity} títulos</span><span>{money.format(Number(order.total))}</span><b className="text-violet-700">{order.status}</b></div>):<p className="p-8 text-center text-zinc-500">Nenhum pedido registrado.</p>}</section></div>}
-function Info({label,value}:{label:string;value:string}){return <div className="rounded-2xl border bg-white p-5"><span className="text-xs font-black uppercase text-zinc-400">{label}</span><b className="mt-2 block text-xl">{value}</b></div>}
+
+import { type FormEvent, use, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import {
+  ArrowLeft,
+  Boxes,
+  ClipboardList,
+  LoaderCircle,
+  Ticket,
+  Trophy,
+} from "lucide-react";
+import PremiumScope from "@/components/premium/PremiumScope";
+import {
+  getMiniCampaign,
+  recordMiniCampaignResult,
+} from "@/lib/organizer-platform/client";
+import styles from "./mini-campaign-detail.module.css";
+
+type Detail = {
+  name: string;
+  status: string;
+  maxTickets: number;
+  soldTickets: number;
+  mainCampaign: { title: string };
+  orders: Array<{
+    id: string;
+    code: string;
+    status: string;
+    quantity: number;
+    total: string | number;
+    buyer: { name: string };
+  }>;
+  result: null | { winningNumber: number; winner: null | { name: string } };
+};
+
+const money = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+const campaignStatus: Record<string, string> = {
+  DRAFT: "Rascunho",
+  PUBLISHED: "Publicada",
+  PAUSED: "Pausada",
+  FINISHED: "Encerrada",
+  CANCELLED: "Cancelada",
+};
+const orderStatus: Record<string, string> = {
+  RESERVED: "Reservado",
+  AWAITING_PAYMENT: "Aguardando pagamento",
+  PAID: "Pago",
+  EXPIRED: "Expirado",
+  CANCELLED: "Cancelado",
+  REFUNDED: "Estornado",
+  FAILED: "Falhou",
+};
+const statusLabel = (labels: Record<string, string>, value: string) =>
+  Object.hasOwn(labels, value) ? labels[value] : value;
+
+export default function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
+  const [result, setResult] = useState<{
+    id: string;
+    value?: Detail;
+    error?: string;
+  }>();
+  const [number, setNumber] = useState("");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [actionError, setActionError] = useState("");
+  const read = useCallback(
+    () => getMiniCampaign(id).then((value) => value as unknown as Detail),
+    [id],
+  );
+  useEffect(() => {
+    let active = true;
+    read().then(
+      (value) => {
+        if (active) setResult({ id, value });
+      },
+      (cause) => {
+        if (active)
+          setResult({
+            id,
+            error:
+              cause instanceof Error
+                ? cause.message
+                : "Mini Campanha não encontrada.",
+          });
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [id, read, attempt]);
+  const current = result?.id === id ? result : undefined;
+  const data = current?.value;
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setActionError("");
+    try {
+      await recordMiniCampaignResult(id, Number(number), notes || undefined);
+      const value = await read();
+      setResult({ id, value });
+    } catch (cause) {
+      setActionError(
+        cause instanceof Error
+          ? cause.message
+          : "Não foi possível registrar o resultado.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <PremiumScope className={styles.scope}>
+      <section className={styles.content} aria-label="Detalhe da Mini Campanha">
+        <Link
+          href="/dashboard/mini-campanhas"
+          className={`sx-premium-button ${styles.back}`}
+        >
+          <ArrowLeft size={17} aria-hidden="true" /> Voltar
+        </Link>
+        {!current ? (
+          <div role="status" className={styles.state}>
+            <LoaderCircle
+              aria-hidden="true"
+              size={21}
+              className="motion-safe:animate-spin"
+            />
+            Carregando Mini Campanha…
+          </div>
+        ) : !data ? (
+          <div className={styles.state}>
+            <p role="alert">{current.error}</p>
+            <button
+              type="button"
+              className="sx-premium-button"
+              onClick={() => {
+                setResult(undefined);
+                setAttempt((value) => value + 1);
+              }}
+            >
+              Tentar novamente
+            </button>
+          </div>
+        ) : (
+          <>
+            <header className={styles.banner}>
+              <span className={styles.heroIcon}>
+                <Boxes size={23} aria-hidden="true" />
+              </span>
+              <div>
+                <p className={styles.eyebrow}>Mini Campanha</p>
+                <h1 className="sx-premium-title">{data.name}</h1>
+                <p className={styles.muted}>
+                  Vinculada a {data.mainCampaign.title}
+                </p>
+              </div>
+              <span className={styles.badge}>
+                {statusLabel(campaignStatus, data.status)}
+              </span>
+            </header>
+
+            {actionError && (
+              <p role="alert" className={styles.actionError}>
+                {actionError}
+              </p>
+            )}
+
+            <dl className={styles.metrics} aria-label="Resumo da Mini Campanha">
+              <div>
+                <Ticket size={20} aria-hidden="true" />
+                <dt>Estoque</dt>
+                <dd>
+                  {data.soldTickets}/{data.maxTickets}
+                </dd>
+              </div>
+              <div>
+                <ClipboardList size={20} aria-hidden="true" />
+                <dt>Pedidos</dt>
+                <dd>{data.orders.length}</dd>
+              </div>
+              <div>
+                <Trophy size={20} aria-hidden="true" />
+                <dt>Status do resultado</dt>
+                <dd>
+                  {data.result
+                    ? "Resultado registrado"
+                    : "Aguardando resultado"}
+                </dd>
+              </div>
+            </dl>
+
+            {data.result ? (
+              <section
+                className={styles.outcome}
+                aria-labelledby="mini-result-title"
+              >
+                <Trophy size={24} aria-hidden="true" />
+                <div>
+                  <h2 id="mini-result-title">
+                    Número vencedor: {data.result.winningNumber}
+                  </h2>
+                  <p>
+                    {data.result.winner?.name || "Sem ganhador identificado"}
+                  </p>
+                </div>
+              </section>
+            ) : (
+              <section
+                className={styles.surface}
+                aria-labelledby="mini-result-form-title"
+              >
+                <h2 id="mini-result-form-title">Registrar resultado</h2>
+                {!data.orders.length && (
+                  <p className={styles.muted} id="mini-result-unavailable">
+                    É preciso ter um pedido registrado para disponibilizar esta
+                    ação.
+                  </p>
+                )}
+                <form onSubmit={submit} className={styles.form}>
+                  <label>
+                    Número vencedor
+                    <input
+                      required
+                      type="number"
+                      min={0}
+                      value={number}
+                      onChange={(event) => setNumber(event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Observação
+                    <input
+                      value={notes}
+                      onChange={(event) => setNotes(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    disabled={busy || !data.orders.length}
+                    aria-describedby={
+                      !data.orders.length
+                        ? "mini-result-unavailable"
+                        : undefined
+                    }
+                    className="sx-premium-button"
+                    data-variant="primary"
+                  >
+                    {busy ? "Registrando…" : "Registrar resultado"}
+                  </button>
+                </form>
+              </section>
+            )}
+
+            <section
+              className={styles.surface}
+              aria-labelledby="mini-orders-title"
+            >
+              <h2 id="mini-orders-title">Pedidos próprios</h2>
+              {data.orders.length ? (
+                <ul
+                  className={styles.orders}
+                  aria-label="Pedidos da Mini Campanha"
+                >
+                  {data.orders.map((order) => (
+                    <li key={order.id} className={styles.order}>
+                      <div>
+                        <strong>{order.buyer.name}</strong>
+                        <span className={styles.muted}>#{order.code}</span>
+                      </div>
+                      <span>
+                        {order.quantity}{" "}
+                        {order.quantity === 1 ? "título" : "títulos"}
+                      </span>
+                      <strong>{money.format(Number(order.total))}</strong>
+                      <span
+                        className={styles.badge}
+                        data-order-status={order.status}
+                      >
+                        {statusLabel(orderStatus, order.status)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className={styles.muted}>Nenhum pedido registrado.</p>
+              )}
+            </section>
+          </>
+        )}
+      </section>
+    </PremiumScope>
+  );
+}

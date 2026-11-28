@@ -6,6 +6,10 @@ O módulo financeiro usa um ledger interno separado do saldo informado pelo gate
 
 `CommercialTermsService` é a fonte única das regras de taxa. Ele considera plano, taxa personalizada, primeira campanha gratuita, isenção do organizador e isenção da campanha. A taxa do gateway permanece separada.
 
+**Critério atual da oferta inicial:** na ausência de uma taxa específica da campanha, a API conta todas as campanhas anteriores pelo horário de criação, inclusive rascunhos. Assim, salvar um rascunho mais antigo pode tirar a elegibilidade da primeira campanha publicada. Isso descreve o comportamento do código, não uma nova decisão comercial. Antes de ativar a oferta em produção, decidir o marco do benefício e como registrar permanentemente a campanha que o consumiu. Separar essa oferta da isenção individual negociada pelo painel.
+
+A tarifa percentual do gateway calculada pela SorteX é uma estimativa configurável, não a taxa apurada na liquidação. Se não houver estimativa configurada, o cálculo local usa zero; isso não prova tarifa zero no gateway.
+
 ## Ledger de uma venda
 
 Uma aprovação cria referências únicas para venda bruta, taxa SorteX, taxa estimada do gateway, receita líquida pendente do organizador e receita da plataforma. Os três primeiros registros são classificadores informativos e não duplicam saldo. A entrada `ORGANIZER_NET_REVENUE` movimenta o saldo pendente; `PLATFORM_REVENUE` movimenta a conta SorteX. A chave `payment:{id}:organizer-net` garante idempotência.

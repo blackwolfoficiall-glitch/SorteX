@@ -1,0 +1,102 @@
+// !$*UTF8*$!
+{
+    archiveVersion = 1;
+    classes = {};
+    objectVersion = 56;
+    objects = {
+        A90100000000000000000001 = {
+            isa = PBXProject;
+            attributes = { LastUpgradeCheck = 1600; };
+            buildConfigurationList = A90100000000000000000008;
+            compatibilityVersion = "Xcode 14.0";
+            developmentRegion = en;
+            hasScannedForEncodings = 0;
+            knownRegions = (en, Base,);
+            mainGroup = A90100000000000000000002;
+            productRefGroup = A90100000000000000000003;
+            projectDirPath = "";
+            projectRoot = "";
+            targets = (A90100000000000000000004,);
+        };
+        A90100000000000000000002 = {
+            isa = PBXGroup;
+            children = (A90100000000000000000005, A90100000000000000000003,);
+            sourceTree = "<group>";
+        };
+        A90100000000000000000003 = {
+            isa = PBXGroup;
+            children = (A90100000000000000000006,);
+            name = Products;
+            sourceTree = "<group>";
+        };
+        A90100000000000000000004 = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = A90100000000000000000009;
+            buildPhases = (A90100000000000000000007,);
+            buildRules = ();
+            dependencies = ();
+            name = SortexFixtureUITests;
+            productName = SortexFixtureUITests;
+            productReference = A90100000000000000000006;
+            productType = "com.apple.product-type.bundle.ui-testing";
+        };
+        A90100000000000000000005 = {
+            isa = PBXFileReference;
+            lastKnownFileType = sourcecode.swift;
+            path = BuyerJourneys.swift;
+            sourceTree = "<group>";
+        };
+        A90100000000000000000006 = {
+            isa = PBXFileReference;
+            explicitFileType = wrapper.cfbundle;
+            path = SortexFixtureUITests.xctest;
+            sourceTree = BUILT_PRODUCTS_DIR;
+        };
+        A90100000000000000000007 = {
+            isa = PBXSourcesBuildPhase;
+            buildActionMask = 2147483647;
+            files = (A90100000000000000000010,);
+            runOnlyForDeploymentPostprocessing = 0;
+        };
+        A90100000000000000000008 = {
+            isa = XCConfigurationList;
+            buildConfigurations = (A90100000000000000000011,);
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Debug;
+        };
+        A90100000000000000000009 = {
+            isa = XCConfigurationList;
+            buildConfigurations = (A90100000000000000000012,);
+            defaultConfigurationIsVisible = 0;
+            defaultConfigurationName = Debug;
+        };
+        A90100000000000000000010 = {
+            isa = PBXBuildFile;
+            fileRef = A90100000000000000000005;
+        };
+        A90100000000000000000011 = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+                SDKROOT = iphonesimulator;
+                SUPPORTED_PLATFORMS = iphonesimulator;
+            };
+            name = Debug;
+        };
+        A90100000000000000000012 = {
+            isa = XCBuildConfiguration;
+            buildSettings = {
+                CLANG_ENABLE_MODULES = YES;
+                CODE_SIGNING_ALLOWED = NO;
+                GENERATE_INFOPLIST_FILE = YES;
+                LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@loader_path/Frameworks");
+                PRODUCT_BUNDLE_IDENTIFIER = br.com.sortex.fixture.xcuitests;
+                PRODUCT_NAME = "$(TARGET_NAME)";
+                SWIFT_VERSION = 5.0;
+                TARGETED_DEVICE_FAMILY = 1;
+            };
+            name = Debug;
+        };
+    };
+    rootObject = A90100000000000000000001;
+}

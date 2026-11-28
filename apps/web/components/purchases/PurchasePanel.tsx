@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Clock3, LoaderCircle, Minus, Plus, Ticket, X } from "lucide-react";
+import { Clock3, LoaderCircle, Minus, Plus, Star, Ticket, X } from "lucide-react";
 import Button from "@/components/ui/Button";
 import type { Campaign } from "@/lib/campaigns/types";
 import {
@@ -12,7 +12,13 @@ import {
 } from "@/lib/purchases/client";
 import type { Ticket as TicketType } from "@/lib/purchases/types";
 
-export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
+export default function PurchasePanel({
+  campaign,
+  salesBlock,
+}: {
+  campaign: Campaign;
+  salesBlock?: string;
+}) {
   const router = useRouter();
   const [quantity, setQuantity] = useState(campaign.minimumPurchase || 1);
   const [quantityText, setQuantityText] = useState(
@@ -26,7 +32,11 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
   const [error, setError] = useState("");
   const [selectedQuick, setSelectedQuick] = useState<number>();
   const [couponCode, setCouponCode] = useState("");
-  const [couponDiscount, setCouponDiscount] = useState(0);
+  const [couponQuote, setCouponQuote] = useState<{
+    key: string;
+    total: number;
+  }>();
+  const couponRequest = useRef(0);
   const [couponMessage, setCouponMessage] = useState("");
   const [identityStep, setIdentityStep] = useState<"PHONE" | "EXISTING" | null>(
     null,
@@ -37,10 +47,14 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
   const [maskedEmail, setMaskedEmail] = useState("");
   const idempotencyKey = useRef<string | undefined>(undefined);
   const startPurchaseRef = useRef<() => void>(() => undefined);
+  const latestSalesBlock = useRef(salesBlock);
+  useEffect(() => { latestSalesBlock.current = salesBlock; }, [salesBlock]);
   const accent = campaignAccent(campaign);
+  const popularAccent = /^#[0-9A-Fa-f]{6}$/.test(accent) ? accent : "#2563EB";
+  const popularText = popularTileText(popularAccent);
 
   useEffect(() => {
-    if (campaign.numberSelectionMode !== "MANUAL") return;
+    if (campaign.numberSelectionMode !== "MANUAL" || salesBlock) return;
     const params = new URLSearchParams({ page: String(page), limit: "100" });
     getNumbers(campaign.slug, params)
       .then((result) => setNumbers(result.items))
@@ -51,14 +65,28 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
             : "Falha ao consultar títulos.",
         ),
       );
-  }, [campaign.numberSelectionMode, campaign.slug, page]);
+  }, [campaign.numberSelectionMode, campaign.slug, page, salesBlock]);
 
   const promotion = campaign.promotions.find((item) => item.id === promotionId);
   const effectiveQuantity =
     campaign.numberSelectionMode === "MANUAL" ? selected.length : quantity;
   const subtotal = effectiveQuantity * campaign.numberPrice;
-  const baseTotal = promotion?.packagePrice ?? subtotal;
-  const total = Math.max(0, baseTotal - couponDiscount);
+  const bestPackage = campaign.promotions
+    .filter((item) => item.numberQuantity === effectiveQuantity)
+    .reduce<number | undefined>(
+      (best, item) =>
+        best == null ? item.packagePrice : Math.min(best, item.packagePrice),
+      undefined,
+    );
+  const baseTotal = promotion?.packagePrice ?? bestPackage ?? subtotal;
+  const couponKey = JSON.stringify([
+    effectiveQuantity,
+    promotionId,
+    couponCode.trim(),
+  ]);
+  const appliedCoupon =
+    couponQuote?.key === couponKey ? couponQuote : undefined;
+  const total = appliedCoupon?.total ?? baseTotal;
   const discount = Math.max(0, subtotal - total);
   const rouletteRounds = rouletteRoundsForQuantity(
     campaign.customization?.configuration,
@@ -70,6 +98,7 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
       : quantity >= campaign.minimumPurchase;
 
   async function reserveAuthenticated() {
+    if (latestSalesBlock.current && !idempotencyKey.current) return;
     setLoading(true);
     setError("");
     try {
@@ -83,7 +112,7 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
               campaignId: campaign.id,
               numbers: selected,
               promotionId,
-              couponCode: couponCode || undefined,
+              couponCode: appliedCoupon ? couponCode.trim() : undefined,
               idempotencyKey: idempotencyKey.current,
               affiliateCode,
             })
@@ -91,7 +120,7 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
               campaignId: campaign.id,
               quantity,
               promotionId,
-              couponCode: couponCode || undefined,
+              couponCode: appliedCoupon ? couponCode.trim() : undefined,
               idempotencyKey: idempotencyKey.current,
               affiliateCode,
             });
@@ -105,9 +134,15 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
   }
 
   async function startPurchase() {
-    if (loading) return;
+    if (loading || (salesBlock && !idempotencyKey.current)) return;
     if (!canReserve) {
       setError("Escolha uma quantidade válida para continuar.");
+      return;
+    }
+    if (couponCode.trim() && !appliedCoupon) {
+      setError(
+        "Aplique o cupom a esta seleção ou apague o código para continuar.",
+      );
       return;
     }
     setLoading(true);
@@ -173,7 +208,11 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
     window.addEventListener("sortex:select-roulette-combo", listener);
     return () =>
       window.removeEventListener("sortex:select-roulette-combo", listener);
-  }, [campaign.maximumPurchasePerBuyer, campaign.minimumPurchase, campaign.promotions]);
+  }, [
+    campaign.maximumPurchasePerBuyer,
+    campaign.minimumPurchase,
+    campaign.promotions,
+  ]);
 
   async function identifyPhone() {
     if (loading) return;
@@ -278,8 +317,10 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
   }
 
   async function applyCoupon() {
+    if (latestSalesBlock.current) return;
+    const attempt = ++couponRequest.current;
     setCouponMessage("");
-    setCouponDiscount(0);
+    setCouponQuote(undefined);
     try {
       const response = await fetch("/api/platform/promotion-quote", {
         method: "POST",
@@ -287,19 +328,28 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
         body: JSON.stringify({
           campaignId: campaign.id,
           quantity: effectiveQuantity,
-          couponCode,
+          promotionId,
+          couponCode: couponCode.trim(),
         }),
       });
       const result = await response.json();
+      if (response.status === 401)
+        throw new Error("Entre na sua conta para consultar o cupom.");
       if (!response.ok) throw new Error(result.message || "Cupom inválido.");
-      setCouponDiscount(Number(result.discount) || 0);
-      setCouponMessage("Cupom aplicado com sucesso.");
+      if (typeof result.total !== "number" || result.total <= 0)
+        throw new Error("Não foi possível confirmar o valor com desconto.");
+      if (attempt === couponRequest.current)
+        setCouponQuote({ key: couponKey, total: result.total });
     } catch (cause) {
-      setCouponMessage(
-        cause instanceof Error ? cause.message : "Cupom inválido.",
-      );
+      if (attempt === couponRequest.current)
+        setCouponMessage(
+          cause instanceof Error ? cause.message : "Cupom inválido.",
+        );
     }
   }
+
+  if (salesBlock && !idempotencyKey.current)
+    return <p className="text-sm font-semibold" role="status" data-purchase-panel>{salesBlock}</p>;
 
   return (
     <div className="space-y-5" data-purchase-panel>
@@ -356,7 +406,7 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
       )}
 
       {campaign.numberSelectionMode === "RANDOM" ? (
-        <div className="grid gap-4 md:grid-cols-[1.4fr_0.6fr]">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[1.4fr_0.6fr]">
           <div>
             <p className="text-xs font-black uppercase text-zinc-600">
               Escolha uma quantidade
@@ -370,20 +420,16 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
                     key={value}
                     className="relative min-w-0 overflow-visible"
                   >
-                    {popular && (
-                      <span
-                        className="absolute left-1/2 top-0 z-20 -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full bg-white px-2 py-1 text-[9px] font-black shadow"
-                        style={{ color: accent }}
-                      >
-                        Mais popular ⭐
-                      </span>
-                    )}
                     <button
                       disabled={quantity >= maximum}
                       onClick={() => addQuick(value)}
                       style={
                         popular
-                          ? { borderColor: accent, backgroundColor: accent }
+                          ? {
+                              borderColor: popularAccent,
+                              backgroundColor: popularAccent,
+                              color: popularText,
+                            }
                           : active
                             ? {
                                 borderColor: accent,
@@ -391,10 +437,16 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
                               }
                             : {}
                       }
-                      className={`h-full w-full rounded-xl border px-1 py-3 text-sm font-black transition-all duration-200 hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 ${popular ? "text-white shadow-lg" : active ? "bg-white" : "border-zinc-200 bg-white"}`}
+                      className={`relative h-full w-full rounded-xl border px-1 py-3 text-sm font-black transition-all duration-200 hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-900 disabled:cursor-not-allowed disabled:bg-zinc-100 disabled:text-zinc-400 ${popular ? "shadow-lg" : active ? "bg-white" : "border-zinc-200 bg-white"}`}
                     >
+                      {popular && (
+                        <span className="absolute left-1/2 top-0 z-20 flex -translate-x-1/2 -translate-y-1/2 items-center gap-0.5 whitespace-nowrap rounded-full bg-white px-1.5 py-0.5 text-[9px] font-black leading-tight text-[#0f172a] shadow">
+                          <Star aria-hidden="true" className="size-2 shrink-0" />
+                          Mais popular
+                        </span>
+                      )}
                       +{value.toLocaleString("pt-BR")}
-                      <span className="mt-1 block text-[9px] font-semibold opacity-80">
+                      <span className="mt-1 block text-[11px] font-semibold leading-tight">
                         {(value * campaign.numberPrice).toLocaleString(
                           "pt-BR",
                           { style: "currency", currency: "BRL" },
@@ -525,24 +577,30 @@ export default function PurchasePanel({ campaign }: { campaign: Campaign }) {
             <input
               value={couponCode}
               onChange={(e) => {
+                couponRequest.current++;
                 setCouponCode(e.target.value.toUpperCase());
-                setCouponDiscount(0);
+                setCouponQuote(undefined);
+                setCouponMessage("");
               }}
+              aria-label="Código do cupom"
               placeholder="CÓDIGO"
               className="h-10 min-w-0 flex-1 rounded-xl border bg-white px-3 uppercase"
             />
             <button
               onClick={() => void applyCoupon()}
-              disabled={!couponCode}
+              disabled={!couponCode || Boolean(salesBlock)}
               className="rounded-xl bg-violet-600 px-4 text-sm font-bold text-white disabled:opacity-40"
             >
               Aplicar
             </button>
           </div>
-          {couponMessage && (
-            <p
-              className={`mt-2 text-xs ${couponDiscount > 0 ? "text-green-700" : "text-red-700"}`}
-            >
+          {appliedCoupon && (
+            <p role="status" className="mt-2 text-xs text-green-700">
+              Desconto calculado. Os limites do cupom são conferidos na reserva.
+            </p>
+          )}
+          {!appliedCoupon && couponMessage && (
+            <p role="alert" className="mt-2 text-xs text-red-700">
               {couponMessage}
             </p>
           )}
@@ -728,6 +786,30 @@ function campaignAccent(campaign: Campaign) {
     CUSTOM: campaign.customAccentColor || "#2563EB",
   };
   return colors[campaign.accentColorMode || "BLUE"];
+}
+
+// WCAG relative luminance; the tile's solid price is small body text (4.5:1).
+function popularTileText(background: string) {
+  const navy = "#0F172A";
+  const brightness = (hex: string) => {
+    const weights = [0.2126, 0.7152, 0.0722];
+    return weights.reduce((sum, weight, index) => {
+      const channel =
+        Number.parseInt(hex.slice(1 + 2 * index, 3 + 2 * index), 16) / 255;
+      const linear =
+        channel <= 0.04045
+          ? channel / 12.92
+          : ((channel + 0.055) / 1.055) ** 2.4;
+      return sum + weight * linear;
+    }, 0);
+  };
+  const fill = brightness(background);
+  const dark = brightness(navy);
+  const overNavy = (Math.max(fill, dark) + 0.05) / (Math.min(fill, dark) + 0.05);
+  if (overNavy >= 4.5) return navy;
+  const overBlack = (fill + 0.05) / 0.05;
+  const overWhite = 1.05 / (fill + 0.05);
+  return overBlack > overWhite ? "#000000" : "#FFFFFF";
 }
 
 function rouletteRoundsForQuantity(

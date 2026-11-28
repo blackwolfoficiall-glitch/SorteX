@@ -1,0 +1,56 @@
+.surface {
+  background-color: var(--sxp-bg);
+  background-image: radial-gradient(ellipse at 15% 20%, color-mix(in srgb, var(--sxp-purple) 11%, transparent), transparent 68%),
+    radial-gradient(ellipse at 85% 85%, color-mix(in srgb, var(--sxp-blue) 13%, transparent), transparent 67%);
+}
+.hero { display: grid; grid-template-columns: minmax(0, 1fr); align-items: center; gap: clamp(1rem, 3vw, 2.6rem); padding-block: clamp(1.05rem, 5vw, 4rem); }
+.ticket {
+  position: relative; min-width: 0; overflow-wrap: anywhere; padding: clamp(1.12rem, 3.7vw, 3.05rem);
+  border-radius: var(--sxp-panel-radius); background: linear-gradient(128deg, #5925b6 8%, #2447b9 90%); color: #fff;
+  box-shadow: var(--sxp-shadow);
+}
+.ticket::before, .ticket::after {
+  content: ""; position: absolute; top: calc(50% - .375rem); width: .75rem; height: .75rem; border-radius: 50%;
+  background: var(--sxp-bg); pointer-events: none;
+}
+.ticket::before { left: -.375rem; }
+.ticket::after { right: -.375rem; }
+.kicker { display: flex; align-items: center; gap: .56rem; margin: 0; line-height: 1.4; font-size: clamp(.65rem, 1.4vw, .79rem); font-weight: 810; letter-spacing: .09em; }
+.surface .ticket h1 { margin: .52rem 0 .72rem; font-family: var(--sxp-font-heading); font-size: clamp(1.95rem, 4.45vw, 4.3rem); font-weight: 820; line-height: 1.03; letter-spacing: -.065em; }
+.surface .ticket h1 em { color: #fff; }
+.lead { max-width: 36rem; margin: 0; font-size: clamp(.82rem, 1.25vw, 1rem); line-height: 1.54; font-weight: 580; }
+.actions { display: flex; flex-wrap: wrap; gap: .52rem; margin-top: clamp(.9rem, 2vw, 1.45rem); }
+.action, .discover { display: inline-flex; align-items: center; gap: .4rem; max-width: 100%; min-height: 2.75rem; text-decoration: none; }
+.action {
+  justify-content: center; padding: .53rem .7rem; border: 1px solid #fff;
+  border-radius: var(--sxp-button-radius); color: #fff; font-size: clamp(.77rem, 1.1vw, .9rem); font-weight: 790;
+  transition: background-color 145ms ease, color 145ms ease; text-align: center;
+}
+.action svg, .discover svg { flex: none; }
+.primary { background: #fff; color: #391879; }
+.primary:hover { background: #f3edff; color: #301469; }
+.action:not(.primary):hover { color: #301469; background: #f3edff; }
+.discover { justify-content: flex-start; margin-top: .6rem; color: #fff; font-size: .8rem; font-weight: 720; }
+.discover:hover { text-decoration: underline; }
+.surface .ticket a:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.stage {
+  min-width: 0; display: grid; gap: .65rem; padding: clamp(.64rem, 1.25vw, 1rem); border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-panel-radius); background: var(--sxp-surface); box-shadow: var(--sxp-shadow);
+}
+.stageHeading, .legend { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem .65rem; color: var(--sxp-text); }
+.stageHeading { justify-content: space-between; font-size: .78rem; font-weight: 790; }
+.stageHeading > span:first-child, .legend span { display: inline-flex; align-items: center; gap: .3rem; }
+.stageTag { padding: .25rem .48rem; border: 1px solid var(--sxp-line); border-radius: 999px; color: var(--sxp-muted); font-size: .69rem; white-space: nowrap; }
+.legend { color: var(--sxp-muted); justify-content: center; font-size: .72rem; font-weight: 720; }
+.stageHeading svg, .legend svg { flex: none; color: var(--sxp-accent); }
+.stage :global(.sx-illustration-hero) { border-radius: .95rem; }
+.stage :global(.sx-visual-kpis > div:first-child) { background: #5925b6; }
+.stage :global(.sx-visual-kpis > div:first-child > span), .stage :global(.sx-visual-kpis > div:first-child strong > span) { opacity: 1; }
+@media (min-width: 53rem) { .hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1.04fr); } }
+@media (max-width: 25rem) {
+  .hero { width: calc(100% - 1.6rem); }
+  .stage :global(.sx-illustration-body) { padding: .65rem; }
+  .stage :global(.sx-visual-kpis > div) { padding-inline: .5rem; min-width: 0; }
+  .stage :global(.sx-visual-kpis strong) { font-size: 1.12rem; }
+}
+@media (prefers-reduced-motion: reduce) { .surface .action { transition: none; } }

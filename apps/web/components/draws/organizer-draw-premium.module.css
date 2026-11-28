@@ -1,0 +1,129 @@
+.scope {
+  width: 100%;
+  min-width: 0;
+  border-radius: 1.5rem;
+}
+.content {
+  display: grid;
+  gap: 1rem;
+  width: min(100%, 68rem);
+  min-width: 0;
+  margin-inline: auto;
+  padding: clamp(0.65rem, 2vw, 1.35rem);
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+  overflow-wrap: anywhere;
+}
+.banner,
+.surface {
+  padding: clamp(1rem, 3vw, 1.75rem);
+  min-width: 0;
+  background: var(--sxp-surface);
+  border: 1px solid var(--sxp-line);
+  border-radius: 1.5rem;
+  box-shadow: var(--sxp-shadow);
+}
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+.banner > div {
+  min-width: 0;
+  flex: 1 1 14rem;
+}
+.banner h1 {
+  margin: 0.2rem 0 0.35rem;
+}
+.eyebrow {
+  color: var(--sxp-accent);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 1rem;
+  background: var(--sxp-gradient);
+  color: var(--sxp-white);
+}
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--sxp-text);
+  font-size: 1.1rem;
+  font-weight: 800;
+}
+.sectionTitle svg {
+  flex: none;
+  color: var(--sxp-accent);
+}
+.muted {
+  color: var(--sxp-muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.surface .muted {
+  margin-top: 0.4rem;
+}
+.fields,
+.actions {
+  margin-top: 1rem;
+}
+.fields {
+  display: grid;
+  gap: 0.85rem;
+}
+@media (min-width: 42rem) {
+  .fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.field {
+  display: grid;
+  min-width: 0;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+.field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--sxp-line);
+  background: var(--sxp-bg);
+  color: var(--sxp-text);
+  font-size: 1rem;
+  font-weight: 400;
+}
+.field input:focus-visible {
+  outline: 2px solid var(--sxp-focus);
+  outline-offset: 2px;
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+.message,
+.result {
+  min-width: 0;
+  margin-top: 0.85rem;
+  padding: 0.75rem;
+  background: var(--sxp-tint);
+  color: var(--sxp-text);
+  border: 1px solid var(--sxp-line);
+  border-radius: 0.8rem;
+  font-size: 0.875rem;
+}
+.result {
+  overflow: auto;
+}

@@ -21,8 +21,16 @@ test("automações críticas executam de ponta a ponta no sandbox", async ({ pag
     await expect(card).toBeVisible();
     await card.getByRole("button", { name: "Ativar" }).click();
     await expect(card.getByRole("button", { name: "Executar teste sandbox" })).toBeVisible();
+    const run = page.waitForResponse(
+      (response) => response.request().method() === "POST" &&
+        /\/api\/engagement\/automations\/[^/]+\/test$/.test(response.url()),
+    );
     await card.getByRole("button", { name: "Executar teste sandbox" }).click();
-    await expect(page.getByText("Teste executado no sandbox. Nenhuma mensagem externa foi enviada.")).toBeVisible();
+    const result = await run;
+    expect(result.ok(), await result.text()).toBeTruthy();
+    await expect(page.getByRole("status").filter({
+      hasText: "Teste executado no sandbox. Nenhuma mensagem externa foi enviada.",
+    })).toBeVisible();
     await expect(card.getByText("1 execuções")).toBeVisible();
     await card.getByRole("button", { name: "Pausar" }).click();
     await expect(card.getByRole("button", { name: "Ativar" })).toBeVisible();

@@ -18,8 +18,12 @@ import {
   Trophy,
 } from "lucide-react";
 import Card from "@/components/ui/Card";
+import PremiumScope from "@/components/premium/PremiumScope";
+import publicHero from "./public-campaign-hero-premium.module.css";
 import PurchasePanel from "@/components/purchases/PurchasePanel";
+import { resolveBuyerSalesWindow, salesWindowMessage } from "../../../../packages/contracts/src/campaign-sales-window";
 import type { Campaign, RewardSection } from "@/lib/campaigns/types";
+import { versionedCoverUrl } from "@/lib/campaigns/cover-revision";
 import { mediaUrl } from "./CampaignDashboard";
 import { cleanTitle } from "./CampaignShare";
 import {
@@ -42,10 +46,12 @@ export default function PublicCampaignView({
   slug,
   previewCampaign,
   previewMode = false,
+  initiallyShowBuyerTitles = false,
 }: {
   slug?: string;
   previewCampaign?: Campaign;
   previewMode?: boolean;
+  initiallyShowBuyerTitles?: boolean;
 }) {
   const [campaign, setCampaign] = useState<Campaign | null>(
     previewCampaign ?? null,
@@ -59,7 +65,7 @@ export default function PublicCampaignView({
     string | null
   >(null);
   const [buyerRounds, setBuyerRounds] = useState<number | null>(null);
-  const [showBuyerTitles, setShowBuyerTitles] = useState(false);
+  const [showBuyerTitles, setShowBuyerTitles] = useState(initiallyShowBuyerTitles);
   const [autoTitleColor, setAutoTitleColor] = useState("#FFFFFF");
   const dragStart = useRef<number | null>(null);
   useEffect(() => {
@@ -108,14 +114,27 @@ export default function PublicCampaignView({
   useEffect(() => {
     if (!slug || previewCampaign) return;
     let active = true;
-    const timer = window.setInterval(() => {
-      if (document.hidden) return;
-      fetch(`/api/public/campaigns/${slug}`, { cache: "no-store" })
-        .then(async (response) => (response.ok ? response.json() : null))
-        .then((payload) => {
-          if (active && payload) setCampaign(payload as Campaign);
-        })
-        .catch(() => undefined);
+    let inFlight = false;
+    const timer = window.setInterval(async () => {
+      if (document.hidden || inFlight) return;
+      inFlight = true;
+      try {
+        const response = await fetch(`/api/public/campaigns/${slug}`, { cache: "no-store" });
+        if (response.status === 404 && active) {
+          setCampaign(null);
+          setError("Campanha não encontrada.");
+        } else if (response.ok) {
+          const payload = await response.json() as Campaign;
+          if (active) {
+            setCampaign(payload);
+            setError("");
+          }
+        }
+      } catch {
+        // A temporary outage does not prove that the campaign was withdrawn.
+      } finally {
+        inFlight = false;
+      }
     }, 15000);
     return () => {
       active = false;
@@ -127,7 +146,10 @@ export default function PublicCampaignView({
       campaign
         ? [
             ...(campaign.coverImageUrl
-              ? [{ id: "cover", url: campaign.coverImageUrl }]
+              ? [{
+                  id: "cover",
+                  url: versionedCoverUrl(campaign.coverImageUrl, campaign.coverImageRevision),
+                }]
               : []),
             ...campaign.galleryImages,
           ]
@@ -261,6 +283,8 @@ export default function PublicCampaignView({
       </main>
     );
 
+  const salesBlock = salesWindowMessage(resolveBuyerSalesWindow(campaign.salesWindow, campaign));
+  const drawDisplay = displayDrawSchedule(campaign);
   const percent = campaign.totalNumbers
     ? Math.min(100, (campaign.soldNumbers / campaign.totalNumbers) * 100)
     : 0;
@@ -300,6 +324,180 @@ export default function PublicCampaignView({
             ? campaign.customTitleColor!
             : autoTitleColor;
 
+  const premiumPublic = Boolean(slug && !previewMode && !previewCampaign);
+  const customFont = typeof campaignPreferences?.fontFamily === "string" && Boolean(campaignPreferences.fontFamily.trim());
+  const campaignHero = (
+    <>
+      <section className="mx-auto max-w-[1500px] px-2 pt-3 sm:px-4 lg:px-6">
+        <div className={`overflow-hidden rounded-2xl border bg-white shadow-sm sm:rounded-[26px] ${premiumPublic ? publicHero.frame : ""}`}>
+          <div
+            data-testid="campaign-hero"
+            className={`relative h-[255px] touch-pan-y select-none overflow-hidden bg-zinc-100 sm:h-[360px] lg:h-[500px] ${premiumPublic ? publicHero.media : ""}`}
+            onPointerDown={(event) => {
+              dragStart.current = event.clientX;
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerCancel={() => {
+              dragStart.current = null;
+            }}
+            onPointerUp={(event) => {
+              if (dragStart.current === null || images.length < 2) return;
+              const distance = event.clientX - dragStart.current;
+              if (Math.abs(distance) > 45)
+                setSelectedImage(
+                  (current) =>
+                    (current + (distance < 0 ? 1 : -1) + images.length) %
+                    images.length,
+                );
+              dragStart.current = null;
+            }}
+          >
+            {selected ? (
+              <Image
+                key={selected.id}
+                src={mediaUrl(selected.url)}
+                alt={cleanTitle(campaign.title)}
+                fill
+                unoptimized
+                priority={selectedImage === 0}
+                sizes="(max-width: 640px) 100vw, (max-width: 1536px) 96vw, 1500px"
+                className="object-cover [object-position:var(--hero-mobile-position)] [transform:scale(var(--hero-mobile-zoom))] [transform-origin:var(--hero-mobile-position)] transition-[opacity,transform] duration-500 motion-reduce:transition-none sm:[object-position:var(--hero-desktop-position)] sm:[transform:scale(var(--hero-desktop-zoom))] sm:[transform-origin:var(--hero-desktop-position)]"
+                style={publicHeroImageStyle(
+                  campaign.customization?.configuration,
+                )}
+                draggable={false}
+              />
+            ) : (
+              <div className={`flex h-full items-center justify-center ${premiumPublic ? publicHero.placeholder : ""}`} data-dark-title={premiumPublic && titleColor === "#111111" ? true : undefined}>
+                <ImageIcon size={64} className="text-violet-300" aria-hidden="true" />
+              </div>
+            )}
+            <div className="absolute left-3 top-3 w-[34%] sm:left-6 sm:top-6 sm:w-[28%] lg:left-10 lg:top-9 lg:w-[22%]">
+              <CampaignCountdown
+                target={drawDisplay.target}
+              />
+            </div>
+            <div className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/35 via-black/10 to-transparent px-4 pb-5 pt-20 text-white sm:px-7 sm:pb-7 lg:px-10 ${premiumPublic && titleColor === "#FFFFFF" ? publicHero.whiteTitleScrim : ""}`}>
+              <div style={{ color: titleColor }}>
+                {campaign.titleDisplayMode === "HIGHLIGHT" ? (
+                  <div className="max-w-5xl">
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] sm:text-xs">
+                      Campanha em destaque
+                    </p>
+                    <h1 className="mt-1 text-2xl font-black uppercase leading-[.95] tracking-tight drop-shadow sm:text-5xl lg:text-6xl">
+                      <PublicCampaignTitle campaign={campaign} />
+                    </h1>
+                  </div>
+                ) : (
+                  <h1 className="max-w-4xl text-xl font-bold leading-tight sm:text-4xl lg:text-5xl">
+                    <PublicCampaignTitle campaign={campaign} />
+                  </h1>
+                )}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-bold sm:text-sm">
+                <span className="inline-flex items-center gap-1 rounded-lg bg-black/40 px-2 py-1 sm:backdrop-blur-sm">
+                  <CalendarDays size={14} />
+                  {drawDisplay.label}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-lg bg-black/40 px-2 py-1 sm:backdrop-blur-sm">
+                  <Trophy size={14} />
+                  {drawBasisLabel(campaign.drawBasis)}
+                </span>
+              </div>
+            </div>
+            {!premiumPublic && images.length > 1 && (
+              <div className="absolute bottom-2 right-3 z-10 flex gap-1.5 sm:bottom-4 sm:right-5">
+                {images.map((image, index) => (
+                  <button
+                    key={image.id}
+                    aria-label={`Mostrar imagem ${index + 1}`}
+                    onClick={() => setSelectedImage(index)}
+                    className={`h-1.5 rounded-full transition-all ${selectedImage === index ? "w-6 bg-white" : "w-1.5 bg-white/55"}`}
+                  />
+                ))}
+              </div>
+            )}
+            {campaign.organizer.verified && (
+              <div className={`absolute right-3 top-3 flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-[9px] font-bold text-white sm:right-5 sm:top-5 sm:text-xs sm:backdrop-blur-sm ${premiumPublic ? publicHero.verified : ""}`}>
+                <CheckCircle2 className="text-green-300" size={15} />{" "}
+                Organizador verificado
+              </div>
+            )}
+          </div>
+          {premiumPublic && images.length > 1 && (
+            <div className={publicHero.gallery} role="group" aria-label="Galeria da campanha">
+              <span className={publicHero.galleryLabel}><ImageIcon size={16} aria-hidden="true" /> Fotos da campanha</span>
+              <div className={publicHero.controls}>
+                {images.map((image, index) => (
+                  <button
+                    key={image.id}
+                    type="button"
+                    aria-label={`Mostrar imagem ${index + 1}`}
+                    aria-pressed={selectedImage === index}
+                    onClick={() => setSelectedImage(index)}
+                  >
+                    {index + 1}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-[1500px] px-2 py-3 sm:px-4 lg:px-6">
+        <div
+          className={`grid overflow-hidden rounded-2xl border bg-white shadow-sm transition-shadow duration-300 hover:shadow-md ${campaign.showParticipants !== false ? "grid-cols-3" : "grid-cols-2"} ${premiumPublic ? publicHero.metrics : ""}`}
+        >
+          <div
+            className="p-3 sm:p-5"
+            style={{ backgroundColor: hexWithAlpha(accent, "38") }}
+          >
+            <p className="text-[8px] font-black uppercase text-zinc-800 sm:text-xs">
+              Valor da cota
+            </p>
+            <p className="mt-1 text-lg font-black text-zinc-950 sm:text-3xl">
+              {money(campaign.numberPrice)}
+            </p>
+          </div>
+          <div className="border-l p-3 sm:p-5">
+            <div className="flex items-center justify-between">
+              <p className="text-[8px] font-black uppercase text-zinc-800 sm:text-xs">
+                Vendido
+              </p>
+              <strong className="text-xs sm:text-xl">
+                {percent.toFixed(0)}%
+              </strong>
+            </div>
+            <div className={`mt-3 h-2 overflow-hidden rounded-full bg-zinc-100 sm:h-3 ${premiumPublic ? publicHero.progress : ""}`}
+              role={premiumPublic ? "progressbar" : undefined}
+              aria-label={premiumPublic ? "Percentual vendido" : undefined}
+              aria-valuenow={premiumPublic ? percent : undefined}
+              aria-valuemin={premiumPublic ? 0 : undefined}
+              aria-valuemax={premiumPublic ? 100 : undefined}
+            >
+              <div
+                className={`h-full rounded-full bg-green-500 transition-all duration-700 ${premiumPublic ? publicHero.progressFill : ""}`}
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+          </div>
+          {campaign.showParticipants !== false && (
+            <div className="border-l p-3 sm:p-5">
+              <p className="text-[8px] font-black uppercase text-zinc-800 sm:text-xs">
+                Participantes
+              </p>
+              <p className="mt-1 text-lg font-black sm:text-3xl">
+                {(campaign.participantsCount ?? 0).toLocaleString("pt-BR")}
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+
+    </>
+  );
+
   return (
     <main
       className="min-h-screen overflow-x-hidden pb-28 text-zinc-950"
@@ -327,151 +525,13 @@ export default function PublicCampaignView({
         onOpenTitles={() => setShowBuyerTitles(true)}
       />
 
-      <section className="mx-auto max-w-[1500px] px-2 pt-3 sm:px-4 lg:px-6">
-        <div className="overflow-hidden rounded-2xl border bg-white shadow-sm sm:rounded-[26px]">
-          <div
-            data-testid="campaign-hero"
-            className="relative h-[255px] touch-pan-y select-none overflow-hidden bg-zinc-100 sm:h-[360px] lg:h-[500px]"
-            onPointerDown={(event) => {
-              dragStart.current = event.clientX;
-              event.currentTarget.setPointerCapture(event.pointerId);
-            }}
-            onPointerCancel={() => {
-              dragStart.current = null;
-            }}
-            onPointerUp={(event) => {
-              if (dragStart.current === null || images.length < 2) return;
-              const distance = event.clientX - dragStart.current;
-              if (Math.abs(distance) > 45)
-                setSelectedImage(
-                  (current) =>
-                    (current + (distance < 0 ? 1 : -1) + images.length) %
-                    images.length,
-                );
-              dragStart.current = null;
-            }}
-          >
-            {selected ? (
-              <Image
-                key={selected.id}
-                src={mediaUrl(selected.url)}
-                alt={cleanTitle(campaign.title)}
-                fill
-                priority={selectedImage === 0}
-                sizes="(max-width: 640px) 100vw, (max-width: 1536px) 96vw, 1500px"
-                className="object-cover [object-position:var(--hero-mobile-position)] [transform:scale(var(--hero-mobile-zoom))] [transform-origin:var(--hero-mobile-position)] transition-[opacity,transform] duration-500 motion-reduce:transition-none sm:[object-position:var(--hero-desktop-position)] sm:[transform:scale(var(--hero-desktop-zoom))] sm:[transform-origin:var(--hero-desktop-position)]"
-                style={publicHeroImageStyle(
-                  campaign.customization?.configuration,
-                )}
-                draggable={false}
-              />
-            ) : (
-              <div className="flex h-full items-center justify-center">
-                <ImageIcon size={64} className="text-violet-300" />
-              </div>
-            )}
-            <div className="absolute left-3 top-3 w-[34%] sm:left-6 sm:top-6 sm:w-[28%] lg:left-10 lg:top-9 lg:w-[22%]">
-              <CampaignCountdown
-                drawDate={campaign.drawDate}
-                drawTime={campaign.drawTime}
-              />
-            </div>
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/35 via-black/10 to-transparent px-4 pb-5 pt-20 text-white sm:px-7 sm:pb-7 lg:px-10">
-              <div style={{ color: titleColor }}>
-                {campaign.titleDisplayMode === "HIGHLIGHT" ? (
-                  <div className="max-w-5xl">
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] sm:text-xs">
-                      Campanha em destaque
-                    </p>
-                    <h1 className="mt-1 text-2xl font-black uppercase leading-[.95] tracking-tight drop-shadow sm:text-5xl lg:text-6xl">
-                      <PublicCampaignTitle campaign={campaign} />
-                    </h1>
-                  </div>
-                ) : (
-                  <h1 className="max-w-4xl text-xl font-bold leading-tight sm:text-4xl lg:text-5xl">
-                    <PublicCampaignTitle campaign={campaign} />
-                  </h1>
-                )}
-              </div>
-              <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-bold sm:text-sm">
-                <span className="inline-flex items-center gap-1 rounded-lg bg-black/40 px-2 py-1 sm:backdrop-blur-sm">
-                  <CalendarDays size={14} />
-                  {campaign.drawDate
-                    ? new Date(campaign.drawDate).toLocaleDateString("pt-BR")
-                    : "A definir"}{" "}
-                  às {campaign.drawTime || "--:--"}
-                </span>
-                <span className="inline-flex items-center gap-1 rounded-lg bg-black/40 px-2 py-1 sm:backdrop-blur-sm">
-                  <Trophy size={14} />
-                  {drawBasisLabel(campaign.drawBasis)}
-                </span>
-              </div>
-            </div>
-            {images.length > 1 && (
-              <div className="absolute bottom-2 right-3 z-10 flex gap-1.5 sm:bottom-4 sm:right-5">
-                {images.map((image, index) => (
-                  <button
-                    key={image.id}
-                    aria-label={`Mostrar imagem ${index + 1}`}
-                    onClick={() => setSelectedImage(index)}
-                    className={`h-1.5 rounded-full transition-all ${selectedImage === index ? "w-6 bg-white" : "w-1.5 bg-white/55"}`}
-                  />
-                ))}
-              </div>
-            )}
-            {campaign.organizer.verified && (
-              <div className="absolute right-3 top-3 flex items-center gap-1.5 rounded-xl bg-black/40 px-3 py-2 text-[9px] font-bold text-white sm:right-5 sm:top-5 sm:text-xs sm:backdrop-blur-sm">
-                <CheckCircle2 className="text-green-300" size={15} />{" "}
-                Organizador verificado
-              </div>
-            )}
+      {premiumPublic ? (
+        <PremiumScope className={`${publicHero.scope} ${customFont ? publicHero.personalizedFont : ""}`}>
+          <div data-public-campaign-hero="premium">
+            {campaignHero}
           </div>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-[1500px] px-2 py-3 sm:px-4 lg:px-6">
-        <div
-          className={`grid overflow-hidden rounded-2xl border bg-white shadow-sm transition-shadow duration-300 hover:shadow-md ${campaign.showParticipants !== false ? "grid-cols-3" : "grid-cols-2"}`}
-        >
-          <div
-            className="p-3 sm:p-5"
-            style={{ backgroundColor: hexWithAlpha(accent, "38") }}
-          >
-            <p className="text-[8px] font-black uppercase text-zinc-800 sm:text-xs">
-              Valor da cota
-            </p>
-            <p className="mt-1 text-lg font-black text-zinc-950 sm:text-3xl">
-              {money(campaign.numberPrice)}
-            </p>
-          </div>
-          <div className="border-l p-3 sm:p-5">
-            <div className="flex items-center justify-between">
-              <p className="text-[8px] font-black uppercase text-zinc-800 sm:text-xs">
-                Vendido
-              </p>
-              <strong className="text-xs sm:text-xl">
-                {percent.toFixed(0)}%
-              </strong>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-zinc-100 sm:h-3">
-              <div
-                className="h-full rounded-full bg-green-500 transition-all duration-700"
-                style={{ width: `${percent}%` }}
-              />
-            </div>
-          </div>
-          {campaign.showParticipants !== false && (
-            <div className="border-l p-3 sm:p-5">
-              <p className="text-[8px] font-black uppercase text-zinc-800 sm:text-xs">
-                Participantes
-              </p>
-              <p className="mt-1 text-lg font-black sm:text-3xl">
-                {(campaign.participantsCount ?? 0).toLocaleString("pt-BR")}
-              </p>
-            </div>
-          )}
-        </div>
-      </section>
+        </PremiumScope>
+      ) : campaignHero}
 
       <section className="mx-auto max-w-[1500px] space-y-3 px-2 sm:space-y-4 sm:px-4 lg:px-6">
         <div id="participar">
@@ -507,7 +567,7 @@ export default function PublicCampaignView({
                   </button>
                 </div>
               ) : (
-                <PurchasePanel campaign={campaign} />
+                <PurchasePanel campaign={campaign} salesBlock={salesBlock} />
               )}
             </div>
           </Card>
@@ -527,7 +587,7 @@ export default function PublicCampaignView({
                   <SectionTitle
                     icon={<Sparkles />}
                     title="Cotas premiadas disponíveis"
-                    subtitle="Confira os números que ainda podem ser premiados."
+                    subtitle="Os números das cotas disponíveis ficam em sigilo."
                   />
                   <SoldBadge percent={percent} />
                 </div>
@@ -544,6 +604,7 @@ export default function PublicCampaignView({
                             src={mediaUrl(prize.imageUrl)}
                             alt={prize.description}
                             fill
+                            unoptimized
                             sizes="(max-width: 1024px) 18vw, 270px"
                             className="object-contain"
                           />
@@ -554,7 +615,7 @@ export default function PublicCampaignView({
                         className="mt-1 overflow-hidden text-ellipsis rounded border border-dashed px-0.5 py-1 font-mono text-[8px] font-black sm:rounded-lg sm:text-base lg:text-xl"
                         style={{ borderColor: accent }}
                       >
-                        {prize.exactNumber}
+                        {prize.description}
                       </p>
                       <p className="mt-1 truncate text-[7px] font-black text-green-700 sm:mt-2 sm:text-sm lg:text-lg">
                         {money(prize.value)}
@@ -581,7 +642,7 @@ export default function PublicCampaignView({
                       >
                         <div className="min-w-0">
                           <p className="font-mono text-sm font-black sm:text-base">
-                            {prize.exactNumber}
+                            {prize.description}
                           </p>
                           <p className="text-[10px] font-black uppercase text-zinc-500">
                             Pode sair
@@ -686,7 +747,7 @@ export default function PublicCampaignView({
                         <button
                           type="button"
                           key={combo.id}
-                          disabled={previewMode}
+                          disabled={previewMode || Boolean(salesBlock)}
                           aria-label={`Combo de ${combo.minQuantity} títulos com ${combo.rounds} ${combo.rounds === 1 ? "giro" : "giros"}`}
                           aria-pressed={selectedCombo}
                           onClick={() => {
@@ -881,7 +942,7 @@ export default function PublicCampaignView({
         <div className="fixed inset-x-0 bottom-0 z-[70] border-t bg-white/95 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] md:hidden">
           <button
             type="button"
-            disabled={previewMode}
+            disabled={previewMode || Boolean(salesBlock)}
             onClick={() => {
               const panel = document.querySelector("[data-purchase-panel]");
               if (!panel) return;
@@ -899,9 +960,9 @@ export default function PublicCampaignView({
             style={{ backgroundColor: campaignButtonColor(campaign) }}
             className="block w-full touch-manipulation rounded-2xl py-4 text-center font-black text-white shadow-lg disabled:cursor-default"
           >
-            {selectedRouletteCombo
+            {salesBlock || (selectedRouletteCombo
               ? `Continuar — ${money(rouletteCombos.find((combo) => combo.id === selectedRouletteCombo)?.price ?? 0)}`
-              : String(campaignPreferences?.buttonText || "Participar agora")}
+              : String(campaignPreferences?.buttonText || "Participar agora"))}
           </button>
         </div>
       )}
@@ -1234,6 +1295,7 @@ function MilestoneImage({
         src={mediaUrl(imageUrl)}
         alt={`Imagem do prêmio ${title}`}
         fill
+        unoptimized
         sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 33vw"
         className="object-cover [object-position:var(--milestone-mobile-position)] [transform:scale(var(--milestone-mobile-zoom))] [transform-origin:var(--milestone-mobile-position)] sm:[object-position:var(--milestone-desktop-position)] sm:[transform:scale(var(--milestone-desktop-zoom))] sm:[transform-origin:var(--milestone-desktop-position)]"
         onError={() => setFailed(true)}
@@ -1455,20 +1517,37 @@ function countdownLabel(label: string) {
   );
 }
 
+const brazilDrawDisplay = new Intl.DateTimeFormat("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+  dateStyle: "short",
+  timeStyle: "short",
+});
+
+function displayDrawSchedule(campaign: Campaign) {
+  // Older pre-deploy APIs did not return scheduledDrawAt. Show the entered
+  // civil date without applying the viewer's timezone, but don't invent a
+  // countdown for an API that has not confirmed the event's instant.
+  if (campaign.scheduledDrawAt === undefined) {
+    const value = campaign.drawDate?.slice(0, 10);
+    const day = value && /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? value.split("-").reverse().join("/")
+      : null;
+    return {
+      target: null,
+      label: day ? `${day} às ${campaign.drawTime || "--:--"}` : "A definir",
+    };
+  }
+  const target = campaign.scheduledDrawAt ? Date.parse(campaign.scheduledDrawAt) : NaN;
+  return Number.isFinite(target)
+    ? { target, label: `${brazilDrawDisplay.format(target)} (horário de Brasília)` }
+    : { target: null, label: "A definir" };
+}
+
 const CampaignCountdown = memo(function CampaignCountdown({
-  drawDate,
-  drawTime,
+  target,
 }: {
-  drawDate?: string | null;
-  drawTime?: string | null;
+  target: number | null;
 }) {
-  const target = useMemo(
-    () =>
-      drawDate
-        ? new Date(`${drawDate.slice(0, 10)}T${drawTime || "00:00"}`).getTime()
-        : null,
-    [drawDate, drawTime],
-  );
   const [countdown, setCountdown] = useState(() =>
     target === null ? null : countdownParts(target - Date.now()),
   );

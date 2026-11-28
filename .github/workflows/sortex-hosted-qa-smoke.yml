@@ -1,0 +1,92 @@
+name: SorteX QA hospedado (HTTP sintético)
+
+on:
+  workflow_call:
+    inputs:
+      expected-api-sha:
+        required: true
+        type: string
+      check-draft-cover:
+        required: false
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      expected-api-sha:
+        required: true
+        type: string
+        default: 48eeb85830c2dddab048796d7859200e65cc73f9
+
+permissions:
+  contents: read
+concurrency:
+  group: sortex-hosted-qa-smoke
+  cancel-in-progress: false
+
+jobs:
+  core:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada'
+    runs-on: ubuntu-latest
+    environment: sortex-web-ios-qa
+    timeout-minutes: 12
+    env:
+      SORTEX_PARITY_API: https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech
+      SORTEX_PARITY_WEB: http://127.0.0.1:4408
+      SORTEX_PARITY_MODE: hosted-qa-synthetic
+      SORTEX_PARITY_EXPECTED_API_SHA: ${{ inputs.expected-api-sha }}
+      SORTEX_HOMOLOGATION_API_URL: https://br-weathered-forest-bccwn49d-sortexqa.compute.c-16.us-east-1.aws.neon.tech
+      SORTEX_PARITY_CHECK_DRAFT_COVER: ${{ inputs.check-draft-cover && 'yes' || 'no' }}
+      NEXT_TELEMETRY_DISABLED: "1"
+      EXPO_NO_TELEMETRY: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Confirmar a API isolada antes de escrever dados sintéticos
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            if curl --fail --silent --show-error --max-time 12 "$SORTEX_PARITY_API/health" |
+              node -e 'const s=require("fs").readFileSync(0,"utf8"); if(!s)process.exit(1);const x=JSON.parse(s); if(x.status!=="ok"||x.version!==process.env.SORTEX_PARITY_EXPECTED_API_SHA)process.exit(1);' &&
+              curl --fail --silent --show-error --max-time 12 "$SORTEX_PARITY_API/health/ready" |
+              node -e 'const s=require("fs").readFileSync(0,"utf8"); if(!s)process.exit(1);const x=JSON.parse(s); if(x.status!=="ready"||x.database!=="up")process.exit(1);'; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "A revisão exata da API QA não confirmou prontidão. Sem gravar dados."
+          exit 1
+      - name: Construir o Next dinâmico sem publicar o site
+        working-directory: apps/web
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Preparar cliente HTTP do app (não é build nativo)
+        working-directory: apps/mobile
+        run: npm ci --no-audit --no-fund
+      - name: Testar cadastro, sessão, campanhas e isolamento no Neon QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd apps/web && exec node_modules/.bin/next start --hostname 127.0.0.1 --port 4408) >"$RUNNER_TEMP/sortex-qa-next.log" 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in {1..30}; do
+            kill -0 "$pid" 2>/dev/null || break
+            if curl -fsS --max-time 8 "$SORTEX_PARITY_WEB/api/health/ready" >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            echo "A prévia local do Next não confirmou a API QA."
+            exit 1
+          fi
+          cd apps/mobile
+          node --import tsx scripts/test-web-ios-parity.ts

@@ -1,8 +1,7 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { Public } from '../auth/decorators/public.decorator';
 import { PrismaService } from '../prisma/prisma.service';
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { isLocalUploadStorageReady } from '../organizers/local-upload-storage';
 import { HeadBucketCommand } from '@aws-sdk/client-s3';
 import { objectStorage, usesObjectStorage } from '../organizers/object-storage';
 @Controller('health')
@@ -21,23 +20,27 @@ export class HealthController {
   }
   @Get('ready') @Public() async ready() {
     try {
-      await this.p.$queryRaw`SELECT 1`;
-      const storage = resolve(
-        process.env.ORGANIZER_UPLOAD_DIR ?? './storage/organizers',
-      );
-      if (usesObjectStorage()) {
+      // Reject a reachable database that has not applied the schema needed by
+      // this binary. Selecting drawTimeZone checks the column even on an
+      // empty campaign table; its value may legitimately be null.
+      await this.p.$transaction([
+        this.p.user.findFirst({ select: { id: true } }),
+        this.p.campaign.findFirst({ select: { id: true, drawTimeZone: true } }),
+        this.p.payment.findFirst({ select: { id: true } }),
+      ]);
+      let storage: 'disabled' | 'up' | 'not-initialized';
+      if (process.env.UPLOADS_DISABLED === 'true') {
+        storage = 'disabled';
+      } else if (usesObjectStorage()) {
         const { client, bucket } = objectStorage();
         await client.send(new HeadBucketCommand({ Bucket: bucket }));
-      }
-      return {
-        status: 'ready',
-        database: 'up',
-        storage: usesObjectStorage()
+        storage = 'up';
+      } else {
+        storage = (await isLocalUploadStorageReady())
           ? 'up'
-          : existsSync(storage)
-            ? 'up'
-            : 'not-initialized',
-      };
+          : 'not-initialized';
+      }
+      return { status: 'ready', database: 'up', storage };
     } catch {
       throw new ServiceUnavailableException('Serviço ainda não está pronto.');
     }

@@ -43,14 +43,38 @@ describe('RequestSecurityMiddleware', () => {
     const middleware = new RequestSecurityMiddleware();
     const req = request({
       headers: {},
-      path: '/auth/login',
+      // Express's mounted wildcard trims req.path to "/" in real traffic.
+      path: '/',
+      originalUrl: '/auth/login',
       method: 'POST',
       ip: '10.0.0.1',
     });
     const res = response();
     const next = jest.fn() as unknown as NextFunction;
     middleware.use(req, res.typed, next);
-    middleware.use(req, res.typed, next);
+    const normalRead = response();
+    middleware.use(
+      request({
+        headers: {},
+        path: '/',
+        originalUrl: '/health/live',
+        method: 'GET',
+        ip: '10.0.0.1',
+      }),
+      normalRead.typed,
+      next,
+    );
+    expect(normalRead.value.setHeader).toHaveBeenCalledWith(
+      'RateLimit-Limit',
+      '120',
+    );
+    expect(normalRead.value.status).not.toHaveBeenCalled();
+    middleware.use(
+      request({ ...req, originalUrl: '/AUTH/LOGIN/?source=official-web' }),
+      res.typed,
+      next,
+    );
+    expect(next).toHaveBeenCalledTimes(2);
     expect(res.value.status).toHaveBeenCalledWith(429);
     expect(res.value.setHeader).toHaveBeenCalledWith(
       'Retry-After',
@@ -59,8 +83,34 @@ describe('RequestSecurityMiddleware', () => {
     delete process.env.RATE_LIMIT_LOGIN;
   });
 
+  it('separa buckets de leitura por rota, sem separar query strings', () => {
+    const previous = process.env.RATE_LIMIT_READ;
+    process.env.RATE_LIMIT_READ = '1';
+    try {
+      const middleware = new RequestSecurityMiddleware();
+      const next = jest.fn();
+      const get = (originalUrl: string) =>
+        request({
+          headers: {},
+          path: '/',
+          originalUrl,
+          method: 'GET',
+          ip: '10.0.0.2',
+        });
+      middleware.use(get('/public/campaigns?page=1'), response().typed, next);
+      middleware.use(get('/public/winners'), response().typed, next);
+      const repeated = response();
+      middleware.use(get('/public/campaigns?page=2'), repeated.typed, next);
+      expect(next).toHaveBeenCalledTimes(2);
+      expect(repeated.value.status).toHaveBeenCalledWith(429);
+    } finally {
+      if (previous === undefined) delete process.env.RATE_LIMIT_READ;
+      else process.env.RATE_LIMIT_READ = previous;
+    }
+  });
+
   it('isola o limite de sessões autenticadas atrás do mesmo proxy', () => {
-    process.env.RATE_LIMIT_DEFAULT = '1';
+    process.env.RATE_LIMIT_READ = '1';
     const middleware = new RequestSecurityMiddleware();
     const nextMock = jest.fn();
     const next = nextMock as unknown as NextFunction;
@@ -79,6 +129,6 @@ describe('RequestSecurityMiddleware', () => {
     middleware.use(first, response().typed, next);
     middleware.use(second, response().typed, next);
     expect(nextMock).toHaveBeenCalledTimes(2);
-    delete process.env.RATE_LIMIT_DEFAULT;
+    delete process.env.RATE_LIMIT_READ;
   });
 });

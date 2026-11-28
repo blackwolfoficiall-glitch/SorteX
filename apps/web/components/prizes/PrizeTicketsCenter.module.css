@@ -1,0 +1,207 @@
+.scope {
+  container: prize-center / inline-size;
+  min-width: 0;
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-panel-radius);
+}
+
+.layout {
+  width: 100%;
+  min-width: 0;
+  max-width: 88rem;
+  margin-inline: auto;
+  padding: clamp(.65rem, 2.7cqi, 1.5rem);
+}
+
+.hero, .filters, .ticket, .errorState {
+  min-width: 0;
+  border: 1px solid var(--sxp-line);
+  border-radius: var(--sxp-panel-radius);
+  background: var(--sxp-surface);
+  box-shadow: var(--sxp-shadow);
+}
+
+.hero {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: .7rem;
+  padding: clamp(.8rem, 3.2cqi, 1.45rem);
+  border-block-start: 3px solid var(--sxp-purple);
+  background: linear-gradient(117deg, var(--sxp-tint), var(--sxp-surface) 70%);
+}
+
+.hero h1 { margin-block: .3rem; }
+.hero p:last-child { color: var(--sxp-muted); font-size: .87rem; line-height: 1.48; }
+
+.eyebrow {
+  color: var(--sxp-accent);
+  font-size: .76rem;
+  font-weight: 850;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  min-height: 2.75rem;
+  min-width: 0;
+  padding: .4rem .62rem;
+  border-radius: var(--sxp-button-radius);
+  background: var(--sxp-gradient);
+  color: var(--sxp-white);
+  font-weight: 850;
+  font-size: .85rem;
+  text-align: center;
+}
+
+.primary:hover { filter: brightness(.93); }
+.primary svg { flex-shrink: 0; }
+
+.overviewHeading { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: .55rem; }
+
+.statusGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(.4rem, 1.8cqi, .75rem);
+  margin-top: .65rem;
+}
+
+.statusCard {
+  min-width: 0;
+  min-height: 7.1rem;
+  padding: clamp(.43rem, 1.8cqi, .75rem);
+  border: 1px solid var(--sxp-line);
+  border-radius: .88rem;
+  text-align: start;
+  overflow-wrap: anywhere;
+  background: var(--sxp-surface);
+  box-shadow: var(--sxp-shadow);
+}
+
+.statusCard[aria-pressed="true"] {
+  color: var(--sxp-accent);
+  background: var(--sxp-tint);
+  border-color: var(--sxp-accent);
+}
+
+.statusCard:hover { border-color: var(--sxp-accent); }
+
+.statusIcon {
+  display: grid;
+  place-items: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  flex-shrink: 0;
+  border-radius: .48rem;
+  background: var(--sxp-bg);
+  color: var(--sxp-accent);
+}
+
+.statusIcon svg { width: .92rem; height: .92rem; }
+
+.selectedBadge {
+  padding: .12rem .22rem;
+  border-radius: .4rem;
+  background: var(--sxp-surface);
+  color: var(--sxp-accent);
+  font-size: .58rem;
+  font-weight: 850;
+}
+
+.filters { margin-top: .85rem; padding: .65rem; }
+.filterFields { grid-template-columns: minmax(0, 1fr); }
+.filterFields > * { min-width: 0; }
+
+.selectClip { display: block; min-width: 0; overflow: hidden; border-radius: .75rem; }
+.selectClip select { min-width: 0; max-width: 100%; text-overflow: ellipsis; }
+.selectClip:focus-within { outline: 2px solid var(--sxp-focus); outline-offset: 1px; }
+.scope .selectClip select:focus-visible { outline: none; }
+
+.ticket {
+  padding: clamp(.63rem, 2cqi, 1rem);
+  overflow-wrap: anywhere;
+}
+
+.actionMenu { position: static; min-width: 0; }
+.menuPanel {
+  display: grid;
+  width: min(12rem, 100%);
+  padding: .26rem;
+  margin-top: .35rem;
+  border: 1px solid var(--sxp-line);
+  border-radius: .8rem;
+  background: var(--sxp-surface);
+}
+.actionMenu:not([open]) .menuPanel { display: none; }
+
+.errorState { min-height: 18rem; display: grid; place-items: center; padding: 1rem; text-align: center; }
+
+.editor {
+  position: fixed;
+  inset: 0;
+  width: min(100%, 43rem);
+  max-height: 94dvh;
+  margin: auto auto 0;
+  padding: .85rem .85rem max(.85rem, env(safe-area-inset-bottom, 0px));
+  border: 1px solid var(--sxp-line);
+  border-radius: 1.2rem 1.2rem 0 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  color: var(--sxp-text);
+  background: var(--sxp-surface);
+  box-shadow: var(--sxp-shadow);
+}
+
+.editor::backdrop { background: #0f0b23a8; }
+.track { height: .38rem; margin-top: .68rem; overflow: hidden; border-radius: 1rem; background: var(--sxp-tint); }
+.trackFill { height: 100%; border-radius: inherit; background: var(--sxp-gradient); }
+.editorActions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .45rem; margin-top: .85rem; }
+.editorChoices { display: flex; flex-wrap: wrap; gap: .42rem; }
+.editorError { margin-top: .4rem; color: var(--sxp-error); font-size: .82rem; font-weight: 750; }
+
+/* This module has several mature status and drawer variants. Restyle their
+   scoped semantic surfaces without changing their DOM contracts or actions. */
+.scope [class~="bg-white"],
+.scope [class~="bg-white/80"],
+.scope [class~="from-white"] { background: var(--sxp-surface); }
+
+.scope :is([class~="bg-zinc-50"], [class~="bg-zinc-100"], [class~="bg-zinc-200"]) { background: var(--sxp-bg); }
+
+.scope :is([class~="bg-violet-50"], [class~="bg-violet-100"], [class~="bg-amber-50"], [class~="bg-amber-100"], [class~="bg-blue-50"], [class~="bg-blue-100"], [class~="bg-emerald-50"]) { background: var(--sxp-tint); }
+
+.scope :is([class~="bg-violet-600"], [class~="bg-emerald-600"], [class~="bg-zinc-900"]) {
+  color: var(--sxp-white);
+  background: var(--sxp-gradient);
+}
+
+.scope :is([class~="text-zinc-400"], [class~="text-zinc-500"], [class~="text-zinc-600"]) { color: var(--sxp-muted); }
+.scope :is([class~="text-violet-600"], [class~="text-violet-700"], [class~="text-violet-800"], [class~="text-blue-700"], [class~="text-blue-800"], [class~="text-amber-700"], [class~="text-amber-800"]) { color: var(--sxp-accent); }
+.scope :is([class~="text-emerald-600"], [class~="text-emerald-700"]) { color: var(--sxp-success); }
+.scope [class~="text-red-700"] { color: var(--sxp-error); }
+
+.scope :is([class~="border"], [class~="border-b"]) { border-color: var(--sxp-line); }
+.scope [aria-pressed="true"][class~="border"] { border-color: var(--sxp-accent); }
+.scope :is(input, select, textarea) { min-width: 0; max-width: 100%; color: var(--sxp-text); background: var(--sxp-surface); }
+.scope :is(button, a, summary, input, select, textarea):focus-visible { outline: 2px solid var(--sxp-focus); outline-offset: 2px; }
+.scope :is(input, textarea)::placeholder { color: var(--sxp-muted); }
+.scope :is(h1, h2, h3) { overflow-wrap: anywhere; }
+.scope [class~="grid-cols-2"] > * { min-width: 0; }
+
+@container prize-center (min-width: 35rem) {
+  .statusGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .filterFields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@container prize-center (min-width: 68rem) {
+  .statusGrid { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+  .filterFields { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+@media (min-width: 40rem) {
+  .editor { margin: auto; border-radius: 1.2rem; padding: 1.35rem; }
+}

@@ -66,6 +66,32 @@ export class DrawRuleEngineService {
     return true;
   }
 
+  // Validate a saved rule without running a draw or supplying fictitious prizes.
+  // Only the engine's supported current/legacy structures can be reactivated.
+  validatePublishedSnapshot(snapshot: unknown) {
+    if (
+      !snapshot ||
+      typeof snapshot !== 'object' ||
+      Array.isArray(snapshot) ||
+      ('digits' in snapshot && !Array.isArray(snapshot.digits))
+    )
+      throw new BadRequestException('Regra publicada inválida.');
+    const rule = this.upgradeLegacy(snapshot as DrawRuleDefinition);
+    this.validate(rule);
+    if (
+      rule.normalization.mode === 'CUSTOM_PIPELINE' ||
+      rule.steps.some(
+        (step) =>
+          !Number.isInteger(step.sourcePrize) ||
+          (step.direction !== undefined &&
+            !['NORMAL', 'REVERSE'].includes(step.direction)) ||
+          (step.transformation !== undefined &&
+            !['NONE', 'COMPLEMENT_9'].includes(step.transformation)),
+      )
+    )
+      throw new BadRequestException('A regra publicada não pode ser apurada.');
+  }
+
   evaluate(rule: DrawRuleDefinition, input: DrawInput) {
     rule = this.upgradeLegacy(rule);
     this.validate(rule);

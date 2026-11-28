@@ -1,3 +1,4 @@
+import { resolveApiUpstream } from "@/lib/api-upstream";
 import type { AuthTokens } from "./types";
 import { cookies, headers } from "next/headers";
 
@@ -9,12 +10,6 @@ type CookieStore = {
 export const ACCESS_COOKIE = "sortex_access_token";
 export const REFRESH_COOKIE = "sortex_refresh_token";
 
-const API_URL = (
-  process.env.API_INTERNAL_URL ||
-  process.env.API_URL ||
-  "http://localhost:3333"
-).replace(/\/$/, "");
-
 const cookieBase = {
   httpOnly: true,
   sameSite: "lax" as const,
@@ -23,7 +18,7 @@ const cookieBase = {
 };
 
 async function upstreamFetch(path: string, init: RequestInit = {}) {
-  const endpoint = `${API_URL}${path}`;
+  const endpoint = `${resolveApiUpstream()}${path}`;
   const timeoutSignal = AbortSignal.timeout(path.startsWith('/auth/social/') ? 45_000 : 15_000);
   const signal = init.signal
     ? AbortSignal.any([init.signal, timeoutSignal])
@@ -78,7 +73,7 @@ export async function authenticatedApiFetch(
   init: RequestInit = {},
 ) {
   const cookieStore = await cookies();
-  let accessToken = cookieStore.get(ACCESS_COOKIE)?.value;
+  const accessToken = cookieStore.get(ACCESS_COOKIE)?.value;
   const refreshToken = cookieStore.get(REFRESH_COOKIE)?.value;
 
   if (!accessToken && !refreshToken) {
@@ -110,22 +105,59 @@ export async function authenticatedApiFetch(
     });
   }
 
-  const refreshResponse = await apiFetch("/auth/refresh", {
+  const renewal = await renewAuthSession(cookieStore, refreshToken);
+  return renewal.ok ? request(renewal.accessToken) : renewal.response;
+}
+
+function isAuthTokens(value: unknown): value is AuthTokens {
+  if (!value || typeof value !== "object") return false;
+  const tokens = value as Partial<AuthTokens>;
+  return typeof tokens.accessToken === "string" && tokens.accessToken.length > 0 &&
+    typeof tokens.refreshToken === "string" && tokens.refreshToken.length > 0 &&
+    tokens.tokenType === "Bearer" && typeof tokens.expiresIn === "number" &&
+    Number.isSafeInteger(tokens.expiresIn) && tokens.expiresIn > 0;
+}
+
+export async function renewAuthSession(
+  cookieStore: CookieStore,
+  refreshToken: string,
+) {
+  const response = await apiFetch("/auth/refresh", {
     method: "POST",
     body: JSON.stringify({ refreshToken }),
   });
-  const tokens = (await readJson(refreshResponse)) as AuthTokens;
-  if (!refreshResponse.ok) {
-    clearAuthCookies(cookieStore);
-    return new Response(JSON.stringify(tokens), {
-      status: refreshResponse.status,
-      headers: { "Content-Type": "application/json" },
-    });
+  const payload: unknown = await readJson(response);
+  if (!response.ok) {
+    // Authentication rejection is final. Outages and rate limits are not:
+    // retain existing HttpOnly credentials so the browser can retry later.
+    if (response.status === 401 || response.status === 403)
+      clearAuthCookies(cookieStore);
+
+    const headers = new Headers({ "Cache-Control": "no-store" });
+    for (const name of ["Retry-After", "X-Request-Id"]) {
+      const value = response.headers.get(name);
+      if (value) headers.set(name, value);
+    }
+    return {
+      ok: false as const,
+      response: jsonFromUpstream(payload, response.status, headers),
+    };
+  }
+  if (!isAuthTokens(payload)) {
+    return {
+      ok: false as const,
+      response: Response.json(
+        {
+          code: "INVALID_AUTH_RESPONSE",
+          message: "Não foi possível confirmar a renovação da sessão. Tente novamente.",
+        },
+        { status: 502, headers: { "Cache-Control": "no-store" } },
+      ),
+    };
   }
 
-  setAuthCookies(cookieStore, tokens);
-  accessToken = tokens.accessToken;
-  return request(accessToken);
+  setAuthCookies(cookieStore, payload);
+  return { ok: true as const, accessToken: payload.accessToken };
 }
 
 export async function readJson(response: Response) {

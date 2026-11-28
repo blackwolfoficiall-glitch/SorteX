@@ -30,7 +30,15 @@ async function execute(options = {}) {
     require: (name) =>
       name === 'node:fs'
         ? { readFileSync: () => Buffer.from('test archive') }
-        : require(name),
+        : name === 'node:child_process'
+          ? {
+              spawnSync: () => ({
+                status: 0,
+                stdout:
+                  options.gitRef ?? 'refs/heads/infra/netlify-northflank-neon',
+              }),
+            }
+          : require(name),
     fetch: async (url, init = {}) => {
       const method = init.method || 'GET';
       const environment = init.body?.get('environment');
@@ -73,9 +81,18 @@ async function execute(options = {}) {
   return { calls, messages, exitCode: processStub.exitCode };
 }
 
+test('candidate checkout refuses the legacy destination before any request', async () => {
+  const r = await execute({
+    gitRef: 'refs/heads/homologacao/web-ios-integrada',
+  });
+  assert.equal(r.exitCode, 1);
+  assert.equal(r.calls.length, 0);
+  assert.match(r.messages.join(' '), /Publicador exclusivo/);
+});
 test('refuses a paid plan before any write', async () => {
   const r = await execute({ plan: 'launch' });
   assert.equal(r.exitCode, 1);
+  assert.ok(r.calls.length > 0);
   assert.equal(r.calls.filter((c) => c.method === 'POST').length, 0);
 });
 test('refuses another branch or a missing destination database before any write', async () => {

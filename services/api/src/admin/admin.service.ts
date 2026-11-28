@@ -33,6 +33,10 @@ import {
 } from '../auth/policies/admin-authorization.policy';
 import { PrismaService } from '../prisma/prisma.service';
 import {
+  adminTeamInvitationListRow,
+  adminTeamInvitationListSelect,
+} from './admin-team-invitation-list';
+import {
   AdminListDto,
   AdminGatewayDto,
   AdminTeamDto,
@@ -307,7 +311,10 @@ export class AdminService {
       },
     });
     if (!item) throw new NotFoundException();
-    return this.serialize(item);
+    return this.serialize({
+      ...item,
+      auditLogs: item.auditLogs.map(minimizeAccountAudit),
+    });
   }
   async userAction(id: string, dto: UserActionDto, admin: AuthenticatedUser) {
     if (
@@ -318,7 +325,10 @@ export class AdminService {
         'Você não pode bloquear sua própria conta.',
       );
     return this.prisma.$transaction(async (tx) => {
-      const current = await tx.user.findUnique({ where: { id } });
+      const current = await tx.user.findUnique({
+        where: { id },
+        select: { status: true, isActive: true, forcePasswordReset: true },
+      });
       if (!current) throw new NotFoundException();
       const map: Partial<
         Record<UserActionDto['action'], Prisma.UserUpdateInput>
@@ -347,7 +357,7 @@ export class AdminService {
         `USER_${dto.action}`,
         admin,
         current,
-        map[dto.action] ?? null,
+        map[dto.action] ?? { sessionsRevoked: true },
         dto.reason,
       );
       return { message: 'Ação administrativa registrada.' };
@@ -358,28 +368,34 @@ export class AdminService {
     dto: UpdateAdminPermissionsDto,
     admin: AuthenticatedUser,
   ) {
-    const target = await this.prisma.user.findUnique({ where: { id } });
-    if (!target || target.role !== UserRole.ADMIN)
-      throw new BadRequestException('Usuário não é administrador.');
-    const permissions = effectiveAdminPermissions(
-      target.adminTeamRole,
-      dto.permissions,
-    );
-    const next = await this.prisma.user.update({
-      where: { id },
-      data: { adminPermissions: permissions },
+    return this.prisma.$transaction(async (tx) => {
+      const target = await tx.user.findUnique({
+        where: { id },
+        select: { role: true, adminTeamRole: true, adminPermissions: true },
+      });
+      if (!target || target.role !== UserRole.ADMIN)
+        throw new BadRequestException('Usuário não é administrador.');
+      const permissions = effectiveAdminPermissions(
+        target.adminTeamRole,
+        dto.permissions,
+      );
+      const next = await tx.user.update({
+        where: { id },
+        data: { adminPermissions: permissions },
+        select: { id: true, adminPermissions: true },
+      });
+      await this.audit(
+        tx,
+        'User',
+        id,
+        'ADMIN_PERMISSIONS_UPDATED',
+        admin,
+        { permissions: target.adminPermissions },
+        { permissions: next.adminPermissions },
+        dto.reason,
+      );
+      return { id: next.id, permissions: next.adminPermissions };
     });
-    await this.audit(
-      this.prisma,
-      'User',
-      id,
-      'ADMIN_PERMISSIONS_UPDATED',
-      admin,
-      target,
-      { permissions },
-      dto.reason,
-    );
-    return { id: next.id, permissions: next.adminPermissions };
   }
   async campaigns(q: CampaignListDto) {
     const where: Prisma.CampaignWhereInput = {
@@ -947,7 +963,7 @@ export class AdminService {
     );
     return item;
   }
-  auditLogs(
+  async auditLogs(
     q: AdminListDto,
     filters: {
       action?: string;
@@ -972,9 +988,14 @@ export class AdminService {
           }
         : {}),
     };
-    return this.paginate(this.prisma.auditLog, where, q, undefined, {
-      actor: { select: { id: true, name: true, email: true, role: true } },
-    });
+    const page = await this.paginate<AuditSnapshot>(
+      this.prisma.auditLog,
+      where,
+      q,
+      undefined,
+      { actor: { select: { id: true, name: true, email: true, role: true } } },
+    );
+    return { ...page, data: page.data.map(minimizeAccountAudit) };
   }
   async health() {
     const now = new Date();
@@ -1836,13 +1857,13 @@ export class AdminService {
             in: [AdminInvitationStatus.PENDING, AdminInvitationStatus.EXPIRED],
           },
         },
-        include: { invitedBy: { select: { id: true, name: true } } },
+        select: adminTeamInvitationListSelect,
         orderBy: { createdAt: 'desc' },
       }),
     ]);
     return {
       members,
-      invitations,
+      invitations: invitations.map(adminTeamInvitationListRow),
       summary: {
         total: members.length,
         active: members.filter((member) => member.isActive).length,
@@ -2255,7 +2276,7 @@ export class AdminService {
     );
     return next;
   }
-  private async paginate(
+  private async paginate<T = unknown>(
     model: unknown,
     where: unknown,
     q: AdminListDto,
@@ -2263,7 +2284,7 @@ export class AdminService {
     include?: unknown,
   ) {
     const delegate = model as {
-      findMany: (args: Record<string, unknown>) => Promise<unknown[]>;
+      findMany: (args: Record<string, unknown>) => Promise<T[]>;
       count: (args: { where: unknown }) => Promise<number>;
     };
     const [data, total] = await Promise.all([
@@ -2334,6 +2355,42 @@ export class AdminService {
       },
     });
   }
+}
+
+type AuditSnapshot = {
+  entityType: string;
+  previousData: Prisma.JsonValue;
+  newData: Prisma.JsonValue;
+};
+
+function minimizeAccountAudit<T extends AuditSnapshot>(entry: T) {
+  if (entry.entityType !== 'User') return entry;
+  const safeFields = [
+    'status',
+    'isActive',
+    'forcePasswordReset',
+    'sessionsRevoked',
+    'role',
+    'active',
+    'adminTeamRole',
+    'adminPermissions',
+    'permissions',
+  ] as const;
+  const minimize = (v: Prisma.JsonValue): Prisma.JsonValue => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+    return Object.fromEntries(
+      safeFields
+        .filter((key) => Object.hasOwn(v, key))
+        .map((key) => [key, v[key]]),
+    );
+  };
+  // Historical account audits may have stored full User records. Keep their
+  // rows intact, but expose only operational state in administrative reads.
+  return {
+    ...entry,
+    previousData: minimize(entry.previousData),
+    newData: minimize(entry.newData),
+  };
 }
 
 function reviewTitle(status: VerificationStatus) {

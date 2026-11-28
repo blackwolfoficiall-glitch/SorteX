@@ -1,9 +1,11 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import {
   GatewayProvider,
@@ -30,6 +32,15 @@ import { FinancialLedgerService } from '../finance/financial-ledger.service';
 import { AffiliateCommissionService } from '../affiliates/affiliate-commission.service';
 import { CrmSyncService } from '../crm/crm-sync.service';
 import { CampaignMilestonesService } from '../campaigns/campaign-milestones.service';
+import {
+  releaseUnusedCouponCapacity,
+  type ClosedProviderAttempt,
+} from '../purchases/coupon-release';
+
+import {
+  nativeSandboxPixEnabled,
+  sandboxPixTicketUrl,
+} from './native-sandbox-pix';
 
 const paymentInclude = {
   purchase: {
@@ -66,16 +77,102 @@ export class PaymentsService {
     private readonly campaignMilestones: CampaignMilestonesService,
   ) {}
 
-  createPix(user: AuthenticatedUser, data: CreatePixPaymentDto) {
-    return this.create(user, data.purchaseId, PaymentMethod.PIX);
+  async createPix(user: AuthenticatedUser, data: CreatePixPaymentDto) {
+    return this.sanitize(
+      await this.create(user, data.purchaseId, PaymentMethod.PIX),
+    );
   }
 
-  createCard(user: AuthenticatedUser, data: CreateCardPaymentDto) {
-    return this.create(user, data.purchaseId, PaymentMethod.CREDIT_CARD, {
-      cardToken: data.cardToken,
-      paymentMethodId: data.paymentMethodId,
-      installments: data.installments,
+  nativeSandboxPixConfig() {
+    return {
+      provider: GatewayProvider.MERCADO_PAGO,
+      method: PaymentMethod.PIX,
+      environment: 'sandbox' as const,
+      enabled: nativeSandboxPixEnabled(),
+    };
+  }
+
+  async createNativeSandboxPix(
+    user: AuthenticatedUser,
+    data: CreatePixPaymentDto,
+  ) {
+    this.ensureBuyer(user);
+    this.requireNativeSandboxPix();
+    if (data.acceptedTerms !== true)
+      throw new BadRequestException('Confirme que se trata de um teste.');
+    return this.nativeSandboxPixRecord(
+      await this.create(
+        user,
+        data.purchaseId,
+        PaymentMethod.PIX,
+        undefined,
+        true,
+      ),
+    );
+  }
+
+  async nativeSandboxPixStatus(purchaseId: string, user: AuthenticatedUser) {
+    this.ensureBuyer(user);
+    this.requireNativeSandboxPix();
+    const payment = await this.prisma.payment.findFirst({
+      where: {
+        purchaseId,
+        buyerId: user.id,
+        provider: GatewayProvider.MERCADO_PAGO,
+        method: PaymentMethod.PIX,
+        metadata: { path: ['nativeSandboxPix'], equals: true },
+      },
+      select: {
+        id: true,
+        purchaseId: true,
+        status: true,
+        amount: true,
+        expiresAt: true,
+        providerPaymentId: true,
+      },
+      orderBy: { createdAt: 'desc' },
     });
+    return payment ? this.nativeSandboxPixRecord(payment) : null;
+  }
+
+  private requireNativeSandboxPix() {
+    if (!nativeSandboxPixEnabled()) {
+      throw new ServiceUnavailableException(
+        'Pix de teste indisponível neste ambiente.',
+      );
+    }
+  }
+
+  private nativeSandboxPixRecord(
+    payment: Pick<
+      PaymentPayload,
+      | 'id'
+      | 'purchaseId'
+      | 'status'
+      | 'amount'
+      | 'expiresAt'
+      | 'providerPaymentId'
+    >,
+  ) {
+    return {
+      id: payment.id,
+      purchaseId: payment.purchaseId,
+      status: payment.status,
+      amount: Number(payment.amount),
+      expiresAt: payment.expiresAt,
+      environment: 'sandbox' as const,
+      awaitingProvider: !payment.providerPaymentId,
+    };
+  }
+
+  async createCard(user: AuthenticatedUser, data: CreateCardPaymentDto) {
+    return this.sanitize(
+      await this.create(user, data.purchaseId, PaymentMethod.CREDIT_CARD, {
+        cardToken: data.cardToken,
+        paymentMethodId: data.paymentMethodId,
+        installments: data.installments,
+      }),
+    );
   }
 
   async get(id: string, user: AuthenticatedUser) {
@@ -113,9 +210,15 @@ export class PaymentsService {
       );
     }
 
+    if (this.jsonObject(payment.metadata).nativeSandboxPix === true)
+      this.requireNativeSandboxPix();
     const gatewayPayment = await this.gateways
       .get(payment.provider)
       .getPaymentStatus(payment.providerPaymentId);
+    if (gatewayPayment.providerPaymentId !== payment.providerPaymentId)
+      throw new ConflictException(
+        'Identificador da ordem do provedor divergente.',
+      );
     const fingerprint = createHash('sha256')
       .update(
         `${payment.id}:${gatewayPayment.status}:${gatewayPayment.rawStatus || ''}`,
@@ -136,20 +239,24 @@ export class PaymentsService {
     }
     const event =
       existingEvent ||
-      (await this.prisma.paymentEvent.create({
-        data: {
-          paymentId: payment.id,
-          provider: payment.provider,
-          providerEventId,
-          eventType: 'PAYMENT_STATUS_POLLED',
-          payload: {
-            source: 'POLLING',
-            status: gatewayPayment.status,
-          },
+      (await this.createOrReadPaymentEvent({
+        paymentId: payment.id,
+        provider: payment.provider,
+        providerEventId,
+        eventType: 'PAYMENT_STATUS_POLLED',
+        payload: {
+          source: 'POLLING',
+          status: gatewayPayment.status,
         },
       }));
+    if (event.processed)
+      return this.sanitize(await this.findOwned(id, user.id));
     try {
-      const updated = await this.processGatewayUpdate(event.id, gatewayPayment);
+      const { payment: updated, duplicate } = await this.processGatewayUpdate(
+        event.id,
+        gatewayPayment,
+      );
+      if (duplicate) return this.sanitize(await this.findOwned(id, user.id));
       if (updated.status === PaymentStatus.APPROVED) {
         await this.instantPrizes.detectForPurchase(updated.purchaseId);
       }
@@ -162,8 +269,8 @@ export class PaymentsService {
       );
       return this.sanitize(await this.findOwned(id, user.id));
     } catch (error) {
-      await this.prisma.paymentEvent.update({
-        where: { id: event.id },
+      await this.prisma.paymentEvent.updateMany({
+        where: { id: event.id, processed: false },
         data: { errorMessage: this.safeError(error) },
       });
       throw error;
@@ -188,29 +295,71 @@ export class PaymentsService {
       PaymentStatus.PENDING,
       PaymentStatus.PROCESSING,
     ];
+    if (current.status === PaymentStatus.CANCELLED)
+      return this.sanitize(current);
     if (!cancellableStatuses.includes(current.status)) {
       throw new BadRequestException('Este pagamento não pode ser cancelado.');
     }
-    if (current.providerPaymentId) {
-      await this.gateways
-        .get(current.provider)
-        .cancelPayment(current.providerPaymentId);
+    if (!current.providerPaymentId) {
+      // The create request may already be at the provider, even if we have
+      // not received or saved its order ID. Keep the reservation until linked.
+      throw new ConflictException(
+        'O pedido ainda está sendo vinculado. Atualize o pagamento antes de cancelar.',
+      );
     }
-    return this.prisma.$transaction(async (transaction) => {
-      const payment = await transaction.payment.update({
-        where: { id },
+    await this.requireSinglePaymentAttempt(this.prisma, current);
+    if (this.jsonObject(current.metadata).nativeSandboxPix === true)
+      this.requireNativeSandboxPix();
+    const cancelled = await this.gateways
+      .get(current.provider)
+      .cancelPayment(current.providerPaymentId);
+    if (
+      cancelled.status !== PaymentStatus.CANCELLED ||
+      cancelled.orderClosure !== PaymentStatus.CANCELLED ||
+      cancelled.providerPaymentId !== current.providerPaymentId ||
+      cancelled.externalReference !== current.externalReference ||
+      !current.amount.equals(cancelled.amount)
+    ) {
+      throw new ConflictException(
+        'O provedor não confirmou o cancelamento deste pagamento.',
+      );
+    }
+    return this.reconcileSerializable(async (transaction) => {
+      await this.requireSinglePaymentAttempt(transaction, current);
+      const update = await transaction.payment.updateMany({
+        where: {
+          id,
+          status: { in: cancellableStatuses },
+          providerPaymentId: current.providerPaymentId,
+          purchase: { status: PurchaseStatus.AWAITING_PAYMENT },
+        },
         data: {
           status: PaymentStatus.CANCELLED,
           cancelledAt: new Date(),
           activePurchaseKey: null,
         },
+      });
+      if (update.count) {
+        await this.releasePurchase(
+          transaction,
+          current.purchaseId,
+          PurchaseStatus.CANCELLED,
+          {
+            id,
+            providerPaymentId: cancelled.providerPaymentId,
+            status: PaymentStatus.CANCELLED,
+          },
+        );
+      }
+      const payment = await transaction.payment.findUniqueOrThrow({
+        where: { id },
         include: paymentInclude,
       });
-      await this.releasePurchase(
-        transaction,
-        current.purchaseId,
-        PurchaseStatus.CANCELLED,
-      );
+      if (payment.status !== PaymentStatus.CANCELLED) {
+        throw new ConflictException(
+          'O pagamento mudou enquanto o cancelamento era confirmado. Atualize o pedido.',
+        );
+      }
       return this.sanitize(payment);
     });
   }
@@ -272,23 +421,71 @@ export class PaymentsService {
     });
     if (storedEvent?.processed) return { received: true, duplicate: true };
     if (!storedEvent) {
-      storedEvent = await this.prisma.paymentEvent.create({
-        data: {
-          provider: GatewayProvider.MERCADO_PAGO,
-          providerEventId: event.providerEventId,
-          eventType: event.eventType,
-          payload: event.payload as Prisma.InputJsonValue,
-        },
+      storedEvent = await this.createOrReadPaymentEvent({
+        provider: GatewayProvider.MERCADO_PAGO,
+        providerEventId: event.providerEventId,
+        eventType: event.eventType,
+        payload: event.payload as Prisma.InputJsonValue,
       });
+      if (storedEvent.processed) return { received: true, duplicate: true };
     }
 
-    const trackedPayment = await this.prisma.payment.findFirst({
+    let trackedPayment = await this.prisma.payment.findFirst({
       where: {
         provider: GatewayProvider.MERCADO_PAGO,
         providerPaymentId: event.resourceId,
       },
-      select: { id: true },
+      select: { id: true, metadata: true },
     });
+    if (!trackedPayment) {
+      const details = event.payload?.data;
+      const hint =
+        details && typeof details === 'object' && !Array.isArray(details)
+          ? (details as Record<string, unknown>)
+          : null;
+      const reference = hint?.external_reference;
+      // The signed query binds the order id, not this body field. Use a
+      // reference only to detect a local handoff, never to link or settle it.
+      if (
+        context.dataId === event.resourceId &&
+        hint?.id === event.resourceId &&
+        typeof reference === 'string' &&
+        /^sortex-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(
+          reference,
+        )
+      ) {
+        const attempt = await this.prisma.payment.findUnique({
+          where: { externalReference: reference },
+          select: {
+            id: true,
+            provider: true,
+            providerPaymentId: true,
+            status: true,
+            activePurchaseKey: true,
+            metadata: true,
+          },
+        });
+        if (attempt?.provider === GatewayProvider.MERCADO_PAGO) {
+          // Checkout may have committed between the two queries.
+          if (attempt.providerPaymentId === event.resourceId) {
+            trackedPayment = { id: attempt.id, metadata: attempt.metadata };
+          } else if (
+            !attempt.providerPaymentId &&
+            attempt.activePurchaseKey &&
+            attempt.status === PaymentStatus.CREATED
+          ) {
+            const pending = await this.prisma.paymentEvent.updateMany({
+              where: { id: storedEvent.id, processed: false },
+              data: { errorMessage: 'ORDER_LINK_PENDING' },
+            });
+            if (!pending.count) return { received: true, duplicate: true };
+            throw new ServiceUnavailableException(
+              'A order ainda está sendo vinculada ao pedido.',
+            );
+          }
+        }
+      }
+    }
     if (!trackedPayment) {
       await this.prisma.$transaction(async (transaction) => {
         await transaction.paymentEvent.update({
@@ -318,21 +515,28 @@ export class PaymentsService {
     }
 
     try {
+      if (this.jsonObject(trackedPayment.metadata).nativeSandboxPix === true)
+        this.requireNativeSandboxPix();
       const gatewayPayment = await provider.getPaymentStatus(event.resourceId);
-      const result = await this.processGatewayUpdate(
+      if (gatewayPayment.providerPaymentId !== event.resourceId)
+        throw new ConflictException(
+          'Identificador da ordem do provedor divergente.',
+        );
+      const { payment: result, duplicate } = await this.processGatewayUpdate(
         storedEvent.id,
         gatewayPayment,
       );
+      if (duplicate) return { received: true, duplicate: true };
       if (result.status === PaymentStatus.APPROVED) {
         await this.instantPrizes.detectForPurchase(result.purchaseId);
       }
       return { received: true, duplicate: false, status: result.status };
     } catch (error) {
-      await this.prisma.paymentEvent.update({
-        where: { id: storedEvent.id },
-        data: {
-          errorMessage: this.safeError(error),
-        },
+      // A failed attempt must not overwrite an acknowledgement committed by
+      // another delivery of the same event.
+      await this.prisma.paymentEvent.updateMany({
+        where: { id: storedEvent.id, processed: false },
+        data: { errorMessage: this.safeError(error) },
       });
       throw error;
     }
@@ -421,6 +625,7 @@ export class PaymentsService {
       paymentMethodId: string;
       installments: number;
     },
+    nativeSandbox = false,
   ) {
     this.ensureBuyer(user);
     const prepared = await this.preparePayment(
@@ -428,9 +633,10 @@ export class PaymentsService {
       purchaseId,
       method,
       card?.installments,
+      nativeSandbox,
     );
     if (prepared.existing && prepared.payment.providerPaymentId) {
-      return this.sanitize(prepared.payment);
+      return prepared.payment;
     }
     const provider = this.gateways.get(prepared.payment.provider);
     const names = user.name.trim().split(/\s+/);
@@ -451,6 +657,7 @@ export class PaymentsService {
     };
 
     try {
+      if (nativeSandbox) this.requireNativeSandboxPix();
       const gatewayResult =
         method === PaymentMethod.PIX
           ? await provider.createPixPayment(input)
@@ -460,24 +667,46 @@ export class PaymentsService {
               paymentMethodId: card!.paymentMethodId,
               installments: card!.installments,
             });
-      const storedStatus =
-        gatewayResult.status === PaymentStatus.APPROVED
-          ? PaymentStatus.PROCESSING
-          : gatewayResult.status;
+      if (
+        nativeSandbox &&
+        (!gatewayResult.providerPaymentId ||
+          !sandboxPixTicketUrl(gatewayResult.boletoUrl) ||
+          gatewayResult.externalReference !==
+            prepared.payment.externalReference ||
+          !new Prisma.Decimal(gatewayResult.amount).equals(
+            prepared.payment.amount,
+          ))
+      ) {
+        throw new BadGatewayException(
+          'O provedor não confirmou uma cobrança Pix do ambiente de teste.',
+        );
+      }
+      const storedStatus = (
+        [
+          PaymentStatus.APPROVED,
+          PaymentStatus.CANCELLED,
+          PaymentStatus.EXPIRED,
+        ] as PaymentStatus[]
+      ).includes(gatewayResult.status)
+        ? PaymentStatus.PROCESSING
+        : gatewayResult.status;
       const updated = await this.prisma.payment.update({
         where: { id: prepared.payment.id },
         data: {
           providerPaymentId: gatewayResult.providerPaymentId,
           status: storedStatus,
-          pixQrCode: gatewayResult.pixQrCode,
-          pixQrCodeBase64: gatewayResult.pixQrCodeBase64,
-          pixCopyPaste: gatewayResult.pixCopyPaste,
-          boletoUrl: gatewayResult.boletoUrl,
+          pixQrCode: nativeSandbox ? null : gatewayResult.pixQrCode,
+          pixQrCodeBase64: nativeSandbox ? null : gatewayResult.pixQrCodeBase64,
+          pixCopyPaste: nativeSandbox ? null : gatewayResult.pixCopyPaste,
+          boletoUrl: nativeSandbox ? null : gatewayResult.boletoUrl,
           cardBrand: gatewayResult.cardBrand,
           cardLastFour: gatewayResult.cardLastFour,
           installments: gatewayResult.installments ?? card?.installments,
           failureReason: gatewayResult.failureReason,
-          metadata: { providerStatus: gatewayResult.rawStatus || '' },
+          metadata: {
+            ...this.jsonObject(prepared.payment.metadata),
+            providerStatus: gatewayResult.rawStatus || '',
+          },
           ...(storedStatus === PaymentStatus.REJECTED
             ? {
                 rejectedAt: new Date(),
@@ -494,7 +723,7 @@ export class PaymentsService {
         prepared.payment.status,
         updated.status,
       );
-      return this.sanitize(updated);
+      return updated;
     } catch (error) {
       await this.prisma.payment.update({
         where: { id: prepared.payment.id },
@@ -518,6 +747,7 @@ export class PaymentsService {
     purchaseId: string,
     method: PaymentMethod,
     installments?: number,
+    nativeSandbox = false,
   ) {
     return this.prisma.$transaction(
       async (transaction) => {
@@ -532,13 +762,29 @@ export class PaymentsService {
             throw new ConflictException(
               'Já existe um pagamento ativo com outro método.',
             );
+          if (
+            (this.jsonObject(existing.metadata).nativeSandboxPix === true) !==
+            nativeSandbox
+          )
+            throw new ConflictException(
+              'Já existe uma tentativa de pagamento criada por outro fluxo.',
+            );
+          if (
+            nativeSandbox &&
+            !existing.providerPaymentId &&
+            (existing.purchase.status !== PurchaseStatus.AWAITING_PAYMENT ||
+              existing.purchase.expiresAt <= new Date())
+          ) {
+            throw new BadRequestException(
+              'A reserva terminou; não retome este Pix.',
+            );
+          }
           return { payment: existing, existing: true };
         }
 
         const purchase = await transaction.purchase.findFirst({
           where: { id: purchaseId, buyerId: user.id },
           include: {
-            promotion: true,
             buyer: true,
             tickets: true,
             campaign: {
@@ -625,6 +871,7 @@ export class PaymentsService {
               platformFeeRule: fee.reason,
               platformFeeSource: fee.source,
               paymentEnvironment: process.env.PAYMENT_ENV || 'sandbox',
+              ...(nativeSandbox ? { nativeSandboxPix: true } : {}),
             },
           },
           include: paymentInclude,
@@ -638,26 +885,98 @@ export class PaymentsService {
   private recalculateAmount(purchase: {
     quantity: number;
     unitPrice: Prisma.Decimal;
-    promotion: { numberQuantity: number; packagePrice: Prisma.Decimal } | null;
+    subtotal: Prisma.Decimal;
+    discount: Prisma.Decimal;
+    total: Prisma.Decimal;
+    promotionId: string | null;
   }) {
-    const subtotal = new Prisma.Decimal(purchase.unitPrice).mul(
-      purchase.quantity,
-    );
-    if (purchase.promotion) {
-      if (purchase.promotion.numberQuantity !== purchase.quantity) {
-        throw new ConflictException('Promoção incompatível com a compra.');
+    // Charge the server-calculated snapshot. A later edit to the promotion
+    // must not change the price agreed when the stock was held.
+    const subtotal = purchase.unitPrice
+      .mul(purchase.quantity)
+      .toDecimalPlaces(2);
+    if (
+      !subtotal.equals(purchase.subtotal) ||
+      purchase.discount.lt(0) ||
+      (!purchase.promotionId && !purchase.discount.isZero()) ||
+      !purchase.total.gt(0) ||
+      !subtotal.sub(purchase.discount).equals(purchase.total)
+    )
+      throw new ConflictException(
+        'Valores da reserva divergem. Faça uma nova reserva.',
+      );
+    return purchase.total;
+  }
+
+  private async createOrReadPaymentEvent(
+    data: Prisma.PaymentEventUncheckedCreateInput,
+  ) {
+    try {
+      return await this.prisma.paymentEvent.create({ data });
+    } catch (error) {
+      // Two first deliveries can both observe an absent event. Only the unique
+      // provider/event pair can be reused, not an unrelated unique violation.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const existing = await this.prisma.paymentEvent.findUnique({
+          where: {
+            provider_providerEventId: {
+              provider: data.provider,
+              providerEventId: data.providerEventId,
+            },
+          },
+        });
+        if (existing) return existing;
       }
-      return new Prisma.Decimal(purchase.promotion.packagePrice);
+      throw error;
     }
-    return subtotal;
+  }
+
+  private async reconcileSerializable<T>(
+    reconcile: (transaction: Prisma.TransactionClient) => Promise<T>,
+  ): Promise<T> {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(reconcile, {
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        });
+      } catch (error) {
+        // PostgreSQL aborted the whole transaction; no intermediate writes
+        // survived. Re-read state in a new transaction, never repeat the SDK.
+        if (
+          !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+          error.code !== 'P2034'
+        ) {
+          throw error;
+        }
+      }
+    }
+    throw new ServiceUnavailableException(
+      'Conciliação concorrente. Tente novamente.',
+    );
   }
 
   private async processGatewayUpdate(
     eventId: string,
     gateway: GatewayPaymentResult,
   ) {
-    const result = await this.prisma.$transaction(
+    const result = await this.reconcileSerializable(
+      // Event acknowledgement and accounting must commit together.
       async (transaction) => {
+        const handled = await transaction.paymentEvent.findUnique({
+          where: { id: eventId },
+          select: { processed: true, paymentId: true },
+        });
+        if (handled?.processed && handled.paymentId) {
+          return {
+            payment: await transaction.payment.findUniqueOrThrow({
+              where: { id: handled.paymentId },
+            }),
+            duplicate: true,
+          };
+        }
         const payment = await transaction.payment.findFirst({
           where: {
             provider: GatewayProvider.MERCADO_PAGO,
@@ -673,15 +992,51 @@ export class PaymentsService {
         });
         if (!payment)
           throw new NotFoundException('Referência externa inválida.');
+        if (gateway.providerPaymentId !== payment.providerPaymentId) {
+          throw new ConflictException(
+            'Identificador da ordem do provedor divergente.',
+          );
+        }
         if (gateway.externalReference !== payment.externalReference) {
           throw new ConflictException('Referência externa divergente.');
         }
         if (!new Prisma.Decimal(gateway.amount).equals(payment.amount)) {
           throw new ConflictException('Valor do webhook divergente.');
         }
-        if (
+        if (gateway.reconciliationIssue) {
+          throw new ConflictException(
+            gateway.reconciliationIssue === 'PARTIAL_REFUND'
+              ? 'Estorno parcial confirmado; requer conciliação manual.'
+              : 'Contestação devolvida ao vendedor; requer conciliação manual.',
+          );
+        }
+        const localApproval =
           payment.status === PaymentStatus.APPROVED &&
-          payment.purchase.status === PurchaseStatus.PAID
+          payment.purchase.status === PurchaseStatus.PAID;
+        const reversed =
+          payment.status === PaymentStatus.REFUNDED ||
+          payment.status === PaymentStatus.CHARGEBACK;
+        const reversal =
+          gateway.status === PaymentStatus.REFUNDED ||
+          gateway.status === PaymentStatus.CHARGEBACK
+            ? gateway.status
+            : null;
+        if (reversal && !localApproval && !reversed) {
+          throw new ConflictException(
+            'Reversão informada sem aprovação local; requer conciliação manual.',
+          );
+        }
+        // A confirmação nunca pode ser reaberta por uma notificação tardia.
+        // O ledger permite apenas um débito de reversão por pagamento liquidado.
+        const closedPayment =
+          (payment.status === PaymentStatus.CANCELLED ||
+            payment.status === PaymentStatus.EXPIRED) &&
+          (payment.purchase.status === PurchaseStatus.CANCELLED ||
+            payment.purchase.status === PurchaseStatus.EXPIRED);
+        if (
+          reversed ||
+          (localApproval && !reversal) ||
+          (closedPayment && gateway.status !== PaymentStatus.APPROVED)
         ) {
           await transaction.auditLog.create({
             data: {
@@ -699,9 +1054,10 @@ export class PaymentsService {
               processed: true,
               processedAt: new Date(),
               paymentId: payment.id,
+              errorMessage: null,
             },
           });
-          return payment;
+          return { payment, duplicate: false };
         }
 
         if (gateway.status === PaymentStatus.APPROVED) {
@@ -750,29 +1106,35 @@ export class PaymentsService {
               grossRevenue: { increment: payment.amount },
             },
           });
+          await transaction.promotionUsage.updateMany({
+            where: { purchaseId: payment.purchaseId, status: 'RESERVED' },
+            data: { status: 'APPROVED' },
+          });
           await this.ledger.recordApprovedPayment(transaction, payment.id);
           await this.affiliateCommissions.recordApprovedPayment(
             transaction,
             payment.id,
           );
           await this.crmSync.syncApprovedPayment(transaction, payment.id);
+        } else if (reversal) {
+          await transaction.payment.update({
+            where: { id: payment.id },
+            data: {
+              status: reversal,
+              refundedAt:
+                reversal === PaymentStatus.REFUNDED ? new Date() : undefined,
+              activePurchaseKey: null,
+              failureReason: null,
+            },
+          });
+          await this.ledger.recordReversal(transaction, payment.id, reversal);
+          await this.affiliateCommissions.reversePayment(
+            transaction,
+            payment.id,
+            reversal,
+          );
         } else {
           await this.applyNonApprovedStatus(transaction, payment, gateway);
-          if (
-            gateway.status === PaymentStatus.REFUNDED ||
-            gateway.status === PaymentStatus.CHARGEBACK
-          ) {
-            await this.ledger.recordReversal(
-              transaction,
-              payment.id,
-              gateway.status,
-            );
-            await this.affiliateCommissions.reversePayment(
-              transaction,
-              payment.id,
-              gateway.status,
-            );
-          }
         }
         if (payment.status !== gateway.status) {
           await transaction.auditLog.create({
@@ -795,14 +1157,16 @@ export class PaymentsService {
             errorMessage: null,
           },
         });
-        return transaction.payment.findUniqueOrThrow({
-          where: { id: payment.id },
-        });
+        return {
+          payment: await transaction.payment.findUniqueOrThrow({
+            where: { id: payment.id },
+          }),
+          duplicate: false,
+        };
       },
-      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
     );
-    if (result.status === PaymentStatus.APPROVED) {
-      await this.campaignMilestones.evaluateReached(result.campaignId);
+    if (!result.duplicate && result.payment.status === PaymentStatus.APPROVED) {
+      await this.campaignMilestones.evaluateReached(result.payment.campaignId);
     }
     return result;
   }
@@ -814,12 +1178,20 @@ export class PaymentsService {
     }>,
     gateway: GatewayPaymentResult,
   ) {
-    const terminalStatuses: PaymentStatus[] = [
-      PaymentStatus.REJECTED,
-      PaymentStatus.CANCELLED,
-      PaymentStatus.EXPIRED,
-    ];
-    const terminal = terminalStatuses.includes(gateway.status);
+    const closing =
+      gateway.status === PaymentStatus.CANCELLED
+        ? PaymentStatus.CANCELLED
+        : gateway.status === PaymentStatus.EXPIRED
+          ? PaymentStatus.EXPIRED
+          : undefined;
+    if (closing) {
+      if (gateway.orderClosure !== closing)
+        throw new ConflictException(
+          'Encerramento da ordem não confirmado. A reserva continua retida.',
+        );
+      await this.requireSinglePaymentAttempt(transaction, payment);
+    }
+    const terminal = closing || gateway.status === PaymentStatus.REJECTED;
     await transaction.payment.update({
       where: { id: payment.id },
       data: {
@@ -832,25 +1204,40 @@ export class PaymentsService {
           gateway.status === PaymentStatus.CANCELLED ? new Date() : undefined,
       },
     });
-    const releasableStatuses: PaymentStatus[] = [
-      PaymentStatus.CANCELLED,
-      PaymentStatus.EXPIRED,
-    ];
-    if (releasableStatuses.includes(gateway.status)) {
+    if (closing) {
       await this.releasePurchase(
         transaction,
         payment.purchaseId,
         gateway.status === PaymentStatus.EXPIRED
           ? PurchaseStatus.EXPIRED
           : PurchaseStatus.CANCELLED,
+        {
+          id: payment.id,
+          providerPaymentId: gateway.providerPaymentId,
+          status: closing,
+        },
       );
     }
+  }
+
+  private async requireSinglePaymentAttempt(
+    tx: Pick<Prisma.TransactionClient, 'payment'>,
+    current: { id: string; purchaseId: string },
+  ) {
+    const other = await tx.payment.count({
+      where: { purchaseId: current.purchaseId, id: { not: current.id } },
+    });
+    if (other > 0)
+      throw new ConflictException(
+        'Há outras tentativas de pagamento. A reserva continua retida para conciliação.',
+      );
   }
 
   private async releasePurchase(
     transaction: Prisma.TransactionClient,
     purchaseId: string,
     status: PurchaseStatus,
+    closure: ClosedProviderAttempt,
   ) {
     const purchase = await transaction.purchase.findUnique({
       where: { id: purchaseId },
@@ -868,6 +1255,7 @@ export class PaymentsService {
           status === PurchaseStatus.CANCELLED ? new Date() : undefined,
       },
     });
+    await releaseUnusedCouponCapacity(transaction, [purchaseId], closure);
     await transaction.campaign.update({
       where: { id: purchase.campaignId },
       data: {

@@ -1,4 +1,4 @@
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString, Matches } from 'class-validator';
 
 export const campaignMediaTargets = [
   'COVER',
@@ -18,4 +18,9 @@ export class UploadCampaignMediaDto {
   @IsOptional()
   @IsString()
   instantPrizeId?: string;
+
+  // Omitted by the existing web editor; supplied by the native draft editor.
+  @IsOptional()
+  @Matches(/^(none|[a-f0-9]{16})$/)
+  expectedDraftCoverRevision?: string;
 }

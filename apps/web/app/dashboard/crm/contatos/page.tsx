@@ -5,7 +5,9 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Download, MessageCircle, Tag, X } from "lucide-react";
-import CrmNav from "@/components/crm/CrmNav";
+import { CrmWorkspace, CrmNotice } from "@/components/crm/CrmWorkspace";
+import ui from "@/components/crm/crm-workspace-premium.module.css";
+import { useAuthorizedUser } from "@/components/auth/RoleGate";
 import {
   addContactTag,
   contacts,
@@ -29,6 +31,11 @@ const statusLabel: Record<string, string> = {
 };
 
 export default function Contatos() {
+  const organizer = useAuthorizedUser();
+  return organizer ? <ContactsView key={organizer.id} /> : null;
+}
+
+function ContactsView() {
   const router = useRouter();
   const query = useSearchParams();
   const cityMissing = query.get("cityMissing") === "1";
@@ -36,8 +43,8 @@ export default function Contatos() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [allTags, setAllTags] = useState<CrmTag[]>([]);
   const [segmentRows, setSegmentRows] = useState<Segment[]>([]);
-  const [search, setSearch] = useState("");
-  const [debounced, setDebounced] = useState("");
+  const [search, setSearch] = useState(query.get("search") || "");
+  const [debounced, setDebounced] = useState(query.get("search") || "");
   const [status, setStatus] = useState(query.get("status") || "");
   const [campaignId, setCampaignId] = useState("");
   const [city, setCity] = useState(query.get("city") || "");
@@ -48,6 +55,12 @@ export default function Contatos() {
   const [pages, setPages] = useState(1);
   const [total, setTotal] = useState(0);
   const [error, setError] = useState("");
+  const [listError, setListError] = useState("");
+  const [filtersError, setFiltersError] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [refresh, setRefresh] = useState(0);
+  const [filtersRefresh, setFiltersRefresh] = useState(0);
   const [selected, setSelected] = useState<string[]>([]);
   const [bulkTag, setBulkTag] = useState("");
   const [bulkBusy, setBulkBusy] = useState(false);
@@ -74,7 +87,7 @@ export default function Contatos() {
   function communicate(ids = selected) {
     if (!ids.length) return;
     router.push(
-      `/dashboard/comunicacao?audience=MANUAL&contactIds=${encodeURIComponent(ids.join(","))}`,
+      `/dashboard/comunicacao?tab=new&audience=MANUAL&contactIds=${encodeURIComponent(ids.join(","))}`,
     );
   }
   function queryString(targetPage: number, limit = 20) {
@@ -140,6 +153,7 @@ export default function Contatos() {
       });
       setSelected([]);
       setBulkSegment("");
+      setFeedback("Contatos adicionados ao segmento.");
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -163,6 +177,7 @@ export default function Contatos() {
         ),
       );
       setSelected([]);
+      setFeedback("Tarefas criadas.");
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -181,6 +196,8 @@ export default function Contatos() {
       await Promise.all(selected.map((id) => addContactTag(id, bulkTag)));
       setSelected([]);
       setBulkTag("");
+      setFeedback("Etiqueta aplicada.");
+      setRefresh((value) => value + 1);
     } catch (cause) {
       setError(
         cause instanceof Error
@@ -192,43 +209,52 @@ export default function Contatos() {
     }
   }
   async function exportSelected() {
-    let rows = items.filter((item) => selectedSet.has(item.id));
-    if (rows.length < selected.length) {
-      const first = await contacts(`?${queryString(1, 100)}`);
-      const rest = await Promise.all(
-        Array.from({ length: Math.max(0, first.pages - 1) }, (_, index) =>
-          contacts(`?${queryString(index + 2, 100)}`),
+    if (bulkBusy) return;
+    setBulkBusy(true);
+    setError("");
+    try {
+      let rows = items.filter((item) => selectedSet.has(item.id));
+      if (rows.length < selected.length) {
+        const first = await contacts(`?${queryString(1, 100)}`);
+        const rest = await Promise.all(
+          Array.from({ length: Math.max(0, first.pages - 1) }, (_, index) =>
+            contacts(`?${queryString(index + 2, 100)}`),
+          ),
+        );
+        rows = [first, ...rest]
+          .flatMap((result) => result.items)
+          .filter((item) => selectedSet.has(item.id));
+      }
+      const csv = [
+        "Nome,E-mail,Telefone,Cidade,Estado,Compras,Títulos,Valor gasto",
+        ...rows.map((item) =>
+          [
+            item.name,
+            item.email || "",
+            item.phone || "",
+            item.city || "",
+            item.state || "",
+            item.totalPurchases,
+            item.totalTickets,
+            item.totalSpent,
+          ]
+            .map((value) => `"${String(value).replaceAll('"', '""')}"`)
+            .join(","),
         ),
+      ].join("\n");
+      const url = URL.createObjectURL(
+        new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }),
       );
-      rows = [first, ...rest]
-        .flatMap((result) => result.items)
-        .filter((item) => selectedSet.has(item.id));
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "contatos-selecionados.csv";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      setError("Não foi possível exportar os contatos selecionados.");
+    } finally {
+      setBulkBusy(false);
     }
-    const csv = [
-      "Nome,E-mail,Telefone,Cidade,Estado,Compras,Títulos,Valor gasto",
-      ...rows.map((item) =>
-        [
-          item.name,
-          item.email || "",
-          item.phone || "",
-          item.city || "",
-          item.state || "",
-          item.totalPurchases,
-          item.totalTickets,
-          item.totalSpent,
-        ]
-          .map((value) => `"${String(value).replaceAll('"', '""')}"`)
-          .join(","),
-      ),
-    ].join("\n");
-    const url = URL.createObjectURL(
-      new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }),
-    );
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "contatos-selecionados.csv";
-    anchor.click();
-    URL.revokeObjectURL(url);
   }
 
   useEffect(() => {
@@ -239,15 +265,25 @@ export default function Contatos() {
     return () => window.clearTimeout(timer);
   }, [search]);
   useEffect(() => {
+    let active = true;
+    setFiltersError(false);
     Promise.all([getMyCampaigns(), tags(), segments()])
       .then(([c, t, s]) => {
+        if (!active) return;
         setCampaigns(c);
         setAllTags(t);
         setSegmentRows(s);
       })
-      .catch(() => undefined);
-  }, []);
+      .catch(() => {
+        if (active) setFiltersError(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, [filtersRefresh]);
+
   useEffect(() => {
+    let active = true;
     const query = new URLSearchParams({
       page: String(page),
       limit: "20",
@@ -260,142 +296,202 @@ export default function Contatos() {
       ...(tagId ? { tagId } : {}),
       ...(minSpent ? { minSpent } : {}),
     });
-    setError("");
+    setLoading(true);
+    setListError("");
     contacts(`?${query}`)
       .then((result) => {
+        if (!active) return;
         setItems(result.items);
         setPages(result.pages || 1);
         setTotal(result.total);
       })
-      .catch((cause) =>
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Não foi possível carregar os contatos.",
-        ),
-      );
-  }, [page, order, debounced, status, campaignId, city, cityMissing, tagId, minSpent]);
+      .catch(() => {
+        if (active) setListError("Não foi possível carregar os contatos.");
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [
+    page,
+    order,
+    debounced,
+    status,
+    campaignId,
+    city,
+    cityMissing,
+    tagId,
+    minSpent,
+    refresh,
+  ]);
+  const listReady = !loading && !listError;
+  const label =
+    total === 1 ? "1 contato encontrado" : `${total} contatos encontrados`;
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-zinc-100 p-3 sm:p-5 lg:p-8">
-      <div className="mx-auto max-w-7xl">
-        <div className="flex flex-wrap items-end justify-between gap-3">
+    <CrmWorkspace
+      title="Contatos"
+      subtitle="Encontre compradores pelo histórico e organize sua lista com etiquetas e segmentos."
+      actions={
+        <span className={ui.heroCount}>
+          {loading || listError ? "Contatos do CRM" : label}
+        </span>
+      }
+    >
+      {query.get("action") === "new" && (
+        <section className={`sx-premium-surface ${ui.panel}`}>
+          <h2 className="sx-premium-section">Adicionar contato ao CRM</h2>
+          <p className="sx-premium-muted">
+            Os contatos são criados quando o comprador se identifica ou conclui
+            o cadastro. Seus dados, consentimento e histórico permanecem
+            vinculados à pessoa correta.
+          </p>
           <div>
-            <p className="text-sm font-bold uppercase text-violet-700">
-              CRM Inteligente
-            </p>
-            <h1 className="text-3xl font-black">Contatos</h1>
-          </div>
-          <span className="rounded-full bg-white px-4 py-2 text-sm font-bold text-zinc-600">
-            {total} contatos
-          </span>
-        </div>
-        <div className="mt-4">
-          <CrmNav />
-        </div>
-        {query.get("action") === "new" && (
-          <div className="mt-4 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm text-violet-900">
-            <strong>Adicionar contato ao CRM</strong>
-            <p className="mt-1 text-violet-700">
-              Os contatos são criados com segurança quando o comprador se
-              identifica ou conclui o cadastro. Assim, telefone, consentimento e
-              histórico permanecem vinculados à pessoa correta.
-            </p>
-            <Link
-              href="/cadastro/comprador"
-              className="mt-3 inline-flex rounded-xl bg-violet-700 px-4 py-2 font-bold text-white"
-            >
+            <Link href="/cadastro/comprador" className="sx-premium-button">
               Abrir cadastro de comprador
             </Link>
           </div>
+        </section>
+      )}
+      <section
+        className={`sx-premium-surface ${ui.panel}`}
+        aria-labelledby="crm-contact-filter-title"
+      >
+        <div className={ui.row}>
+          <h2 id="crm-contact-filter-title" className="sx-premium-section">
+            Filtros de contatos
+          </h2>
+          {cityMissing && (
+            <span className="sx-premium-badge">Sem cidade cadastrada</span>
+          )}
+        </div>
+        <div className={ui.filters}>
+          <label className={ui.fieldLabel}>
+            Buscar contato
+            <input
+              className={ui.field}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Nome, telefone ou e-mail"
+            />
+          </label>
+          <label className={ui.fieldLabel}>
+            Status
+            <select
+              className={ui.field}
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">Todos os status</option>
+              {Object.entries(statusLabel).map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={ui.fieldLabel}>
+            Campanha
+            <select
+              className={ui.field}
+              value={campaignId}
+              onChange={(e) => {
+                setCampaignId(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">Todas as campanhas</option>
+              {campaigns.map((campaign) => (
+                <option key={campaign.id} value={campaign.id}>
+                  {campaign.title}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={ui.fieldLabel}>
+            Cidade
+            <input
+              className={ui.field}
+              value={city}
+              placeholder="Cidade"
+              onChange={(e) => {
+                setCity(e.target.value);
+                setPage(1);
+              }}
+            />
+          </label>
+          <label className={ui.fieldLabel}>
+            Etiqueta
+            <select
+              className={ui.field}
+              value={tagId}
+              onChange={(e) => {
+                setTagId(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">Todas as etiquetas</option>
+              {allTags.map((tag) => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={ui.fieldLabel}>
+            Gasto mínimo
+            <input
+              className={ui.field}
+              type="number"
+              min="0"
+              value={minSpent}
+              placeholder="Gasto mínimo"
+              onChange={(e) => {
+                setMinSpent(e.target.value);
+                setPage(1);
+              }}
+            />
+          </label>
+          <label className={ui.fieldLabel}>
+            Ordenar por
+            <select
+              className={ui.field}
+              value={order}
+              onChange={(e) => {
+                setOrder(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="recent">Mais recentes</option>
+              <option value="spent">Maiores compradores</option>
+            </select>
+          </label>
+        </div>
+        {filtersError && (
+          <CrmNotice kind="error">
+            Algumas opções de filtro não puderam ser carregadas.
+            <p>
+              <button
+                type="button"
+                className="sx-premium-button"
+                onClick={() => setFiltersRefresh((n) => n + 1)}
+              >
+                Recarregar opções
+              </button>
+            </p>
+          </CrmNotice>
         )}
-        <section className="mt-5 grid gap-3 rounded-3xl bg-white p-4 md:grid-cols-2 xl:grid-cols-4">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Nome, telefone ou e-mail"
-            className="h-11 rounded-xl border px-3"
-          />
-          <select
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              setPage(1);
-            }}
-            className="h-11 rounded-xl border px-3"
-          >
-            <option value="">Todos os status</option>
-            {Object.entries(statusLabel).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <select
-            value={campaignId}
-            onChange={(e) => {
-              setCampaignId(e.target.value);
-              setPage(1);
-            }}
-            className="h-11 rounded-xl border px-3"
-          >
-            <option value="">Todas as campanhas</option>
-            {campaigns.map((campaign) => (
-              <option key={campaign.id} value={campaign.id}>
-                {campaign.title}
-              </option>
-            ))}
-          </select>
-          <input
-            value={city}
-            onChange={(e) => {
-              setCity(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Cidade"
-            className="h-11 rounded-xl border px-3"
-          />
-          <select
-            value={tagId}
-            onChange={(e) => {
-              setTagId(e.target.value);
-              setPage(1);
-            }}
-            className="h-11 rounded-xl border px-3"
-          >
-            <option value="">Todas as etiquetas</option>
-            {allTags.map((tag) => (
-              <option key={tag.id} value={tag.id}>
-                {tag.name}
-              </option>
-            ))}
-          </select>
-          <input
-            type="number"
-            min="0"
-            value={minSpent}
-            onChange={(e) => {
-              setMinSpent(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Gasto mínimo"
-            className="h-11 rounded-xl border px-3"
-          />
-          <select
-            value={order}
-            onChange={(e) => {
-              setOrder(e.target.value);
-              setPage(1);
-            }}
-            className="h-11 rounded-xl border px-3"
-          >
-            <option value="recent">Mais recentes</option>
-            <option value="spent">Maiores compradores</option>
-          </select>
+        <div className={ui.actions}>
           <button
             type="button"
+            className="sx-premium-button"
             onClick={toggleAll}
-            className="h-11 rounded-xl border border-violet-200 px-4 font-bold text-violet-700"
+            disabled={!listReady || !items.length}
           >
             {allVisibleSelected
               ? "Desmarcar visíveis"
@@ -403,9 +499,9 @@ export default function Contatos() {
           </button>
           <button
             type="button"
+            className="sx-premium-button"
             onClick={() => void selectAllResults()}
-            disabled={selectingAll || !total}
-            className="h-11 rounded-xl border px-4 font-bold disabled:opacity-40"
+            disabled={!listReady || selectingAll || !total}
           >
             {selectingAll
               ? "Selecionando..."
@@ -413,245 +509,313 @@ export default function Contatos() {
           </button>
           <button
             type="button"
-            disabled={!items.length}
+            className="sx-premium-button"
+            data-variant="ghost"
+            disabled={!listReady || !items.length}
             onClick={() => communicate(items.map((item) => item.id))}
-            className="h-11 rounded-xl bg-violet-700 px-4 font-bold text-white disabled:opacity-40"
           >
-            📢 Comunicar todos filtrados
+            Preparar comunicação dos contatos visíveis
           </button>
-        </section>
-        {error && (
-          <p className="mt-4 rounded-xl bg-red-50 p-3 text-red-700">{error}</p>
-        )}
-        <div className="mt-5 hidden overflow-auto rounded-2xl bg-white md:block">
-          <table className="w-full min-w-[900px] text-left text-sm">
-            <thead>
-              <tr className="border-b text-zinc-500">
-                <th className="w-12 p-4">
-                  <input
-                    aria-label="Selecionar todos os contatos visíveis"
-                    type="checkbox"
-                    checked={allVisibleSelected}
-                    onChange={toggleAll}
-                  />
-                </th>
-                <th>Contato</th>
-                <th>Localização</th>
-                <th>Status</th>
-                <th>Compras</th>
-                <th>Valor gasto</th>
-                <th>Última compra</th>
-                <th>Etiquetas</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((contact) => (
-                <tr key={contact.id} className="border-b">
-                  <td className="p-4">
-                    <input
-                      aria-label={`Selecionar ${contact.name}`}
-                      type="checkbox"
-                      checked={selectedSet.has(contact.id)}
-                      onChange={() => toggle(contact.id)}
-                    />
-                  </td>
-                  <td>
-                    <Link
-                      href={`/dashboard/crm/contatos/${contact.id}`}
-                      className="font-bold text-violet-700"
-                    >
-                      {contact.name}
-                    </Link>
-                    <p className="text-xs text-zinc-500">
-                      {contact.email} · {contact.phone}
-                    </p>
-                  </td>
-                  <td>
-                    {[contact.city, contact.state]
-                      .filter(Boolean)
-                      .join(" - ") || "—"}
-                  </td>
-                  <td>{statusLabel[contact.status] || contact.status}</td>
-                  <td>{contact.totalPurchases}</td>
-                  <td>{money(contact.totalSpent)}</td>
-                  <td>
-                    {contact.lastPurchaseAt
-                      ? new Date(contact.lastPurchaseAt).toLocaleDateString(
-                          "pt-BR",
-                        )
-                      : "—"}
-                  </td>
-                  <td>
-                    {contact.tags?.map(({ tag }) => (
-                      <span
-                        key={tag.id}
-                        className="mr-1 rounded-full bg-violet-50 px-2 py-1 text-xs text-violet-700"
-                      >
-                        {tag.name}
-                      </span>
-                    ))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!items.length && <Empty />}
         </div>
-        <div className="mt-5 grid gap-3 md:hidden">
-          {items.map((contact) => (
-            <article
-              key={contact.id}
-              className="rounded-2xl bg-white p-5 shadow-sm"
+      </section>
+      {error && <CrmNotice kind="error">{error}</CrmNotice>}
+      {feedback && <CrmNotice kind="success">{feedback}</CrmNotice>}
+      {selected.length > 0 && (
+        <section
+          className={`sx-premium-surface ${ui.selection}`}
+          aria-labelledby="crm-contact-selection"
+        >
+          <div className={ui.row}>
+            <h2
+              className="sx-premium-section"
+              id="crm-contact-selection"
+              aria-live="polite"
             >
-              <div className="flex justify-between gap-2">
-                <label className="flex min-w-0 items-center gap-3">
-                  <input
-                    aria-label={`Selecionar ${contact.name}`}
-                    type="checkbox"
-                    checked={selectedSet.has(contact.id)}
-                    onChange={() => toggle(contact.id)}
-                  />
-                  <Link
-                    href={`/dashboard/crm/contatos/${contact.id}`}
-                    className="truncate font-bold text-violet-700"
-                  >
-                    {contact.name}
-                  </Link>
-                </label>
-                <span className="text-xs font-bold text-violet-700">
-                  {statusLabel[contact.status] || contact.status}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-zinc-500">
-                {contact.email} · {contact.phone}
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                <span>
-                  Compras: <b>{contact.totalPurchases}</b>
-                </span>
-                <span>
-                  Gasto: <b>{money(contact.totalSpent)}</b>
-                </span>
-              </div>
-            </article>
-          ))}
-          {!items.length && <Empty />}
-        </div>
-        {pages > 1 && (
-          <div className="mt-5 flex items-center justify-center gap-3">
+              {selected.length} comprador(es) selecionado(s)
+            </h2>
             <button
-              disabled={page === 1}
-              onClick={() => setPage((value) => value - 1)}
-              className="rounded-xl border bg-white px-4 py-2 font-bold disabled:opacity-40"
+              type="button"
+              className="sx-premium-button"
+              onClick={() => setSelected([])}
             >
-              Anterior
-            </button>
-            <span className="text-sm">
-              Página {page} de {pages}
-            </span>
-            <button
-              disabled={page === pages}
-              onClick={() => setPage((value) => value + 1)}
-              className="rounded-xl border bg-white px-4 py-2 font-bold disabled:opacity-40"
-            >
-              Próxima
+              <X size={16} aria-hidden="true" /> Remover seleção
             </button>
           </div>
-        )}
-        {selected.length > 0 && (
-          <div className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-5xl rounded-2xl border border-violet-200 bg-white p-3 shadow-2xl md:bottom-6 md:flex md:items-center md:gap-3">
-            <div className="mb-3 flex items-center justify-between md:mb-0 md:mr-auto">
-              <strong>{selected.length} comprador(es) selecionado(s)</strong>
-              <button
-                className="rounded-lg p-2 md:hidden"
-                onClick={() => setSelected([])}
-                aria-label="Remover seleção"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:flex">
-              <button
-                onClick={() => communicate()}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-violet-700 px-4 text-sm font-bold text-white"
-              >
-                <MessageCircle size={17} />
-                Enviar mensagem
-              </button>
+          <div className={ui.actions}>
+            <button
+              type="button"
+              className="sx-premium-button"
+              data-variant="primary"
+              onClick={() => communicate()}
+            >
+              <MessageCircle size={17} aria-hidden="true" /> Preparar
+              comunicação
+            </button>
+            <button
+              type="button"
+              className="sx-premium-button"
+              disabled={bulkBusy}
+              onClick={() => void exportSelected()}
+            >
+              <Download size={17} aria-hidden="true" /> Exportar
+            </button>
+            <button
+              type="button"
+              className="sx-premium-button"
+              disabled={bulkBusy}
+              onClick={() => void createBulkTask()}
+            >
+              Criar tarefa
+            </button>
+          </div>
+          <div className={ui.actions}>
+            <label className={ui.fieldLabel}>
+              Etiqueta para adicionar
               <select
-                aria-label="Etiqueta para adicionar"
+                className={ui.field}
                 value={bulkTag}
                 onChange={(e) => setBulkTag(e.target.value)}
-                className="min-h-11 rounded-xl border px-3 text-sm"
               >
-                <option value="">Adicionar etiqueta</option>
+                <option value="">Escolher etiqueta</option>
                 {allTags.map((tag) => (
                   <option key={tag.id} value={tag.id}>
                     {tag.name}
                   </option>
                 ))}
               </select>
-              <button
-                disabled={!bulkTag || bulkBusy}
-                onClick={() => void applyTag()}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold disabled:opacity-40"
-              >
-                <Tag size={17} />
-                Aplicar
-              </button>
-              <button
-                onClick={() => void exportSelected()}
-                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-bold"
-              >
-                <Download size={17} />
-                Exportar
-              </button>
+            </label>
+            <button
+              type="button"
+              className="sx-premium-button"
+              disabled={!bulkTag || bulkBusy}
+              onClick={() => void applyTag()}
+            >
+              <Tag size={17} aria-hidden="true" /> Aplicar etiqueta
+            </button>
+            <label className={ui.fieldLabel}>
+              Segmento de destino
               <select
-                aria-label="Segmento de destino"
+                className={ui.field}
                 value={bulkSegment}
                 onChange={(e) => setBulkSegment(e.target.value)}
-                className="min-h-11 rounded-xl border px-3 text-sm"
               >
-                <option value="">Mover para segmento</option>
+                <option value="">Escolher segmento</option>
                 {segmentRows.map((segment) => (
                   <option key={segment.id} value={segment.id}>
                     {segment.name}
                   </option>
                 ))}
               </select>
-              <button
-                disabled={!bulkSegment || bulkBusy}
-                onClick={() => void moveToSegment()}
-                className="min-h-11 rounded-xl border px-4 text-sm font-bold disabled:opacity-40"
-              >
-                Mover
-              </button>
-              <button
-                disabled={bulkBusy}
-                onClick={() => void createBulkTask()}
-                className="min-h-11 rounded-xl border px-4 text-sm font-bold disabled:opacity-40"
-              >
-                Criar tarefa
-              </button>
-              <button
-                onClick={() => setSelected([])}
-                className="hidden min-h-11 rounded-xl px-4 text-sm font-bold text-zinc-500 md:block"
-              >
-                Remover seleção
-              </button>
-            </div>
+            </label>
+            <button
+              type="button"
+              className="sx-premium-button"
+              disabled={!bulkSegment || bulkBusy}
+              onClick={() => void moveToSegment()}
+            >
+              Mover para segmento
+            </button>
           </div>
-        )}
-      </div>
-    </main>
+        </section>
+      )}
+      {loading && <CrmNotice>Carregando contatos…</CrmNotice>}
+      {listError && (
+        <CrmNotice kind="error">
+          {listError}
+          <p>
+            <button
+              type="button"
+              className="sx-premium-button"
+              onClick={() => setRefresh((n) => n + 1)}
+            >
+              Tentar novamente
+            </button>
+          </p>
+        </CrmNotice>
+      )}
+      {listReady && !items.length && (
+        <p className={ui.empty}>Nenhum contato encontrado.</p>
+      )}
+      {listReady && items.length > 0 && (
+        <>
+          <section
+            className={`sx-premium-surface ${ui.tableWrap}`}
+            aria-label="Tabela de contatos"
+          >
+            <table className={ui.table}>
+              <thead>
+                <tr>
+                  <th>
+                    <input
+                      aria-label="Selecionar todos os contatos visíveis"
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      onChange={toggleAll}
+                    />
+                  </th>
+                  {[
+                    "Contato",
+                    "Localização",
+                    "Status",
+                    "Compras",
+                    "Valor gasto",
+                    "Última compra",
+                    "Etiquetas",
+                  ].map((heading) => (
+                    <th key={heading} scope="col">
+                      {heading}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id}>
+                    <td>
+                      <input
+                        aria-label={`Selecionar ${item.name}`}
+                        type="checkbox"
+                        checked={selectedSet.has(item.id)}
+                        onChange={() => toggle(item.id)}
+                      />
+                    </td>
+                    <td>
+                      <ContactLink item={item} />
+                      <p className={ui.label}>{contactChannel(item)}</p>
+                    </td>
+                    <td>{location(item)}</td>
+                    <td>
+                      <Status item={item} />
+                    </td>
+                    <td>{item.totalPurchases}</td>
+                    <td>{money(item.totalSpent)}</td>
+                    <td>{lastPurchase(item)}</td>
+                    <td>
+                      <ContactTags item={item} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+          <div className={`${ui.cards} ${ui.contactCards}`}>
+            {items.map((item) => (
+              <article
+                key={item.id}
+                className={`sx-premium-surface ${ui.panel}`}
+              >
+                <div className={ui.contactHeader}>
+                  <label className={ui.pick}>
+                    <input
+                      aria-label={`Selecionar ${item.name}`}
+                      type="checkbox"
+                      checked={selectedSet.has(item.id)}
+                      onChange={() => toggle(item.id)}
+                    />
+                  </label>
+                  <div>
+                    <ContactLink item={item} />
+                    <p className={ui.label}>{contactChannel(item)}</p>
+                  </div>
+                  <Status item={item} />
+                </div>
+                <dl className={ui.metricGrid}>
+                  <div className={ui.inset}>
+                    <dt className={ui.label}>Compras</dt>
+                    <dd>
+                      <strong>{item.totalPurchases}</strong>
+                    </dd>
+                  </div>
+                  <div className={ui.inset}>
+                    <dt className={ui.label}>Valor gasto</dt>
+                    <dd>
+                      <strong>{money(item.totalSpent)}</strong>
+                    </dd>
+                  </div>
+                  <div className={ui.inset}>
+                    <dt className={ui.label}>Localização</dt>
+                    <dd>{location(item)}</dd>
+                  </div>
+                  <div className={ui.inset}>
+                    <dt className={ui.label}>Última compra</dt>
+                    <dd>{lastPurchase(item)}</dd>
+                  </div>
+                </dl>
+                <ContactTags item={item} />
+              </article>
+            ))}
+          </div>
+        </>
+      )}
+      {listReady && pages > 1 && (
+        <nav className={ui.actions} aria-label="Paginação dos contatos">
+          <button
+            type="button"
+            disabled={page === 1}
+            className="sx-premium-button"
+            onClick={() => setPage((n) => n - 1)}
+          >
+            Anterior
+          </button>
+          <span className={ui.label}>
+            Página {page} de {pages}
+          </span>
+          <button
+            type="button"
+            disabled={page >= pages}
+            className="sx-premium-button"
+            onClick={() => setPage((n) => n + 1)}
+          >
+            Próxima
+          </button>
+        </nav>
+      )}
+    </CrmWorkspace>
   );
 }
 
-function money(value: number) {
-  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-function Empty() {
+function ContactLink({ item }: { item: CrmContact }) {
   return (
-    <p className="p-10 text-center text-zinc-500">Nenhum contato encontrado.</p>
+    <Link className={ui.textLink} href={`/dashboard/crm/contatos/${item.id}`}>
+      {item.name}
+    </Link>
   );
+}
+function Status({ item }: { item: CrmContact }) {
+  return (
+    <span className={`sx-premium-badge ${ui.badge}`}>
+      {statusLabel[item.status] || item.status}
+    </span>
+  );
+}
+function ContactTags({ item }: { item: CrmContact }) {
+  return (
+    <div className={ui.actions} aria-label="Etiquetas">
+      {item.tags?.map(({ tag }) => (
+        <span key={tag.id} className="sx-premium-badge">
+          {tag.name}
+        </span>
+      ))}
+    </div>
+  );
+}
+function contactChannel(item: CrmContact) {
+  return (
+    [item.email, item.phone].filter(Boolean).join(" · ") ||
+    "Sem canal cadastrado"
+  );
+}
+function location(item: CrmContact) {
+  return [item.city, item.state].filter(Boolean).join(" - ") || "—";
+}
+function lastPurchase(item: CrmContact) {
+  return item.lastPurchaseAt
+    ? new Date(item.lastPurchaseAt).toLocaleDateString("pt-BR")
+    : "—";
+}
+function money(value: number) {
+  return Number(value).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
 }

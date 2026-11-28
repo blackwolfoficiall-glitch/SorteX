@@ -2,12 +2,13 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   Patch,
   Post,
   Query,
 } from '@nestjs/common';
-import { AdminPermission, ReportStatus, UserRole } from '@prisma/client';
+import { AdminPermission, UserRole } from '@prisma/client';
 import { AdminPermissions } from '../auth/decorators/admin-permissions.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -15,6 +16,7 @@ import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { AdminService } from './admin.service';
 import { PlatformSettingsService } from './platform-settings.service';
 import {
+  AdminAuditListDto,
   AdminListDto,
   AdminGatewayDto,
   AdminTeamDto,
@@ -32,6 +34,7 @@ import {
   OrganizerDecisionDto,
   OrganizerChecklistDto,
   OrganizerFeeDto,
+  ReportListDto,
   ResolveReportDto,
   SupportActionDto,
   SupportListDto,
@@ -138,6 +141,7 @@ export class AdminController {
   }
   @Get('team')
   @AdminPermissions(AdminPermission.USERS_READ)
+  @Header('Cache-Control', 'private, no-store')
   team() {
     return this.admin.team();
   }
@@ -228,8 +232,8 @@ export class AdminController {
   }
   @Get('reports')
   @AdminPermissions(AdminPermission.SUPPORT_WRITE)
-  reports(@Query() q: AdminListDto, @Query('status') status?: ReportStatus) {
-    return this.admin.reports(q, status);
+  reports(@Query() q: ReportListDto) {
+    return this.admin.reports(q, q.status);
   }
   @Get('reports/:id')
   @AdminPermissions(AdminPermission.SUPPORT_WRITE)
@@ -335,14 +339,10 @@ export class AdminController {
     const { reason, ...input } = dto;
     return this.settings.set(key, input, user, reason);
   }
-  @Get('audit-logs') @AdminPermissions(AdminPermission.AUDIT_READ) audit(
-    @Query() q: AdminListDto,
-    @Query('action') action?: string,
-    @Query('entityType') entityType?: string,
-    @Query('actorUserId') actorUserId?: string,
-    @Query('role') role?: UserRole,
-  ) {
-    return this.admin.auditLogs(q, { action, entityType, actorUserId, role });
+  @Get('audit-logs')
+  @AdminPermissions(AdminPermission.AUDIT_READ)
+  audit(@Query() q: AdminAuditListDto) {
+    return this.admin.auditLogs(q, q);
   }
   @Get('health')
   @AdminPermissions(AdminPermission.AUDIT_READ)

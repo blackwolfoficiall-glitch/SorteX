@@ -1,13 +1,11 @@
+import { resolve } from "node:path";
 import type { NextConfig } from "next";
 
-const apiInternalUrl = (
-  process.env.API_INTERNAL_URL ||
-  process.env.API_URL ||
-  process.env.PLAYWRIGHT_API_URL ||
-  "http://localhost:3333"
-).replace(/\/$/, "");
+import { resolveApiUpstream } from "./lib/api-upstream";
 
 const nextConfig: NextConfig = {
+  // Shared contracts live outside apps/web (apps/web has its own lockfile).
+  turbopack: { root: resolve(__dirname, "../..") },
   allowedDevOrigins: [
     "localhost",
     "127.0.0.1",
@@ -21,7 +19,7 @@ const nextConfig: NextConfig = {
       fallback: [
         {
           source: "/api/:path*",
-          destination: `${apiInternalUrl}/:path*`,
+          destination: `${resolveApiUpstream()}/:path*`,
         },
       ],
     };
@@ -35,7 +33,18 @@ const nextConfig: NextConfig = {
         { key: "X-Frame-Options", value: "SAMEORIGIN" },
         { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
       ],
-    }];
+    }, ...[
+      "/admin/convite/:path*",
+      "/api/admin/invitations/:path*",
+      "/afiliado/convite/:path*",
+      "/api/affiliates/affiliates/invite/:path*",
+    ].map((source) => ({
+      source,
+      headers: [
+        { key: "Referrer-Policy", value: "no-referrer" },
+        { key: "Cache-Control", value: "private, no-store" },
+      ],
+    }))];
   },
 };
 

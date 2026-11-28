@@ -176,6 +176,8 @@ test("late CEP response does not overwrite manual edits", async ({ page }) => {
       });
   });
   await page.goto("/cadastro/comprador");
+  // Wait for client hydration before the first edit on slower browser engines.
+  await expect(page.getByText("Verificando opções de acesso…")).toHaveCount(0);
   await page
     .getByLabel("Nome completo", { exact: true })
     .fill("Pessoa Sintética");

@@ -165,6 +165,7 @@ export class CampaignsController {
       data.target,
       files,
       data.instantPrizeId,
+      data.expectedDraftCoverRevision,
     );
   }
 
@@ -195,14 +196,15 @@ export class CampaignsController {
     user: AuthenticatedUser,
     response: Response,
   ) {
+    response.setHeader('Cache-Control', 'private, no-store');
     const file = await this.campaignsService.getMediaFile(
       campaignId,
       kind,
       mediaId,
       user,
+      'owner',
     );
     response.setHeader('Content-Type', file.mimeType);
-    response.setHeader('Cache-Control', 'private, no-store');
     return new StreamableFile(file.stream);
   }
 }

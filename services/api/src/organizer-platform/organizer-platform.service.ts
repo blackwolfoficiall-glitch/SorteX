@@ -20,6 +20,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { OrganizerStorageService } from '../organizers/organizer-storage.service';
 import type { UploadedOrganizerFile } from '../organizers/types/uploaded-file.type';
 import {
+  type DashboardPeriodQuery,
+  validateDashboardPeriod,
+} from './dashboard-period';
+import {
   CampaignTemplateDto,
   CommunityLinkDto,
   DomainDto,
@@ -31,6 +35,11 @@ import {
   SocialLinkDto,
   UpdateBrandDto,
 } from './dto/organizer-platform.dto';
+import {
+  projectPublicMiniCampaign,
+  publicMiniCampaignSelect,
+  publicMiniCampaignWhere,
+} from './public-mini-campaign';
 
 const planEnumByCode: Record<string, OrganizerPlan> = {
   INITIAL: OrganizerPlan.BASIC,
@@ -67,11 +76,12 @@ export class OrganizerPlatformService {
             id: true,
             title: true,
             status: true,
+            publicationBlocked: true,
             soldNumbers: true,
             totalNumbers: true,
             grossRevenue: true,
           },
-          orderBy: { updatedAt: 'desc' },
+          orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
         }),
         this.prisma.purchase.aggregate({
           where: paidWhere,
@@ -112,8 +122,10 @@ export class OrganizerPlatformService {
         grossRevenue,
         revenueToday: Number(todayTotals._sum.total ?? 0),
         revenueMonth: Number(monthTotals._sum.total ?? 0),
-        activeCampaigns: campaigns.filter((campaign) =>
-          ['PUBLISHED', 'SOLD_OUT'].includes(campaign.status),
+        activeCampaigns: campaigns.filter(
+          (campaign) =>
+            !campaign.publicationBlocked &&
+            ['PUBLISHED', 'SOLD_OUT'].includes(campaign.status),
         ).length,
         soldTickets: totals._sum.quantity ?? 0,
         participants: participants.length,
@@ -125,6 +137,62 @@ export class OrganizerPlatformService {
       })),
       generatedAt: now.toISOString(),
     };
+  }
+
+  async dashboardPeriod(user: AuthenticatedUser, query: DashboardPeriodQuery) {
+    this.organizer(user);
+    // Keep the civil-day validation and the last eligible confirmation
+    // aligned even if the request spans midnight in São Paulo.
+    const now = new Date();
+    const period = validateDashboardPeriod(query, now);
+    type PeriodMetrics = {
+      summary: {
+        grossRevenue: number;
+        soldTickets: number;
+        participants: number;
+        averageTicket: number;
+        paidOrders: number;
+      };
+      revenueHistory: Array<{ date: string; revenue: number }>;
+    };
+    // Prisma stores confirmedAt as timestamp (without time zone) in UTC.
+    // Use local civil bounds converted to UTC and group back into the same
+    // local days. One scoped statement guarantees a consistent snapshot and
+    // returns only aggregates, never buyer or purchase rows.
+    const [metrics] = await this.prisma.$queryRaw<PeriodMetrics[]>`
+      WITH paid AS (
+        SELECT p."buyerId", p.total, p.quantity,
+          ((p."confirmedAt" AT TIME ZONE 'UTC') AT TIME ZONE ${period.timeZone})::date AS day
+        FROM "Purchase" AS p
+        JOIN "Campaign" AS c ON c.id = p."campaignId"
+        WHERE c."organizerId" = ${user.id}
+          AND p.status = 'PAID'
+          AND p."confirmedAt" >=
+            ((${period.start}::date::timestamp AT TIME ZONE ${period.timeZone}) AT TIME ZONE 'UTC')
+          AND p."confirmedAt" <
+            (((${period.end}::date + 1)::timestamp AT TIME ZONE ${period.timeZone}) AT TIME ZONE 'UTC')
+          AND p."confirmedAt" <= (${now.toISOString()}::timestamptz AT TIME ZONE 'UTC')
+      ),
+      daily AS (
+        SELECT day, SUM(total) AS revenue
+        FROM paid
+        GROUP BY day
+      )
+      SELECT jsonb_build_object(
+        'grossRevenue', COALESCE(SUM(total), 0),
+        'soldTickets', COALESCE(SUM(quantity), 0),
+        'participants', COUNT(DISTINCT "buyerId"),
+        'averageTicket', COALESCE(ROUND(AVG(total), 2), 0),
+        'paidOrders', COUNT(*)
+      ) AS summary, COALESCE((
+        SELECT jsonb_agg(
+          jsonb_build_object('date', to_char(day, 'YYYY-MM-DD'), 'revenue', revenue)
+          ORDER BY day
+        ) FROM daily
+      ), '[]'::jsonb) AS "revenueHistory"
+      FROM paid
+    `;
+    return { version: 1 as const, period, ...metrics };
   }
 
   listPlans() {
@@ -952,52 +1020,16 @@ export class OrganizerPlatformService {
 
   async publicMiniCampaign(slug: string) {
     const item = await this.prisma.miniCampaign.findFirst({
-      where: { slug, status: MiniCampaignStatus.PUBLISHED, deletedAt: null },
-      include: {
-        mainCampaign: { select: { id: true, title: true, slug: true } },
-        organizer: {
-          select: {
-            organizerBrandProfile: {
-              select: {
-                publicName: true,
-                primaryLogoUrl: true,
-                primaryColor: true,
-              },
-            },
-          },
-        },
-        result: {
-          include: {
-            winner: { select: { name: true, city: true, state: true } },
-          },
-        },
-      },
+      where: publicMiniCampaignWhere(slug),
+      select: publicMiniCampaignSelect,
     });
-    if (!item)
+    // Each relation has its own foreign key; inconsistent imported rows must
+    // not use a public campaign from another organizer as their public parent.
+    if (!item || item.organizerId !== item.mainCampaign.organizerId)
       throw new NotFoundException(
         'Mini Campanha não encontrada ou indisponível.',
       );
-    return {
-      id: item.id,
-      name: item.name,
-      slug: item.slug,
-      description: item.description,
-      imageUrl: item.imageUrl,
-      prizeType: item.prizeType,
-      prizeDescription: item.prizeDescription,
-      maxTickets: item.maxTickets,
-      soldTickets: item.soldTickets,
-      availableTickets: Math.max(0, item.maxTickets - item.soldTickets),
-      ticketPrice: Number(item.ticketPrice),
-      purchaseLimitPerBuyer: item.purchaseLimitPerBuyer,
-      startsAt: item.startsAt,
-      endsAt: item.endsAt,
-      drawAt: item.drawAt,
-      rules: item.rules,
-      mainCampaign: item.mainCampaign,
-      organizer: item.organizer.organizerBrandProfile,
-      result: item.result,
-    };
+    return projectPublicMiniCampaign(item);
   }
 
   async reserveMiniCampaign(

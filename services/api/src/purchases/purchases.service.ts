@@ -9,6 +9,8 @@ import {
   CampaignStatus,
   NumberSelectionMode,
   Prisma,
+  PromotionType,
+  PromotionStatus,
   PurchaseStatus,
   TicketStatus,
   UserRole,
@@ -16,8 +18,16 @@ import {
 import type { AuthenticatedUser } from '../auth/types/authenticated-user.type';
 import { PrismaService } from '../prisma/prisma.service';
 import { ListNumbersDto } from './dto/list-numbers.dto';
+import type { BuyerCouponQuoteDto } from './dto/buyer-coupon-quote.dto';
 import { ReservationExpirationService } from './reservation-expiration.service';
 import { CrmSyncService } from '../crm/crm-sync.service';
+import { reservationPricing } from './reservation-pricing';
+import { releaseUnusedCouponCapacity } from './coupon-release';
+import { serializableReservationTransition } from './reservation-transaction';
+import {
+  campaignSalesBlockMessage,
+  campaignSalesWindow,
+} from '../campaigns/campaign-sales-window';
 
 const activeStatuses: PurchaseStatus[] = [
   PurchaseStatus.RESERVED,
@@ -45,6 +55,17 @@ const purchaseInclude = {
   tickets: { orderBy: { number: 'asc' as const } },
 } as const satisfies Prisma.PurchaseInclude;
 
+const reservableCampaignInclude = {
+  promotions: true,
+  organizer: {
+    select: {
+      organizerProfile: {
+        select: { paymentsBlocked: true, verificationStatus: true },
+      },
+    },
+  },
+} as const satisfies Prisma.CampaignInclude;
+
 type ReserveInput = {
   campaignId: string;
   quantity: number;
@@ -63,6 +84,30 @@ export class PurchasesService {
     private readonly expiration: ReservationExpirationService,
     private readonly crmSync: CrmSyncService,
   ) {}
+
+  async quoteCoupon(user: AuthenticatedUser, input: BuyerCouponQuoteDto) {
+    this.ensureBuyer(user);
+    const campaign = await this.prisma.campaign.findUnique({
+      where: { id: input.campaignId, status: CampaignStatus.PUBLISHED },
+      include: reservableCampaignInclude,
+    });
+    if (!campaign) throw new NotFoundException('Campanha não encontrada.');
+    this.validateCampaign(campaign, user);
+    this.validateQuantity(campaign, input.quantity);
+    const pricing = await reservationPricing(
+      this.prisma,
+      campaign,
+      input,
+      user.id,
+    );
+    return {
+      campaignId: campaign.id,
+      quantity: input.quantity,
+      subtotal: Number(pricing.subtotal),
+      discount: Number(pricing.discount),
+      total: Number(pricing.total),
+    };
+  }
 
   reserveRandom(
     user: AuthenticatedUser,
@@ -87,20 +132,21 @@ export class PurchasesService {
     });
   }
 
+  private async existingAttempt(key: string | undefined, buyerId: string) {
+    if (!key) return null;
+    const existing = await this.prisma.purchase.findUnique({
+      where: { idempotencyKey: key },
+      include: purchaseInclude,
+    });
+    if (existing && existing.buyerId !== buyerId)
+      throw new ConflictException('Chave de idempotência já utilizada.');
+    return existing ? this.serialize(existing) : null;
+  }
+
   private async reserve(user: AuthenticatedUser, input: ReserveInput) {
     this.ensureBuyer(user);
-    if (input.idempotencyKey) {
-      const existing = await this.prisma.purchase.findUnique({
-        where: { idempotencyKey: input.idempotencyKey },
-        include: purchaseInclude,
-      });
-      if (existing) {
-        if (existing.buyerId !== user.id) {
-          throw new ConflictException('Chave de idempotência já utilizada.');
-        }
-        return this.serialize(existing);
-      }
-    }
+    const prior = await this.existingAttempt(input.idempotencyKey, user.id);
+    if (prior) return prior;
 
     const attempts = input.mode === NumberSelectionMode.RANDOM ? 4 : 1;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -113,19 +159,7 @@ export class PurchasesService {
             );
             const campaign = await transaction.campaign.findUnique({
               where: { id: input.campaignId },
-              include: {
-                promotions: true,
-                organizer: {
-                  select: {
-                    organizerProfile: {
-                      select: {
-                        paymentsBlocked: true,
-                        verificationStatus: true,
-                      },
-                    },
-                  },
-                },
-              },
+              include: reservableCampaignInclude,
             });
             if (!campaign)
               throw new NotFoundException('Campanha não encontrada.');
@@ -138,7 +172,7 @@ export class PurchasesService {
               );
             }
             this.validateQuantity(campaign, input.quantity);
-            const pricing = await this.calculatePrice(
+            const pricing = await reservationPricing(
               transaction,
               campaign,
               input,
@@ -227,8 +261,13 @@ export class PurchasesService {
         await this.crmSync.syncReservation(this.prisma, result.id);
         return this.serialize(result);
       } catch (error) {
-        if (this.isConcurrencyError(error) && attempt + 1 < attempts) continue;
         if (this.isConcurrencyError(error)) {
+          const committed = await this.existingAttempt(
+            input.idempotencyKey,
+            user.id,
+          );
+          if (committed) return committed;
+          if (attempt + 1 < attempts) continue;
           throw new ConflictException(
             'Um ou mais números acabaram de ser reservados. Tente novamente.',
           );
@@ -288,57 +327,86 @@ export class PurchasesService {
 
   async cancel(id: string, user: AuthenticatedUser) {
     this.ensureBuyer(user);
-    const result = await this.prisma.$transaction(async (transaction) => {
-      await this.expiration.expireDueInTransaction(transaction);
-      const purchase = await transaction.purchase.findFirst({
-        where: { id, buyerId: user.id },
-        include: purchaseInclude,
-      });
-      if (!purchase) throw new NotFoundException('Compra não encontrada.');
-      if (!activeStatuses.includes(purchase.status)) {
-        throw new BadRequestException('Esta reserva não pode ser cancelada.');
-      }
-      const released = await transaction.ticket.deleteMany({
-        where: { purchaseId: id, status: TicketStatus.RESERVED },
-      });
-      const campaign = await transaction.campaign.findUnique({
-        where: { id: purchase.campaignId },
-        select: { reservedNumbers: true },
-      });
-      await transaction.campaign.update({
-        where: { id: purchase.campaignId },
-        data: {
-          reservedNumbers: Math.max(
-            0,
-            (campaign?.reservedNumbers ?? 0) - released.count,
-          ),
-        },
-      });
-      return transaction.purchase.update({
-        where: { id },
-        data: { status: PurchaseStatus.CANCELLED, cancelledAt: new Date() },
-        include: purchaseInclude,
-      });
-    });
+    const result = await serializableReservationTransition(
+      this.prisma,
+      async (transaction) => {
+        await this.expiration.expireDueInTransaction(transaction);
+        const purchase = await transaction.purchase.findFirst({
+          where: { id, buyerId: user.id },
+          include: purchaseInclude,
+        });
+        if (!purchase) throw new NotFoundException('Compra não encontrada.');
+        if (!activeStatuses.includes(purchase.status)) {
+          throw new BadRequestException('Esta reserva não pode ser cancelada.');
+        }
+        // Even a rejected/local terminal row is not proof that the provider
+        // cannot still report a successful payment on this purchase.
+        const attempt = await transaction.payment.findFirst({
+          where: { purchaseId: id },
+          select: { id: true },
+        });
+        if (attempt)
+          throw new ConflictException(
+            'Há uma tentativa de pagamento vinculada. Confira o pagamento antes de cancelar a reserva.',
+          );
+        const released = await transaction.ticket.deleteMany({
+          where: { purchaseId: id, status: TicketStatus.RESERVED },
+        });
+        const campaign = await transaction.campaign.findUnique({
+          where: { id: purchase.campaignId },
+          select: { reservedNumbers: true },
+        });
+        await transaction.campaign.update({
+          where: { id: purchase.campaignId },
+          data: {
+            reservedNumbers: Math.max(
+              0,
+              (campaign?.reservedNumbers ?? 0) - released.count,
+            ),
+          },
+        });
+        const cancelled = await transaction.purchase.update({
+          where: { id },
+          data: { status: PurchaseStatus.CANCELLED, cancelledAt: new Date() },
+          include: purchaseInclude,
+        });
+        await releaseUnusedCouponCapacity(transaction, [id]);
+        return cancelled;
+      },
+    );
     return this.serialize(result);
   }
 
   async availability(slug: string) {
     const campaign = await this.publicCampaign(slug);
     await this.expiration.expireDue(campaign.id);
-    const occupied = await this.prisma.ticket.count({
+    // Count inventory from one post-expiry snapshot. The campaign returned by
+    // publicCampaign predates expiration and its cached counters can be stale.
+    const inventory = await this.prisma.ticket.groupBy({
+      by: ['status'],
       where: {
         campaignId: campaign.id,
         status: { in: [TicketStatus.RESERVED, TicketStatus.SOLD] },
       },
+      _count: { _all: true },
     });
+    const reservedNumbers =
+      inventory.find(({ status }) => status === TicketStatus.RESERVED)?._count
+        ._all ?? 0;
+    const soldNumbers =
+      inventory.find(({ status }) => status === TicketStatus.SOLD)?._count
+        ._all ?? 0;
     return {
       campaignId: campaign.id,
       totalNumbers: campaign.totalNumbers,
-      availableNumbers: Math.max(0, campaign.totalNumbers - occupied),
-      reservedNumbers: campaign.reservedNumbers,
-      soldNumbers: campaign.soldNumbers,
+      availableNumbers: Math.max(
+        0,
+        campaign.totalNumbers - reservedNumbers - soldNumbers,
+      ),
+      reservedNumbers,
+      soldNumbers,
       reservationSeconds,
+      salesWindow: campaignSalesWindow(campaign),
       selectionMode: campaign.numberSelectionMode,
       minimumPurchase: campaign.minimumPurchase,
       maximumPurchasePerBuyer: campaign.maximumPurchasePerBuyer,
@@ -438,6 +506,10 @@ export class PurchasesService {
     const promotions = await this.prisma.campaignPromotion.findMany({
       where: {
         campaignId: campaign.id,
+        type: PromotionType.PACKAGE,
+        status: PromotionStatus.ACTIVE,
+        deletedAt: null,
+        packagePrice: { gt: 0 },
         isActive: true,
         AND: [
           { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
@@ -515,6 +587,8 @@ export class PurchasesService {
       salesStartAt: Date | null;
       salesEndAt: Date | null;
       drawDate: Date | null;
+      drawTime?: string | null;
+      drawTimeZone?: string | null;
       purchasesBlocked: boolean;
       organizer?: {
         organizerProfile?: {
@@ -538,13 +612,8 @@ export class PurchasesService {
       throw new BadRequestException(
         'As vendas deste organizador estão temporariamente bloqueadas.',
       );
-    const now = new Date();
-    if (campaign.salesStartAt && campaign.salesStartAt > now)
-      throw new BadRequestException('As vendas ainda não começaram.');
-    if (campaign.salesEndAt && campaign.salesEndAt <= now)
-      throw new BadRequestException('As vendas foram encerradas.');
-    if (campaign.drawDate && campaign.drawDate <= now)
-      throw new BadRequestException('O sorteio desta campanha já ocorreu.');
+    const salesBlock = campaignSalesBlockMessage(campaign);
+    if (salesBlock) throw new BadRequestException(salesBlock);
     if (
       campaign.organizerId === user.id &&
       process.env.ALLOW_SELF_PURCHASE !== 'true'
@@ -578,106 +647,6 @@ export class PurchasesService {
       throw new BadRequestException(
         'Quantidade maior que o total da campanha.',
       );
-  }
-
-  private async calculatePrice(
-    transaction: Prisma.TransactionClient,
-    campaign: {
-      organizerId: string;
-      numberPrice: Prisma.Decimal;
-      promotions: Array<{
-        id: string;
-        numberQuantity: number;
-        packagePrice: Prisma.Decimal;
-        isActive: boolean;
-        startsAt: Date | null;
-        endsAt: Date | null;
-      }>;
-    },
-    input: ReserveInput,
-    buyerId: string,
-  ) {
-    const now = new Date();
-    const valid = (promotion: (typeof campaign.promotions)[number]) =>
-      promotion.isActive &&
-      (!promotion.startsAt || promotion.startsAt <= now) &&
-      (!promotion.endsAt || promotion.endsAt > now);
-    let promotion = input.promotionId
-      ? campaign.promotions.find((item) => item.id === input.promotionId)
-      : campaign.promotions
-          .filter(
-            (item) => item.numberQuantity === input.quantity && valid(item),
-          )
-          .sort((a, b) => Number(a.packagePrice) - Number(b.packagePrice))[0];
-    if (input.promotionId && (!promotion || !valid(promotion)))
-      throw new BadRequestException('Promoção inválida ou inativa.');
-    if (promotion && promotion.numberQuantity !== input.quantity)
-      throw new BadRequestException('A quantidade não corresponde à promoção.');
-    if (promotion && !valid(promotion)) promotion = undefined;
-    const subtotal = new Prisma.Decimal(campaign.numberPrice).mul(
-      input.quantity,
-    );
-    let total = promotion
-      ? new Prisma.Decimal(promotion.packagePrice)
-      : subtotal;
-    let couponId: string | undefined;
-    if (input.couponCode) {
-      const coupon = await transaction.promotionCoupon.findFirst({
-        where: {
-          organizerId: campaign.organizerId,
-          code: input.couponCode.trim().toUpperCase(),
-          isActive: true,
-          promotion: {
-            campaignId: input.campaignId,
-            status: 'ACTIVE',
-            isActive: true,
-          },
-        },
-      });
-      if (
-        !coupon ||
-        (coupon.startsAt && coupon.startsAt > now) ||
-        (coupon.endsAt && coupon.endsAt <= now) ||
-        (coupon.totalLimit && coupon.usageCount >= coupon.totalLimit)
-      )
-        throw new BadRequestException('Cupom inválido, expirado ou esgotado.');
-      if (coupon.perBuyerLimit) {
-        const used = await transaction.promotionUsage.count({
-          where: {
-            couponId: coupon.id,
-            buyerId,
-            status: { in: ['RESERVED', 'APPROVED'] },
-          },
-        });
-        if (used >= coupon.perBuyerLimit)
-          throw new BadRequestException(
-            'Você já atingiu o limite de uso deste cupom.',
-          );
-      }
-      if (subtotal.lt(coupon.minimumAmount))
-        throw new BadRequestException(
-          'Esta compra não atingiu o valor mínimo do cupom.',
-        );
-      const couponDiscount =
-        coupon.discountType === 'PERCENTAGE'
-          ? subtotal.mul(coupon.discountValue).div(100)
-          : coupon.discountValue;
-      total = Prisma.Decimal.max(
-        0,
-        total.sub(Prisma.Decimal.min(total, couponDiscount)),
-      );
-      promotion = campaign.promotions.find(
-        (item) => item.id === coupon.promotionId,
-      );
-      couponId = coupon.id;
-    }
-    return {
-      promotionId: promotion?.id,
-      couponId,
-      subtotal,
-      discount: subtotal.sub(total),
-      total,
-    };
   }
 
   private validateManualNumbers(numbers: number[], total: number) {

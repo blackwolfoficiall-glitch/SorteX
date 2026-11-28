@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { createSyntheticCampaign } from "./fixtures/synthetic-campaign";
 
 test("Dashboard navega para Campanhas publicadas e para as análises da IA", async ({ page }) => {
   await page.goto("/dashboard");
@@ -24,7 +25,8 @@ test("Dashboard navega para Campanhas publicadas e para as análises da IA", asy
 
 test("Filtros de Pedidos têm identificação e não geram overflow", async ({ page }) => {
   await page.goto("/dashboard/pedidos");
-  for (const label of ["Busca", "Data inicial", "Data final", "Valor mínimo", "Valor máximo"]) {
+  await expect(page.getByRole("searchbox", { name: "Busca", exact: true })).toBeVisible();
+  for (const label of ["Data inicial", "Data final", "Valor mínimo", "Valor máximo"]) {
     await expect(page.getByLabel(label, { exact: true })).toBeVisible({ timeout: 15_000 });
   }
   for (const name of ["Campanha", "Status", "Método de pagamento"]) {
@@ -42,4 +44,45 @@ test("Minhas Campanhas recupera a lista após uma falha de rede", async ({ page 
   await page.getByRole("button", { name: "Tentar novamente" }).click();
   await expect(page.getByText("Não foi possível carregar suas campanhas.")).toBeHidden();
   await expect(page.getByRole("heading", { name: "Minhas Campanhas" })).toBeVisible();
+});
+
+test("falha temporária na consulta de aprovação não tira o organizador da tela", async ({ page }) => {
+  const profileRoute = "**/api/organizer/profile";
+  await page.route(profileRoute, (route) =>
+    route.fulfill({ status: 503, json: { message: "Indisponível para teste." } }),
+  );
+  await page.goto("/dashboard/campanhas");
+  const retry = page.getByRole("button", { name: "Tentar verificar novamente" });
+  await expect(retry).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard\/campanhas$/);
+  await expect(page.getByRole("heading", { name: "Minhas Campanhas" })).toHaveCount(0);
+
+  await page.unroute(profileRoute);
+  await retry.click();
+  await expect(page.getByRole("heading", { name: "Minhas Campanhas" })).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard\/campanhas$/);
+});
+
+test("cartões publicados permanecem dentro da largura do celular após carregar", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const suffix = Date.now();
+  const campaign = await createSyntheticCampaign(page.request, "Largura dos cartões", {
+    publish: true,
+    fields: {
+      title: `Campanha sintética de homologação com título comprido para verificar a largura dos cartões ${suffix}`,
+      slug: `homologacao-controles-compridos-de-verificacao-responsiva-${suffix}`,
+    },
+  });
+  await page.goto("/dashboard/campanhas?status=PUBLISHED");
+  const cover = page.getByRole("img", { name: campaign.title, exact: true });
+  await expect(cover).toBeVisible();
+  await page.evaluate(() => document.fonts.ready.then(() => null));
+  const dimensions = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    page: document.documentElement.scrollWidth,
+  }));
+  expect(dimensions.page).toBe(dimensions.viewport);
+  const coverBox = await cover.boundingBox();
+  expect(coverBox).not.toBeNull();
+  expect(coverBox!.x + coverBox!.width).toBeLessThanOrEqual(dimensions.viewport);
 });

@@ -1,5 +1,6 @@
 "use client";
 
+import { campaignPublicationNotice, publicationError } from "@/lib/campaigns/publication";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -33,7 +34,9 @@ import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import { Input } from "@/components/ui/Input";
 import { Textarea } from "@/components/ui/textarea";
-import ProgressSteps from "@/components/organizador/ProgressSteps";
+import PremiumScope from "@/components/premium/PremiumScope";
+import prizeStyles from "./campaign-prize-step-premium.module.css";
+import styles from "./CampaignWizard.module.css";
 import {
   createCampaign,
   deleteCampaignImage,
@@ -233,6 +236,7 @@ export default function CampaignWizard({
     [form.instantPrizes],
   );
   const platformFee = campaign?.organizer.platformFee ?? planFee;
+  const publishNotice = campaign ? campaignPublicationNotice(campaign) : undefined;
   const isPublished = campaign?.status === "PUBLISHED" || campaign?.status === "PAUSED";
 
   function set<K extends keyof CampaignDraft>(key: K, value: CampaignDraft[K]) {
@@ -392,7 +396,7 @@ export default function CampaignWizard({
 
   async function saveDraft() {
     const saved = await persist(false);
-    if (saved) router.push(`/dashboard/campanhas?status=${isPublished?"PUBLISHED":"DRAFT"}`);
+    if (saved) router.push(`/dashboard/campanhas?status=${saved.status === "PENDING_REVIEW" ? "DRAFT" : saved.status}`);
   }
 
   async function confirmPriceReduction(createPromotion: boolean) {
@@ -504,6 +508,7 @@ export default function CampaignWizard({
   }
 
   async function publish() {
+    if (publishNotice) return;
     const saved = await persist(false);
     if (!saved) return;
     setSaving(true);
@@ -513,7 +518,7 @@ export default function CampaignWizard({
       router.push(`/dashboard/campanhas/${published.id}/publicada`);
     } catch (cause) {
       setError(
-        cause instanceof Error ? cause.message : "Não foi possível publicar.",
+        publicationError(cause),
       );
     } finally {
       setSaving(false);
@@ -562,40 +567,81 @@ export default function CampaignWizard({
 
   if (loading)
     return (
-      <div className="flex min-h-96 items-center justify-center">
-        <LoaderCircle className="animate-spin text-violet-700" />
-      </div>
-    );
-  return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-7 md:px-8">
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-wider text-violet-600">
-              Módulo de campanhas
-            </p>
-            <h1 className="mt-2 text-3xl font-black">
-              {id ? "Editar rifa" : "Criar nova rifa"}
-            </h1>
-            <p className="mt-2 text-zinc-500">
-              {isPublished?"Atualize informações públicas sem alterar títulos emitidos ou regras do sorteio.":"Salve como rascunho e continue quando quiser."}
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            onClick={() => void saveDraft()}
-            disabled={saving}
-          >
-            <Save size={17} /> {isPublished?"Salvar alterações":"Salvar rascunho"}
-          </Button>
+      <PremiumScope className={styles.loading}>
+        <div role="status">
+          <LoaderCircle className={styles.spinner} aria-hidden="true" />
+          Carregando campanha…
         </div>
-        <ProgressSteps etapa={step} etapas={steps} />
-        {error && (
-          <p className="rounded-2xl bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </p>
-        )}
-        {isPublished&&<div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900"><strong>Campanha publicada:</strong> preço, conteúdo, mídias, promoções e identidade visual continuam editáveis. Quantidade emitida e regra do sorteio permanecem protegidas.</div>}
+      </PremiumScope>
+    );
+  const stepPercent = Math.min(step / steps.length * 100, 100);
+
+  return (
+    <section className={styles.wizard} aria-labelledby="campaign-wizard-title">
+      <div className={styles.layout}>
+        <PremiumScope className={styles.chrome}>
+          <header className={styles.header}>
+            <div>
+              <p className={styles.eyebrow}>Módulo de campanhas</p>
+              <h1 id="campaign-wizard-title" className="sx-premium-title">
+                {id ? "Editar rifa" : "Criar nova rifa"}
+              </h1>
+              <p className={styles.muted}>
+                {isPublished
+                  ? "Atualize informações públicas sem alterar títulos emitidos ou regras do sorteio."
+                  : "Salve como rascunho e continue quando quiser."}
+              </p>
+            </div>
+            <button
+              className={styles.control}
+              type="button"
+              onClick={() => void saveDraft()}
+              disabled={saving}
+            >
+              <Save size={17} aria-hidden="true" /> {isPublished ? "Salvar alterações" : "Salvar rascunho"}
+            </button>
+          </header>
+
+          <section className={styles.progress} aria-labelledby="campaign-wizard-progress">
+            <div className={styles.progressHeading}>
+              <div>
+                <p className={styles.eyebrow}>Etapas da campanha</p>
+                <h2 id="campaign-wizard-progress" className="sx-premium-section">Etapa {step} de {steps.length}</h2>
+              </div>
+              <span className={styles.progressBadge} aria-hidden="true">{Math.round(stepPercent)}%</span>
+            </div>
+            <div
+              className={styles.track}
+              role="progressbar"
+              aria-label="Etapas da campanha"
+              aria-valuemin={0}
+              aria-valuemax={steps.length}
+              aria-valuenow={step}
+            >
+              <div style={{ width: `${stepPercent}%` }} />
+            </div>
+            <ol className={styles.steps} role="list" aria-label="Etapas do formulário">
+              {steps.map((title, index) => (
+                <li
+                  key={title}
+                  aria-current={step === index + 1 ? "step" : undefined}
+                  data-complete={step > index + 1 ? true : undefined}
+                >
+                  <span aria-hidden="true">
+                    {step > index + 1 ? <CheckCircle2 size={16} /> : index + 1}
+                  </span>
+                  {title}
+                </li>
+              ))}
+            </ol>
+          </section>
+          {error && <p className={styles.error} role="alert">{error}</p>}
+          {isPublished && (
+            <p className={styles.notice}>
+              <strong>Campanha publicada:</strong> preço, conteúdo, mídias, promoções e identidade visual continuam editáveis. Quantidade emitida e regra do sorteio permanecem protegidas.
+            </p>
+          )}
+        </PremiumScope>
 
         {step === 1 && (
           <Step
@@ -750,7 +796,7 @@ export default function CampaignWizard({
               )}
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Data do sorteio">
+              <Field label="Data do sorteio (Brasília para novas datas)">
                 <Input
                   className={inputClass}
                   type="date"
@@ -758,7 +804,7 @@ export default function CampaignWizard({
                   onChange={(e) => set("drawDate", e.target.value)}
                 />
               </Field>
-              <Field label="Horário">
+              <Field label="Horário do sorteio (Brasília para novas datas)">
                 <Input
                   className={inputClass}
                   type="time"
@@ -932,150 +978,154 @@ export default function CampaignWizard({
             title="Prêmios"
             description="Configure o prêmio principal e as cotas premiadas instantâneas."
           >
-            <div className="rounded-2xl bg-violet-50 p-5">
-              <h3 className="font-black">Prêmio principal</h3>
-              <p className="mt-2 text-sm text-zinc-600">
-                {form.mainPrizeName || "Ainda não informado"} · Valor estimado
-                R$ {(form.estimatedPrizeValue || 0).toFixed(2)}
-              </p>
-            </div>
-            <div className="mt-6 rounded-2xl border border-violet-100 bg-white p-5">
-              <h3 className="text-xl font-black">Cotas premiadas</h3>
-              <p className="mt-1 text-sm text-zinc-500">
-                Crie cotas independentes manualmente ou gere números únicos
-                automaticamente.
-              </p>
-              <div className="mt-5 grid gap-4 md:grid-cols-[1fr_180px_auto]">
-                <Field label="Forma de escolha">
-                  <Select
-                    value={prizeMode}
-                    onChange={(value) =>
-                      setPrizeMode(value as "MANUAL" | "AUTOMATIC")
-                    }
-                    options={["AUTOMATIC", "MANUAL"]}
-                  />
-                </Field>
-                <Field label="Quantidade de cotas">
-                  <NumberInput
-                    value={prizeCount}
-                    onChange={(value) =>
-                      setPrizeCount(
-                        value === undefined
-                          ? 1
-                          : Math.max(1, Math.floor(value)),
-                      )
-                    }
-                  />
-                </Field>
-                <div className="flex items-end">
-                  <Button onClick={createPrizeSlots} className="w-full">
-                    <Plus size={16} />{" "}
-                    {prizeMode === "AUTOMATIC"
-                      ? "Gerar todas automaticamente"
-                      : "Criar cotas"}
-                  </Button>
+            <PremiumScope className={prizeStyles.scope}>
+              <section className={prizeStyles.content} aria-label="Gerenciamento de prêmios">
+                <div className={prizeStyles.mainPrize}>
+                  <h3 className="font-black">Prêmio principal</h3>
+                  <p className="mt-2 text-sm text-zinc-600">
+                    {form.mainPrizeName || "Ainda não informado"} · Valor estimado
+                    R$ {(form.estimatedPrizeValue || 0).toFixed(2)}
+                  </p>
                 </div>
-              </div>
-              {(form.instantPrizes || []).length > 1 && (
-                <Button
-                  className="mt-4"
-                  size="sm"
-                  variant="outline"
-                  onClick={applyFirstPrizeToAll}
-                >
-                  Aplicar configuração para todas
-                </Button>
-              )}
-            </div>
-            <div className="mt-4 space-y-4">
-              {(form.instantPrizes || []).map((prize, index) => (
-                <Card key={index} className="p-5">
-                  <div className="mb-4 flex items-center justify-between">
-                    <h4 className="font-black text-violet-800">
-                      Cota {index + 1}
-                    </h4>
-                    <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs font-bold">
-                      {prize.exactNumber ? "Configurada" : "Pendente"}
-                    </span>
-                  </div>
-                  <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
-                    <Field label="Número">
-                      <Input
-                        className={inputClass}
-                        inputMode="numeric"
-                        value={prize.exactNumber || ""}
-                        onChange={(e) =>
-                          updatePrize(index, {
-                            exactNumber: e.target.value.replace(/\D/g, ""),
-                            generationRule: undefined,
-                          })
-                        }
-                      />
-                    </Field>
-                    <Field label="Nome do prêmio">
-                      <Input
-                        className={inputClass}
-                        value={prize.description}
-                        onChange={(e) =>
-                          updatePrize(index, { description: e.target.value })
-                        }
-                      />
-                    </Field>
-                    <Field label="Valor">
-                      <NumberInput
-                        value={prize.value}
-                        onChange={(value) => updatePrize(index, { value })}
-                      />
-                    </Field>
-                    <Field label="Tipo">
+                <div className={prizeStyles.ticketSection}>
+                  <h3 className="text-xl font-black">Cotas premiadas</h3>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    Crie cotas independentes manualmente ou gere números únicos
+                    automaticamente.
+                  </p>
+                  <div className="mt-5 grid gap-4 md:grid-cols-[1fr_180px_auto]">
+                    <Field label="Forma de escolha">
                       <Select
-                        value={prize.type}
+                        value={prizeMode}
                         onChange={(value) =>
-                          updatePrize(index, {
-                            type: value as CampaignInstantPrizeInput["type"],
-                          })
+                          setPrizeMode(value as "MANUAL" | "AUTOMATIC")
                         }
-                        options={["PIX", "PRODUCT", "GIFT_CARD", "OTHER"]}
+                        options={["AUTOMATIC", "MANUAL"]}
                       />
                     </Field>
+                    <Field label="Quantidade de cotas">
+                      <NumberInput
+                        value={prizeCount}
+                        onChange={(value) =>
+                          setPrizeCount(
+                            value === undefined
+                              ? 1
+                              : Math.max(1, Math.floor(value)),
+                          )
+                        }
+                      />
+                    </Field>
+                    <div className="flex items-end">
+                      <Button onClick={createPrizeSlots} className="w-full">
+                        <Plus size={16} />{" "}
+                        {prizeMode === "AUTOMATIC"
+                          ? "Gerar todas automaticamente"
+                          : "Criar cotas"}
+                      </Button>
+                    </div>
                   </div>
-                  <Button
-                    className="mt-3"
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      set(
-                        "instantPrizes",
-                        (form.instantPrizes || []).filter(
-                          (_, itemIndex) => itemIndex !== index,
-                        ),
-                      )
-                    }
-                  >
-                    <Trash2 size={15} /> Remover
-                  </Button>
-                </Card>
-              ))}
-            </div>
-            {campaign&&campaign.milestonePrizes.length>0&&<MilestoneManager
-              campaign={campaign}
-              busy={milestoneBusy}
-              onEvaluate={() => void refreshMilestones()}
-              onDraw={(milestoneId) =>
-                void refreshMilestones({ milestoneId, draw: true })
-              }
-            />}
-            <MilestoneEditor
-              campaignId={id}
-              milestones={form.milestones || []}
-              winnersRemainEligible={
-                form.milestoneWinnersRemainEligible !== false
-              }
-              onChange={(milestones) => set("milestones", milestones)}
-              onEligibilityChange={(value) =>
-                set("milestoneWinnersRemainEligible", value)
-              }
-            />
+                  {(form.instantPrizes || []).length > 1 && (
+                    <Button
+                      className="mt-4"
+                      size="sm"
+                      variant="outline"
+                      onClick={applyFirstPrizeToAll}
+                    >
+                      Aplicar configuração para todas
+                    </Button>
+                  )}
+                </div>
+                <div className="mt-4 space-y-4">
+                  {(form.instantPrizes || []).map((prize, index) => (
+                    <Card key={index} className="p-5">
+                      <div className={`mb-4 flex flex-wrap items-center justify-between gap-2 ${prizeStyles.ticketHeading}`}>
+                        <h4 className="font-black text-violet-800">
+                          Cota {index + 1}
+                        </h4>
+                        <span className={prizeStyles.status} data-configured={Boolean(prize.exactNumber)}>
+                          {prize.exactNumber ? "Configurada" : "Pendente"}
+                        </span>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-5">
+                        <Field label="Número">
+                          <Input
+                            className={inputClass}
+                            inputMode="numeric"
+                            value={prize.exactNumber || ""}
+                            onChange={(e) =>
+                              updatePrize(index, {
+                                exactNumber: e.target.value.replace(/\D/g, ""),
+                                generationRule: undefined,
+                              })
+                            }
+                          />
+                        </Field>
+                        <Field label="Nome do prêmio">
+                          <Input
+                            className={inputClass}
+                            value={prize.description}
+                            onChange={(e) =>
+                              updatePrize(index, { description: e.target.value })
+                            }
+                          />
+                        </Field>
+                        <Field label="Valor">
+                          <NumberInput
+                            value={prize.value}
+                            onChange={(value) => updatePrize(index, { value })}
+                          />
+                        </Field>
+                        <Field label="Tipo">
+                          <Select
+                            value={prize.type}
+                            onChange={(value) =>
+                              updatePrize(index, {
+                                type: value as CampaignInstantPrizeInput["type"],
+                              })
+                            }
+                            options={["PIX", "PRODUCT", "GIFT_CARD", "OTHER"]}
+                          />
+                        </Field>
+                      </div>
+                      <Button
+                        className="mt-3"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          set(
+                            "instantPrizes",
+                            (form.instantPrizes || []).filter(
+                              (_, itemIndex) => itemIndex !== index,
+                            ),
+                          )
+                        }
+                      >
+                        <Trash2 size={15} /> Remover
+                      </Button>
+                    </Card>
+                  ))}
+                </div>
+                {campaign&&campaign.milestonePrizes.length>0&&<MilestoneManager
+                  campaign={campaign}
+                  busy={milestoneBusy}
+                  onEvaluate={() => void refreshMilestones()}
+                  onDraw={(milestoneId) =>
+                    void refreshMilestones({ milestoneId, draw: true })
+                  }
+                />}
+                <MilestoneEditor
+                  campaignId={id}
+                  milestones={form.milestones || []}
+                  winnersRemainEligible={
+                    form.milestoneWinnersRemainEligible !== false
+                  }
+                  onChange={(milestones) => set("milestones", milestones)}
+                  onEligibilityChange={(value) =>
+                    set("milestoneWinnersRemainEligible", value)
+                  }
+                />
+              </section>
+            </PremiumScope>
             <Actions
               step={step}
               saving={saving}
@@ -1520,26 +1570,35 @@ export default function CampaignWizard({
                   : "· Publicação imediata"}
               </p>
             </div>
-            <div className="mt-8 flex flex-wrap justify-between gap-3">
-              <Button variant="outline" onClick={() => setStep(6)}>
-                <ArrowLeft size={17} /> Voltar
-              </Button>
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
+            <WizardFooter>
+              <button className={styles.control} type="button" onClick={() => setStep(6)}>
+                <ArrowLeft size={17} aria-hidden="true" /> Voltar
+              </button>
+              <div className={styles.footerGroup}>
+                <button
+                  className={styles.control}
+                  type="button"
                   onClick={() => void saveDraft()}
                   disabled={saving}
                 >
-                  <Save size={17} /> {isPublished?"Salvar alterações":"Salvar rascunho"}
-                </Button>
-                {!isPublished&&<Button onClick={publish} disabled={saving}><Rocket size={17} /> Publicar campanha</Button>}
+                  <Save size={17} aria-hidden="true" /> {isPublished ? "Salvar alterações" : "Salvar rascunho"}
+                </button>
+                {!isPublished && (
+                  publishNotice ? (
+                    <p className={styles.notice}>{publishNotice}</p>
+                  ) : (
+                    <button className={styles.primary} type="button" onClick={publish} disabled={saving}>
+                      <Rocket size={17} aria-hidden="true" /> Publicar campanha
+                    </button>
+                  )
+                )}
               </div>
-            </div>
+            </WizardFooter>
           </Step>
         )}
       </div>
       {priceReductionOpen&&<div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-4" role="presentation"><section role="dialog" aria-modal="true" aria-labelledby="price-reduction-title" className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl"><h2 id="price-reduction-title" className="text-2xl font-black">O valor da cota foi reduzido.</h2><p className="mt-3 text-zinc-600">Deseja criar uma promoção oficial utilizando esse novo valor?</p><div className="mt-6 grid gap-2 sm:grid-cols-3"><Button onClick={()=>void confirmPriceReduction(true)} disabled={saving}>Criar promoção</Button><Button variant="outline" onClick={()=>void confirmPriceReduction(false)} disabled={saving}>Somente atualizar preço</Button><Button variant="ghost" onClick={()=>setPriceReductionOpen(false)} disabled={saving}>Cancelar</Button></div></section></div>}
-    </main>
+    </section>
   );
 
   function updatePrize(
@@ -1663,23 +1722,29 @@ function Actions({
   next: () => void;
 }) {
   return (
-    <div className="mt-8 flex justify-between">
-      {back ? (
-        <Button variant="outline" onClick={back}>
-          <ArrowLeft size={17} /> Voltar
-        </Button>
-      ) : (
-        <span />
+    <WizardFooter>
+      {back && (
+        <button className={styles.control} type="button" onClick={back}>
+          <ArrowLeft size={17} aria-hidden="true" /> Voltar
+        </button>
       )}
-      <Button onClick={next} disabled={saving}>
+      <button className={styles.primary} type="button" onClick={next} disabled={saving}>
         {saving ? (
-          <LoaderCircle className="animate-spin" size={17} />
+          <LoaderCircle className={styles.spinner} size={17} aria-hidden="true" />
         ) : (
-          <ArrowRight size={17} />
-        )}{" "}
+          <ArrowRight size={17} aria-hidden="true" />
+        )}
         Salvar e continuar
-      </Button>
-    </div>
+      </button>
+    </WizardFooter>
+  );
+}
+
+function WizardFooter({ children }: { children: React.ReactNode }) {
+  return (
+    <PremiumScope className={styles.footer}>
+      <footer aria-label="Ações da etapa">{children}</footer>
+    </PremiumScope>
   );
 }
 function QuickChoices({
@@ -3405,8 +3470,7 @@ function MilestoneEditor({
                 imageUrl={milestone.imageUrl}
                 imageCrop={milestone.imageCrop}
                 prizeName={milestone.name}
-                onChange={(imageUrl) => update(index, { imageUrl })}
-                onCropChange={(imageCrop) => update(index, { imageCrop })}
+                onPhotoChange={(patch) => update(index, patch)}
               />
               <Field label="Vídeo opcional">
                 <Input
@@ -3479,15 +3543,15 @@ function MilestonePhotoField({
   imageUrl,
   imageCrop,
   prizeName,
-  onChange,
-  onCropChange,
+  onPhotoChange,
 }: {
   campaignId?: string;
   imageUrl?: string;
   imageCrop?: HeroImageCrop;
   prizeName: string;
-  onChange: (imageUrl: string | undefined) => void;
-  onCropChange: (imageCrop: HeroImageCrop) => void;
+  onPhotoChange: (
+    patch: Pick<Partial<CampaignMilestoneInput>, "imageUrl" | "imageCrop">,
+  ) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -3512,7 +3576,7 @@ function MilestonePhotoField({
     setBusy(true);
     try {
       const url = await uploadCampaignMilestoneImage(campaignId, file);
-      onChange(url);
+      onPhotoChange({ imageUrl: url, imageCrop: defaultHeroCrop });
       setFailedUrl("");
     } catch (cause) {
       setError(
@@ -3574,8 +3638,7 @@ function MilestonePhotoField({
                 type="button"
                 disabled={busy}
                 onClick={() => {
-                  onChange(undefined);
-                  onCropChange(defaultHeroCrop);
+                  onPhotoChange({ imageUrl: undefined, imageCrop: undefined });
                   setError("");
                 }}
                 className="min-h-10 rounded-xl border px-4 text-xs font-black text-red-700 hover:bg-red-50 disabled:opacity-50"
@@ -3600,7 +3663,7 @@ function MilestonePhotoField({
         <HeroImageCropEditor
           savedUrl={previewUrl}
           value={imageUrl ? imageCrop || defaultHeroCrop : defaultHeroCrop}
-          onChange={onCropChange}
+          onChange={(crop) => onPhotoChange({ imageCrop: crop })}
           variant="MILESTONE"
         />
       )}

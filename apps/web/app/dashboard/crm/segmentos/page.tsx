@@ -1,11 +1,16 @@
 "use client";
-/* eslint-disable react-hooks/set-state-in-effect */
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
 import { Pencil, Plus, Tags, X } from "lucide-react";
-import CrmNav from "@/components/crm/CrmNav";
+import { useAuthorizedUser } from "@/components/auth/RoleGate";
+import {
+  CrmNotice,
+  CrmWorkspace,
+  CrmWorkspaceDialog,
+} from "@/components/crm/CrmWorkspace";
+import ui from "@/components/crm/crm-workspace-premium.module.css";
 import {
   calculateSegment,
   createSegment,
@@ -33,6 +38,11 @@ const automatic = [
 ];
 
 export default function Segmentos() {
+  const organizer = useAuthorizedUser();
+  return organizer ? <SegmentsView key={organizer.id} /> : null;
+}
+
+function SegmentsView() {
   const query = useSearchParams();
   const [items, setItems] = useState<Segment[]>([]);
   const [tagItems, setTagItems] = useState<CrmTag[]>([]);
@@ -51,42 +61,61 @@ export default function Segmentos() {
   const [tagName, setTagName] = useState("");
   const [tagOpen, setTagOpen] = useState(false);
   const [message, setMessage] = useState("");
-  const load = async () => {
-    const [segmentRows, tagRows] = await Promise.all([segments(), tags()]);
-    setItems(segmentRows);
-    setTagItems(tagRows);
-  };
-  useEffect(() => {
-    void load();
+  const [error, setError] = useState("");
+  const [dialogError, setDialogError] = useState("");
+  const [loadError, setLoadError] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [mutating, setMutating] = useState(false);
+
+  const load = useCallback(async (isCurrent: () => boolean = () => true) => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const [segmentRows, tagRows] = await Promise.all([segments(), tags()]);
+      if (!isCurrent()) return;
+      setItems(segmentRows);
+      setTagItems(tagRows);
+    } catch {
+      if (isCurrent()) setLoadError(true);
+    } finally {
+      if (isCurrent()) setLoading(false);
+    }
   }, []);
-  async function submit(event: FormEvent) {
-    event.preventDefault();
-    const rules = Object.fromEntries(
-      Object.entries({
-        status,
-        city,
-        minSpent: minSpent ? Number(minSpent) : undefined,
-        minPurchases: minPurchases ? Number(minPurchases) : undefined,
-        inactiveDays: inactiveDays ? Number(inactiveDays) : undefined,
-      }).filter(([, value]) => value !== "" && value !== undefined),
-    );
-    const body = {
-      name,
-      description: description || undefined,
-      type: "DYNAMIC",
-      isDynamic: true,
-      rules,
+  useEffect(() => {
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) return load(() => active);
+    });
+    return () => {
+      active = false;
     };
-    if (editingId) await updateSegment(editingId, body);
-    else await createSegment(body);
-    setName("");
-    setDescription("");
-    setEditingId("");
-    setSegmentOpen(false);
-    setStep(1);
-    setMessage(editingId ? "Segmento atualizado." : "Segmento criado.");
-    await load();
+  }, [load]);
+
+  async function mutate(
+    action: () => Promise<unknown>,
+    success: string,
+    reset?: () => void,
+    isDialog = false,
+  ) {
+    if (mutating) return;
+    setError("");
+    setDialogError("");
+    setMessage("");
+    setMutating(true);
+    try {
+      await action();
+      reset?.();
+      setMessage(success);
+      await load();
+    } catch {
+      const text = "Não foi possível concluir a alteração. Tente novamente.";
+      if (isDialog) setDialogError(text);
+      else setError(text);
+    } finally {
+      setMutating(false);
+    }
   }
+
   function currentRules() {
     return Object.fromEntries(
       Object.entries({
@@ -98,8 +127,29 @@ export default function Segmentos() {
       }).filter(([, value]) => value !== "" && value !== undefined),
     );
   }
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (step !== 4 || !name.trim()) return;
+    const body = {
+      name,
+      description: description || undefined,
+      type: "DYNAMIC",
+      isDynamic: true,
+      rules: currentRules(),
+    };
+    void mutate(
+      () => (editingId ? updateSegment(editingId, body) : createSegment(body)),
+      editingId ? "Segmento atualizado." : "Segmento criado.",
+      () => setSegmentOpen(false),
+      true,
+    );
+  }
+
   async function goToPreview() {
+    if (previewing) return;
     setPreviewing(true);
+    setDialogError("");
     try {
       const result = await previewSegment({
         name: name || "Prévia",
@@ -109,11 +159,32 @@ export default function Segmentos() {
       });
       setPreviewCount(result.count);
       setStep(3);
+    } catch {
+      setDialogError(
+        "Não foi possível calcular a prévia. Confira as regras e tente novamente.",
+      );
     } finally {
       setPreviewing(false);
     }
   }
+
+  function openNewSegment() {
+    setEditingId("");
+    setName("");
+    setDescription("");
+    setStatus("");
+    setCity("");
+    setMinSpent("");
+    setMinPurchases("");
+    setInactiveDays("");
+    setStep(1);
+    setPreviewCount(null);
+    setDialogError("");
+    setSegmentOpen(true);
+  }
   function editSegment(segment: Segment) {
+    setDialogError("");
+    setPreviewCount(null);
     const rules = segment.rules || {};
     setEditingId(segment.id);
     setName(segment.name);
@@ -130,220 +201,270 @@ export default function Segmentos() {
     setStep(1);
     setSegmentOpen(true);
   }
-  async function submitTag(event: FormEvent) {
+  function submitTag(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await createTag({ name: tagName, color: "#7c3aed" });
-    setTagName("");
-    setTagOpen(false);
-    setMessage("Etiqueta criada.");
-    await load();
+    if (!tagName.trim()) return;
+    void mutate(
+      () => createTag({ name: tagName, color: "#7c3aed" }),
+      "Etiqueta criada.",
+      () => {
+        setTagName("");
+        setTagOpen(false);
+      },
+      true,
+    );
   }
-  async function editTag(tag: CrmTag) {
+
+  function editTag(tag: CrmTag) {
     const name = window.prompt("Novo nome da etiqueta", tag.name)?.trim();
     if (!name || name === tag.name) return;
-    await updateTag(tag.id, { name, color: tag.color });
-    setMessage("Etiqueta atualizada.");
-    await load();
+    void mutate(
+      () => updateTag(tag.id, { name, color: tag.color }),
+      "Etiqueta atualizada.",
+    );
   }
+
+  function dismissSegment() {
+    if (!mutating && !previewing) setSegmentOpen(false);
+  }
+
   return (
-    <main className="min-h-screen overflow-x-hidden bg-zinc-100 p-3 sm:p-5 lg:p-8">
-      <div className="mx-auto max-w-7xl">
-        <p className="text-sm font-bold uppercase text-violet-700">
-          CRM Inteligente
-        </p>
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-black">Segmentos</h1>
-            <p className="text-sm text-zinc-500">
-              Públicos dinâmicos que se atualizam conforme as regras.
-            </p>
-          </div>
-          <button
-            onClick={() => {
-              setEditingId("");
-              setName("");
-              setDescription("");
-              setStep(1);
-              setSegmentOpen(true);
-            }}
-            className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-violet-700 px-5 font-bold text-white sm:w-auto"
-          >
-            <Plus size={18} />
-            Novo segmento
-          </button>
-        </div>
-        <div className="mt-4">
-          <CrmNav />
-        </div>
-        {message && (
-          <p className="mt-4 rounded-xl bg-green-50 p-3 text-green-700">
-            {message}
+    <CrmWorkspace
+      title="Segmentos"
+      subtitle="Organize públicos dinâmicos que se atualizam conforme as regras."
+      actions={
+        <button
+          type="button"
+          className={`sx-premium-button ${ui.heroAction}`}
+          onClick={openNewSegment}
+          disabled={mutating}
+        >
+          <Plus size={18} aria-hidden="true" /> Novo segmento
+        </button>
+      }
+    >
+      {message && <CrmNotice kind="success">{message}</CrmNotice>}
+      {error && <CrmNotice kind="error">{error}</CrmNotice>}
+      {loading && <CrmNotice>Carregando segmentos e etiquetas…</CrmNotice>}
+      {loadError && (
+        <CrmNotice kind="error">
+          Não foi possível carregar os segmentos e as etiquetas.
+          <p>
+            <button
+              type="button"
+              className="sx-premium-button"
+              onClick={() => void load()}
+            >
+              Tentar novamente
+            </button>
           </p>
-        )}
-        <section className="mt-5">
-          <h2 className="text-lg font-black">Segmentos automáticos</h2>
-          <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-5">
-            {automatic.map((label) => (
-              <span
-                key={label}
-                className="rounded-2xl border bg-white p-3 text-sm font-bold text-zinc-600"
-              >
-                {label}
-              </span>
+        </CrmNotice>
+      )}
+      <section
+        className={`sx-premium-surface ${ui.panel}`}
+        aria-label="Segmentos automáticos"
+      >
+        <h2 className="sx-premium-section">Segmentos automáticos</h2>
+        <div className={ui.autoGrid}>
+          {automatic.map((label) => (
+            <span key={label} className={ui.inset}>
+              {label}
+            </span>
+          ))}
+        </div>
+      </section>
+      {!loadError && !loading && (
+        <div className={ui.detailGrid}>
+          <section
+            className={`sx-premium-surface ${ui.panel}`}
+            aria-labelledby="crm-custom-segments"
+          >
+            <h2 id="crm-custom-segments" className="sx-premium-section">
+              Segmentos personalizados
+            </h2>
+            {items.map((segment) => (
+              <article key={segment.id} className={`${ui.inset} ${ui.stack}`}>
+                <div className={ui.row}>
+                  <div>
+                    <strong>{segment.name}</strong>
+                    <p className={ui.label}>
+                      {segment.contactCount} contatos ·{" "}
+                      {segment.type === "DYNAMIC" ? "Dinâmico" : "Manual"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className={`sx-premium-button ${ui.negative}`}
+                    disabled={mutating}
+                    aria-label={`Excluir segmento ${segment.name}`}
+                    onClick={() =>
+                      void mutate(
+                        () => deleteSegment(segment.id),
+                        "Segmento excluído.",
+                      )
+                    }
+                  >
+                    Excluir
+                  </button>
+                </div>
+                <div className={ui.actions}>
+                  <button
+                    type="button"
+                    className="sx-premium-button"
+                    disabled={mutating}
+                    aria-label={`Editar segmento ${segment.name}`}
+                    onClick={() => editSegment(segment)}
+                  >
+                    <Pencil size={15} aria-hidden="true" /> Editar
+                  </button>
+                  <button
+                    type="button"
+                    className="sx-premium-button"
+                    disabled={mutating}
+                    aria-label={`Recalcular segmento ${segment.name}`}
+                    onClick={() =>
+                      void mutate(
+                        () => calculateSegment(segment.id),
+                        "Segmento recalculado.",
+                      )
+                    }
+                  >
+                    Recalcular
+                  </button>
+                  <Link
+                    href={`/dashboard/comunicacao?tab=new&segmentId=${segment.id}`}
+                    className="sx-premium-button"
+                    data-variant="ghost"
+                  >
+                    Preparar comunicação
+                  </Link>
+                </div>
+              </article>
             ))}
-          </div>
-        </section>
-        <div className="mt-5 grid gap-5 xl:grid-cols-[1.5fr_1fr]">
-          <section>
-            <div className="mt-5 grid gap-3 md:grid-cols-2">
-              {items.map((segment) => (
-                <article key={segment.id} className="rounded-2xl bg-white p-5">
-                  <div className="flex justify-between gap-3">
-                    <div>
-                      <strong>{segment.name}</strong>
-                      <p className="text-sm text-zinc-500">
-                        {segment.contactCount} contatos ·{" "}
-                        {segment.type === "DYNAMIC" ? "Dinâmico" : "Manual"}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => deleteSegment(segment.id).then(load)}
-                      className="text-sm font-bold text-red-600"
-                    >
-                      Excluir
-                    </button>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      onClick={() => editSegment(segment)}
-                      className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold"
-                    >
-                      <Pencil size={15} />
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => calculateSegment(segment.id).then(load)}
-                      className="rounded-xl border px-3 py-2 text-sm font-bold"
-                    >
-                      Recalcular
-                    </button>
-                    <Link
-                      href={`/dashboard/comunicacao?segmentId=${segment.id}`}
-                      className="rounded-xl bg-violet-700 px-3 py-2 text-sm font-bold text-white"
-                    >
-                      Comunicar
-                    </Link>
-                  </div>
-                </article>
-              ))}
-              {!items.length && (
-                <p className="rounded-2xl bg-white p-8 text-center text-zinc-500">
-                  Nenhum segmento personalizado.
-                </p>
-              )}
-            </div>
+            {!items.length && (
+              <p className={ui.empty}>Nenhum segmento personalizado.</p>
+            )}
           </section>
-          <section className="rounded-3xl bg-white p-6">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="flex items-center gap-2 text-lg font-black">
-                <Tags size={19} />
+          <section
+            className={`sx-premium-surface ${ui.panel}`}
+            aria-labelledby="crm-segment-tags"
+          >
+            <div className={ui.row}>
+              <h2 id="crm-segment-tags" className="sx-premium-section">
                 Etiquetas
               </h2>
               <button
-                onClick={() => setTagOpen(true)}
-                className="rounded-xl border px-3 py-2 text-sm font-bold text-violet-700"
+                type="button"
+                className="sx-premium-button"
+                disabled={mutating}
+                onClick={() => {
+                  setDialogError("");
+                  setTagOpen(true);
+                }}
               >
-                + Nova etiqueta
+                <Tags size={18} aria-hidden="true" /> Nova etiqueta
               </button>
             </div>
-            <div className="mt-4 space-y-2">
-              {tagItems.map((tag) => (
-                <div
-                  key={tag.id}
-                  className="flex items-center justify-between rounded-xl bg-zinc-50 p-3"
-                >
-                  <span className="font-bold">
-                    {tag.name}{" "}
-                    <small className="text-zinc-400">
-                      ({tag._count?.contacts || 0})
-                    </small>
-                  </span>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => editTag(tag)}
-                      className="text-sm font-bold text-violet-700"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      onClick={() => deleteTag(tag.id).then(load)}
-                      className="text-sm font-bold text-red-600"
-                    >
-                      Excluir
-                    </button>
-                  </div>
+            {tagItems.map((tag) => (
+              <div key={tag.id} className={`${ui.inset} ${ui.row}`}>
+                <p>
+                  <strong>{tag.name}</strong>{" "}
+                  <small className={ui.label}>
+                    ({tag._count?.contacts || 0})
+                  </small>
+                </p>
+                <div className={ui.actions}>
+                  <button
+                    type="button"
+                    className="sx-premium-button"
+                    disabled={mutating}
+                    onClick={() => editTag(tag)}
+                    aria-label={`Editar etiqueta ${tag.name}`}
+                  >
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    className={`sx-premium-button ${ui.negative}`}
+                    disabled={mutating}
+                    aria-label={`Excluir etiqueta ${tag.name}`}
+                    onClick={() =>
+                      void mutate(() => deleteTag(tag.id), "Etiqueta excluída.")
+                    }
+                  >
+                    Excluir
+                  </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
+            {!tagItems.length && (
+              <p className={ui.empty}>Nenhuma etiqueta criada.</p>
+            )}
           </section>
         </div>
-        {segmentOpen && (
-          <div
-            className="fixed inset-0 z-[90] overflow-y-auto bg-black/50 p-3"
-            role="dialog"
-            aria-modal="true"
-          >
-            <form
-              onSubmit={submit}
-              className="relative mx-auto my-4 max-w-2xl rounded-3xl bg-white p-5 shadow-2xl sm:p-7"
-            >
+      )}
+
+      {segmentOpen && (
+        <CrmWorkspaceDialog
+          titleId="crm-segment-dialog-title"
+          onDismiss={dismissSegment}
+        >
+          <form onSubmit={submit} className={ui.stack}>
+            <div className={ui.row}>
+              <div>
+                <p className={ui.label}>Etapa {step} de 4</p>
+                <h2
+                  id="crm-segment-dialog-title"
+                  className="sx-premium-section"
+                >
+                  {editingId ? "Editar segmento" : "Novo segmento"}
+                </h2>
+              </div>
               <button
                 type="button"
-                onClick={() => setSegmentOpen(false)}
-                className="absolute right-4 top-4 rounded-xl p-2"
+                className="sx-premium-button"
+                onClick={dismissSegment}
+                disabled={mutating || previewing}
                 aria-label="Fechar"
               >
-                <X />
+                <X size={18} aria-hidden="true" />
               </button>
-              <p className="text-xs font-black uppercase text-violet-600">
-                Etapa {step} de 4
-              </p>
-              <h2 className="mt-1 text-2xl font-black">
-                {editingId ? "Editar segmento" : "Novo segmento"}
-              </h2>
-              <div className="mt-5 h-2 overflow-hidden rounded-full bg-zinc-100">
-                <div
-                  className="h-full bg-violet-600 transition-all"
-                  style={{ width: `${(step / 4) * 100}%` }}
-                />
+            </div>
+            <progress
+              className={ui.dialogProgress}
+              value={step}
+              max={4}
+              aria-label="Etapa do segmento"
+            />
+            {step === 1 && (
+              <div className={ui.stack}>
+                <label className={ui.fieldLabel}>
+                  Nome
+                  <input
+                    required
+                    value={name}
+                    className={ui.field}
+                    onChange={(event) => setName(event.target.value)}
+                  />
+                </label>
+                <label className={ui.fieldLabel}>
+                  Descrição opcional
+                  <textarea
+                    className={ui.field}
+                    value={description}
+                    onChange={(event) => setDescription(event.target.value)}
+                  />
+                </label>
               </div>
-              {step === 1 && (
-                <div className="mt-6 grid gap-3">
-                  <label className="grid gap-1 text-sm font-bold">
-                    Nome
-                    <input
-                      required
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="h-11 rounded-xl border px-3"
-                    />
-                  </label>
-                  <label className="grid gap-1 text-sm font-bold">
-                    Descrição opcional
-                    <textarea
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      className="min-h-24 rounded-xl border p-3"
-                    />
-                  </label>
-                </div>
-              )}
-              {step === 2 && (
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+            )}
+            {step === 2 && (
+              <div className={`${ui.grid} ${ui.panelDouble}`}>
+                <label className={ui.fieldLabel}>
+                  Status
                   <select
+                    className={ui.field}
                     value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="h-11 rounded-xl border px-3"
+                    onChange={(event) => setStatus(event.target.value)}
                   >
                     <option value="">Qualquer status</option>
                     <option value="LEAD">Lead</option>
@@ -351,141 +472,173 @@ export default function Segmentos() {
                     <option value="VIP">VIP</option>
                     <option value="INACTIVE">Inativo</option>
                   </select>
+                </label>
+                <label className={ui.fieldLabel}>
+                  Cidade
                   <input
+                    className={ui.field}
                     value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="Cidade"
-                    className="h-11 rounded-xl border px-3"
+                    onChange={(event) => setCity(event.target.value)}
                   />
+                </label>
+                <label className={ui.fieldLabel}>
+                  Gasto mínimo
                   <input
+                    className={ui.field}
                     type="number"
                     min="0"
                     value={minSpent}
-                    onChange={(e) => setMinSpent(e.target.value)}
-                    placeholder="Gasto mínimo"
-                    className="h-11 rounded-xl border px-3"
+                    onChange={(event) => setMinSpent(event.target.value)}
                   />
+                </label>
+                <label className={ui.fieldLabel}>
+                  Compras mínimas
                   <input
+                    className={ui.field}
                     type="number"
                     min="0"
                     value={minPurchases}
-                    onChange={(e) => setMinPurchases(e.target.value)}
-                    placeholder="Compras mínimas"
-                    className="h-11 rounded-xl border px-3"
+                    onChange={(event) => setMinPurchases(event.target.value)}
                   />
+                </label>
+                <label className={ui.fieldLabel}>
+                  Sem comprar há X dias
                   <input
+                    className={ui.field}
                     type="number"
                     min="1"
                     value={inactiveDays}
-                    onChange={(e) => setInactiveDays(e.target.value)}
-                    placeholder="Sem comprar há X dias"
-                    className="h-11 rounded-xl border px-3"
+                    onChange={(event) => setInactiveDays(event.target.value)}
                   />
-                </div>
-              )}
-              {step === 3 && (
-                <div className="mt-6 rounded-2xl bg-violet-50 p-6 text-center">
-                  <p className="text-sm font-bold text-violet-700">
-                    Prévia calculada no banco
-                  </p>
-                  <strong className="mt-2 block text-4xl">
-                    {previewCount ?? 0}
-                  </strong>
-                  <p className="mt-1 text-sm text-zinc-600">
-                    contato(s) atendem às regras atuais.
-                  </p>
-                </div>
-              )}
-              {step === 4 && (
-                <div className="mt-6 rounded-2xl border p-5">
-                  <strong>Confirmar segmento</strong>
-                  <p className="mt-2 text-sm text-zinc-600">
-                    {name} será salvo como segmento dinâmico com{" "}
-                    {previewCount ?? 0} contato(s) na contagem inicial.
-                  </p>
-                </div>
-              )}
-              <div className="mt-6 flex gap-2">
-                {step > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => setStep((value) => value - 1)}
-                    className="min-h-11 flex-1 rounded-xl border font-bold"
-                  >
-                    Voltar
-                  </button>
-                )}
-                {step === 1 ? (
-                  <button
-                    type="button"
-                    disabled={!name.trim()}
-                    onClick={() => setStep(2)}
-                    className="min-h-11 flex-1 rounded-xl bg-violet-700 font-bold text-white disabled:opacity-40"
-                  >
-                    Continuar
-                  </button>
-                ) : step === 2 ? (
-                  <button
-                    type="button"
-                    disabled={previewing}
-                    onClick={() => void goToPreview()}
-                    className="min-h-11 flex-1 rounded-xl bg-violet-700 font-bold text-white"
-                  >
-                    {previewing ? "Calculando..." : "Calcular prévia"}
-                  </button>
-                ) : step === 3 ? (
-                  <button
-                    type="button"
-                    onClick={() => setStep(4)}
-                    className="min-h-11 flex-1 rounded-xl bg-violet-700 font-bold text-white"
-                  >
-                    Continuar
-                  </button>
-                ) : (
-                  <button className="min-h-11 flex-1 rounded-xl bg-violet-700 font-bold text-white">
-                    {editingId ? "Salvar alterações" : "Criar segmento"}
-                  </button>
-                )}
+                </label>
               </div>
-            </form>
-          </div>
-        )}
-        {tagOpen && (
-          <div
-            className="fixed inset-0 z-[95] grid place-items-center bg-black/50 p-4"
-            role="dialog"
-            aria-modal="true"
-          >
-            <form
-              onSubmit={submitTag}
-              className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl"
-            >
-              <div className="flex justify-between">
-                <h2 className="text-xl font-black">Nova etiqueta</h2>
+            )}
+            {step === 3 && (
+              <div className={ui.note}>
+                <p>Prévia calculada no banco</p>
+                <strong className={ui.metricValue}>{previewCount ?? 0}</strong>
+                <p className={ui.label}>Contato(s) atendem às regras atuais.</p>
+              </div>
+            )}
+            {step === 4 && (
+              <div className={ui.note}>
+                <strong>Confirmar segmento</strong>
+                <p>
+                  {name} será salvo como segmento dinâmico com{" "}
+                  {previewCount ?? 0} contato(s) na contagem inicial.
+                </p>
+              </div>
+            )}
+            {dialogError && <CrmNotice kind="error">{dialogError}</CrmNotice>}
+            <div className={ui.modalActions}>
+              {step > 1 && (
                 <button
                   type="button"
-                  onClick={() => setTagOpen(false)}
-                  aria-label="Fechar"
+                  className="sx-premium-button"
+                  disabled={mutating || previewing}
+                  onClick={() => {
+                    setDialogError("");
+                    setStep((n) => n - 1);
+                  }}
                 >
-                  <X />
+                  Voltar
                 </button>
-              </div>
-              <label className="mt-5 grid gap-1 text-sm font-bold">
-                Nome
-                <input
-                  required
-                  value={tagName}
-                  onChange={(e) => setTagName(e.target.value)}
-                  className="h-11 rounded-xl border px-3"
-                />
-              </label>
-              <button className="mt-5 min-h-11 w-full rounded-xl bg-violet-700 font-bold text-white">
-                Criar etiqueta
+              )}
+              {step === 1 && (
+                <button
+                  type="button"
+                  className="sx-premium-button"
+                  data-variant="primary"
+                  disabled={!name.trim()}
+                  onClick={() => setStep(2)}
+                >
+                  Continuar
+                </button>
+              )}
+              {step === 2 && (
+                <button
+                  type="button"
+                  className="sx-premium-button"
+                  data-variant="primary"
+                  disabled={previewing}
+                  onClick={() => void goToPreview()}
+                >
+                  {previewing ? "Calculando..." : "Calcular prévia"}
+                </button>
+              )}
+              {step === 3 && (
+                <button
+                  type="button"
+                  className="sx-premium-button"
+                  data-variant="primary"
+                  onClick={() => setStep(4)}
+                >
+                  Continuar
+                </button>
+              )}
+              {step === 4 && (
+                <button
+                  type="submit"
+                  className="sx-premium-button"
+                  data-variant="primary"
+                  disabled={mutating}
+                >
+                  {mutating
+                    ? "Salvando..."
+                    : editingId
+                      ? "Salvar alterações"
+                      : "Criar segmento"}
+                </button>
+              )}
+            </div>
+          </form>
+        </CrmWorkspaceDialog>
+      )}
+      {tagOpen && (
+        <CrmWorkspaceDialog
+          titleId="crm-tag-dialog-title"
+          onDismiss={() => {
+            if (!mutating) setTagOpen(false);
+          }}
+        >
+          <form onSubmit={submitTag} className={ui.stack}>
+            <div className={ui.row}>
+              <h2 id="crm-tag-dialog-title" className="sx-premium-section">
+                Nova etiqueta
+              </h2>
+              <button
+                className="sx-premium-button"
+                type="button"
+                onClick={() => setTagOpen(false)}
+                disabled={mutating}
+                aria-label="Fechar"
+              >
+                <X size={18} aria-hidden="true" />
               </button>
-            </form>
-          </div>
-        )}
-      </div>
-    </main>
+            </div>
+            <label className={ui.fieldLabel}>
+              Nome
+              <input
+                className={ui.field}
+                required
+                value={tagName}
+                onChange={(event) => setTagName(event.target.value)}
+              />
+            </label>
+            {dialogError && <CrmNotice kind="error">{dialogError}</CrmNotice>}
+            <div className={ui.modalActions}>
+              <button
+                type="submit"
+                className="sx-premium-button"
+                disabled={mutating || !tagName.trim()}
+                data-variant="primary"
+              >
+                {mutating ? "Salvando..." : "Criar etiqueta"}
+              </button>
+            </div>
+          </form>
+        </CrmWorkspaceDialog>
+      )}
+    </CrmWorkspace>
   );
 }

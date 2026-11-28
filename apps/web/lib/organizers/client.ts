@@ -4,9 +4,10 @@ import type {
   OrganizerProfile,
 } from "./types";
 
-export function getOrganizerProfile() {
+export function getOrganizerProfile(signal?: AbortSignal) {
   return authRequest<OrganizerProfile>("/api/organizer/profile", {
     cache: "no-store",
+    signal,
   });
 }
 

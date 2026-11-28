@@ -5,11 +5,13 @@ import { AppModule } from './app.module';
 import { SafeExceptionFilter } from './infrastructure/http-exception.filter';
 import { RequestLoggingInterceptor } from './infrastructure/request-logging.interceptor';
 import { EnvironmentService } from './infrastructure/environment.service';
+import { initializeLocalUploadStorage } from './organizers/local-upload-storage';
 
 export async function createApplication() {
   const app = await NestFactory.create(AppModule);
   const environment = app.get(EnvironmentService);
   environment.validate();
+  await initializeLocalUploadStorage();
   app.use(
     json({
       limit: process.env.MAX_JSON_BODY_SIZE || '1mb',

@@ -1,0 +1,131 @@
+name: Interface iOS por XCUITest (PostgreSQL descartável)
+on:
+  push:
+    branches: [homologacao/web-ios-integrada]
+    paths: ['.github/ios-xcuitest/**', '.github/workflows/mobile-native-xcuitest.yml']
+permissions:
+  contents: read
+concurrency:
+  group: sortex-xcuitest-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  driver-preflight:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event_name == 'push' && github.event.repository.private == false
+    runs-on: macos-latest
+    timeout-minutes: 12
+    outputs:
+      run_full: ${{ steps.gate.outputs.run_full }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validar os formatos e a ausência de segredos
+        shell: bash
+        run: python3 -B -m unittest discover -s .github/ios-xcuitest -p '*_test.py'
+      - name: Selecionar iPhone virtual sem inicializar
+        shell: bash
+        run: |
+          set -euo pipefail
+          simulator_id="$(xcrun simctl list devices available --json | python3 .github/ios-xcuitest/select-device.py)"
+          echo "SORTEX_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+      - name: Compilar somente o alvo XCUITest e verificar a especificação
+        shell: bash
+        run: bash .github/ios-xcuitest/preflight.sh
+      - name: Liberar a jornada apenas para um commit de teste integral explícito
+        id: gate
+        shell: bash
+        env:
+          RUN_FULL_NATIVE: ${{ startsWith(github.event.head_commit.message, '[xcui-full] ') }}
+        # This step is reached only after the driver preflight passes. Only an
+        # intentional commit tagged [xcui-full] opts in to the longer fixture job.
+        run: |
+          if [[ "$RUN_FULL_NATIVE" == true ]]; then
+            echo "run_full=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_full=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Guardar apenas formato, presença de campos e código de validação
+        if: ${{ always() && !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sortex-ios-xcuitest-preflight-${{ github.sha }}
+          path: ${{ runner.temp }}/sortex-xcuitest-driver-preflight.txt
+          if-no-files-found: ignore
+          retention-days: 1
+  buyer-session:
+    needs: driver-preflight
+    if: needs.driver-preflight.outputs.run_full == 'true' && github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event_name == 'push' && github.event.repository.private == false
+    runs-on: macos-latest
+    timeout-minutes: 70
+    env:
+      CI: '1'
+      EXPO_NO_TELEMETRY: '1'
+      EXPO_NO_DOTENV: '1'
+      EXPO_PUBLIC_API_URL: http://127.0.0.1:3338
+      EXPO_PUBLIC_ALLOW_LOCAL_API: '1'
+      EXPO_PUBLIC_ENABLE_TEST_RESERVATIONS: '0'
+      EXPO_PUBLIC_SORTEX_XCUI_TAB_PRESS_OBSERVATION: '1'
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      SORTEX_IOS_UI_CHECKPOINTS: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            apps/mobile/package-lock.json
+            services/api/package-lock.json
+      - name: Validar o isolamento dos dois testadores
+        run: |
+          python3 .github/ios-xcuitest/evidence_test.py
+          node --test .github/native-ui/fixture-guards.test.cjs .github/native-ui/startup-probe.test.cjs .github/native-ui/phase-evidence.test.cjs
+      - name: Preparar PostgreSQL descartável
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install postgresql@18
+          echo "SORTEX_IOS_UI_PG_BIN=$(brew --prefix postgresql@18)/bin" >> "$GITHUB_ENV"
+          xcrun xcodebuild -list -project .github/ios-xcuitest/SortexFixtureUI.xcodeproj
+      - name: Preparar API Nest local
+        working-directory: services/api
+        run: |
+          npm ci --no-audit --no-fund
+          npx --no-install prisma generate
+          npm run build
+      - name: Preparar o aplicativo nativo
+        working-directory: apps/mobile
+        run: |
+          npm ci --no-audit --no-fund
+          npx expo prebuild --platform ios --no-install
+          node scripts/check-native-config.cjs
+      - name: Inicializar um iPhone virtual
+        shell: bash
+        run: |
+          set -euo pipefail
+          simulator_id="$(xcrun simctl list devices available --json | python3 .github/ios-xcuitest/select-device.py)"
+          xcrun simctl bootstatus "$simulator_id" -b
+          echo "SORTEX_SIMULATOR_ID=$simulator_id" >> "$GITHUB_ENV"
+      - name: Verificar Release, jornada nativa e revogação no PostgreSQL
+        id: xctest-run
+        shell: bash
+        run: bash .github/ios-xcuitest/finish.sh
+      - name: Reter apenas o resumo sanitizado do cenário aprovado
+        uses: actions/upload-artifact@v4
+        with:
+          name: sortex-ios-xcuitest-${{ github.sha }}
+          path: ${{ runner.temp }}/sortex-xcuitest-summary.txt
+          if-no-files-found: error
+          retention-days: 1
+      - name: Reter apenas a classificação sanitizada se o XCUITest falhar
+        if: ${{ failure() && !cancelled() && steps.xctest-run.outcome == 'failure' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: sortex-ios-xcuitest-failure-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/sortex-xcuitest-failure.txt
+            ${{ runner.temp }}/sortex-xcuitest-fixture-failure.txt
+          if-no-files-found: ignore
+          retention-days: 1
