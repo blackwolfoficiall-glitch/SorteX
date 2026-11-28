@@ -45,7 +45,7 @@ import {
   type PromotionsSession,
 } from "./promotions";
 
-type Props = { client: PromotionsClient; session: PromotionsSession };
+type Props = { client: PromotionsClient; session: PromotionsSession; draftCampaignId?: string };
 type Remote<T> =
   { kind: "ok"; data: T } | { kind: "loading" | "error" | "missing" };
 type Selection =
@@ -155,12 +155,13 @@ function summaryCaption(summary: PromotionSummary) {
 const failure =
   "Não foi possível confirmar a operação. Atualize a lista antes de tentar novamente.";
 
-export function NativeOrganizerPromotions({ client, session }: Props) {
+export function NativeOrganizerPromotions({ client, session, draftCampaignId }: Props) {
   const theme = usePremiumTheme();
   const key = `${session.organizerId}:${session.revision}`;
-  const [query, setQuery] = useState<PromotionFilters>(initialPromotionFilters);
+  const initialFilters = { ...initialPromotionFilters, campaignId: draftCampaignId ?? "" };
+  const [query, setQuery] = useState<PromotionFilters>(initialFilters);
   const [draftFilters, setDraftFilters] = useState<PromotionFilters>(
-    initialPromotionFilters,
+    initialFilters,
   );
   const [page, setPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
@@ -174,14 +175,19 @@ export function NativeOrganizerPromotions({ client, session }: Props) {
   const active = () => samePromotionsSession(client, session);
   const consult = `${key}:${revision}`;
   const summary = useRead<PromotionSummary>(consult, () =>
-    loadPromotionSummary(client, session),
+    draftCampaignId ? Promise.resolve({ kind: "missing" }) : loadPromotionSummary(client, session),
   );
   const campaigns = useRead<OrderCampaign[]>(consult, () =>
-    loadPromotionCampaigns(client, session),
+    draftCampaignId ? Promise.resolve({ kind: "missing" }) : loadPromotionCampaigns(client, session),
   );
   const list = useRead<PromotionPageData>(
     `${consult}:${page}:${JSON.stringify(query)}`,
-    () => loadPromotionList(client, session, query, page),
+    async () => {
+      const result = await loadPromotionList(client, session, query, page);
+      if (draftCampaignId && result.kind === "ok" && result.data.items.some((item) => item.campaign.id !== draftCampaignId))
+        throw new Error("Não foi possível confirmar a campanha das promoções.");
+      return result;
+    },
   );
   const reload = () => setRevision((r) => r + 1);
   function show(next: Selection | null) {
@@ -203,8 +209,8 @@ export function NativeOrganizerPromotions({ client, session }: Props) {
     }
   }
   function resetFilters() {
-    setDraftFilters(initialPromotionFilters);
-    setQuery(initialPromotionFilters);
+    setDraftFilters(initialFilters);
+    setQuery(initialFilters);
     setPage(1);
     setProblem("");
   }
@@ -215,6 +221,20 @@ export function NativeOrganizerPromotions({ client, session }: Props) {
     setProblem("");
     setMessage("");
     try {
+      if (draftCampaignId) {
+        const current = await client.request<{ id?: string; organizerId?: string; status?: string }>(
+          `/campaigns/${encodeURIComponent(draftCampaignId)}`,
+        );
+        if (!active()) return;
+        if (
+          form.campaignId !== draftCampaignId ||
+          (editing && (editing.campaign.id !== draftCampaignId || editing.status !== "DRAFT")) ||
+          current?.id !== draftCampaignId || current.organizerId !== session.organizerId || current.status !== "DRAFT"
+        ) {
+          setProblem("Somente promoções em rascunho desta campanha podem ser salvas aqui.");
+          return;
+        }
+      }
       const result = await savePromotion(client, session, form, editing);
       if (result.kind === "stale" || !active()) return;
       if (result.kind === "missing")
@@ -253,7 +273,7 @@ export function NativeOrganizerPromotions({ client, session }: Props) {
     }
   }
   async function execute() {
-    if (!confirm || saving.current || !active()) return;
+    if (draftCampaignId || !confirm || saving.current || !active()) return;
     const { item, action } = confirm;
     saving.current = true;
     setBusy(true);
@@ -301,6 +321,7 @@ export function NativeOrganizerPromotions({ client, session }: Props) {
       <PromotionFormView
         key={selection.item?.id ?? "new"}
         item={selection.item}
+        draftCampaignId={draftCampaignId}
         campaigns={campaigns}
         retry={reload}
         problem={problem}
@@ -316,6 +337,7 @@ export function NativeOrganizerPromotions({ client, session }: Props) {
         client={client}
         session={session}
         item={selection.item}
+        draftCampaignId={draftCampaignId}
         confirm={confirm}
         busy={busy}
         back={() => show(null)}
@@ -326,15 +348,16 @@ export function NativeOrganizerPromotions({ client, session }: Props) {
       />
     );
   return (
-    <PremiumPage title="Promoções" top={false} bottom>
+    <PremiumPage title={draftCampaignId ? "Promoções do rascunho" : "Promoções"} top={false} bottom>
       <View style={[styles.hero, { backgroundColor: theme.purple }]}>
         <PremiumGradient />
         <Text style={[premiumTypography.label, { color: theme.white }]}>
           Estratégias de conversão
         </Text>
         <Text style={[premiumTypography.body, { color: theme.white }]}>
-          Gerencie cupons e pacotes das suas campanhas. A ativação é manual,
-          nunca automática.
+          {draftCampaignId
+            ? "Cupons e pacotes desta campanha. Este editor não ativa ofertas."
+            : "Gerencie cupons e pacotes das suas campanhas. A ativação é manual, nunca automática."}
         </Text>
       </View>
       {!!message && <PremiumMessage message={message} />}
@@ -344,7 +367,7 @@ export function NativeOrganizerPromotions({ client, session }: Props) {
         title="Criar promoção"
         onPress={() => show({ kind: "form" })}
       />
-      {summary.kind === "ok" ? (
+      {!draftCampaignId && (summary.kind === "ok" ? (
         <PremiumPanel title="Resumo da operação">
           <Copy muted>
             Indicadores de todas as suas campanhas, sem aplicar os filtros da
@@ -361,12 +384,12 @@ export function NativeOrganizerPromotions({ client, session }: Props) {
         </PremiumPanel>
       ) : (
         <RemoteState title="Resumo" state={summary.kind} retry={reload} />
-      )}
-      <PremiumButton
+      ))}
+      {!draftCampaignId && <PremiumButton
         title={showFilters ? "Fechar filtros" : "Filtrar promoções"}
         onPress={() => setShowFilters((v) => !v)}
-      />
-      {showFilters && (
+      />}
+      {!draftCampaignId && showFilters && (
         <PremiumPanel title="Filtros">
           <PremiumField
             label="Nome ou campanha"
@@ -511,6 +534,7 @@ export function NativeOrganizerPromotions({ client, session }: Props) {
 
 function PromotionFormView({
   item,
+  draftCampaignId,
   campaigns,
   retry,
   problem,
@@ -519,6 +543,7 @@ function PromotionFormView({
   save,
 }: {
   item?: Promotion;
+  draftCampaignId?: string;
   campaigns: Remote<OrderCampaign[]>;
   retry: () => void;
   problem: string;
@@ -527,7 +552,7 @@ function PromotionFormView({
   save: (data: PromotionForm, item?: Promotion) => Promise<void>;
 }) {
   const [form, setForm] = useState<PromotionForm>(() =>
-    item ? promotionFormFromItem(item) : newPromotionForm(),
+    item ? promotionFormFromItem(item) : { ...newPromotionForm(), campaignId: draftCampaignId ?? "" },
   );
   const [error, setError] = useState("");
   const patch = (v: Partial<PromotionForm>) => {
@@ -558,6 +583,8 @@ function PromotionFormView({
           <Copy muted>
             A campanha e o tipo da promoção permanecem os mesmos.
           </Copy>
+        ) : draftCampaignId ? (
+          <Copy muted>Oferta vinculada ao rascunho atual.</Copy>
         ) : campaigns.kind === "ok" ? (
           campaigns.data.length ? (
             <View style={styles.choices}>
@@ -739,6 +766,7 @@ function PromotionDetail({
   client,
   session,
   item,
+  draftCampaignId,
   confirm,
   busy,
   back,
@@ -799,7 +827,11 @@ function PromotionDetail({
           <PremiumMessage message="Este tipo é apenas consultável no app e não é aplicado ao preço da compra pela API atual." />
         )}
       </PremiumPanel>
-      {confirm ? (
+      {draftCampaignId ? (
+        item.status === "DRAFT" && editablePromotion(item) && (
+          <PremiumButton title="Editar promoção" disabled={busy} onPress={edit} />
+        )
+      ) : confirm ? (
         <PremiumPanel
           title={`Confirmar: ${promotionActions[confirm.action].label}`}
         >

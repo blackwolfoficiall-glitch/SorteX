@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
+import { useIsFocused } from "@react-navigation/native";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import {
   PremiumButton,
@@ -11,8 +12,9 @@ import {
   premiumTypography,
   usePremiumTheme,
 } from "../theme/premium";
-import type { OrderCampaign } from "./orders";
 import {
+  canManagePrizeTicketDraft,
+  deliveryRecordStatus,
   initialPrizeTicketFilters,
   isPrizeTicketsSession,
   loadPrizeTicketCampaigns,
@@ -25,6 +27,7 @@ import {
   prizeTicketTypes,
   prizeTicketsPath,
   type OrganizerPrizeTicket,
+  type PrizeTicketCampaign,
   type PrizeTicketFilters,
   type PrizeTicketPage,
   type PrizeTicketSummary,
@@ -145,17 +148,26 @@ export function NativeOrganizerPrizeTickets({
   session,
   campaignId,
   onBrowseCampaignDrafts,
+  onOpenDraft,
 }: Props & {
   campaignId?: string;
   onBrowseCampaignDrafts?: () => void;
+  onOpenDraft?: (campaignId: string) => void;
 }) {
   const theme = usePremiumTheme();
   const [draft, setDraft] = useState(() => initial(campaignId));
   const [filters, setFilters] = useState(() => initial(campaignId));
   const [page, setPage] = useState(1);
   const [filtering, setFiltering] = useState(false);
+  const [showDrafts, setShowDrafts] = useState(false);
+  const focused = useIsFocused();
+  const previouslyFocused = useRef(focused);
   const [active, setActive] = useState<OrganizerPrizeTicket | null>(null);
   const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    if (focused && !previouslyFocused.current) setAttempt((a) => a + 1);
+    previouslyFocused.current = focused;
+  }, [focused]);
   const sessionKey = `${session.organizerId}:${session.revision}`;
   const queryKey = `${sessionKey}:${attempt}`;
   const list = useRead<PrizeTicketPage>(
@@ -166,7 +178,7 @@ export function NativeOrganizerPrizeTickets({
     `${queryKey}:${filters.campaignId}`,
     () => loadPrizeTicketSummary(client, session, filters.campaignId),
   );
-  const campaigns = useRead<OrderCampaign[]>(queryKey, () =>
+  const campaigns = useRead<PrizeTicketCampaign[]>(queryKey, () =>
     loadPrizeTicketCampaigns(client, session),
   );
   const [error, setError] = useState("");
@@ -182,8 +194,10 @@ export function NativeOrganizerPrizeTickets({
       setPage(1);
       setFiltering(false);
       setError("");
-    } catch {
-      setError("Os filtros informados são inválidos.");
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : "Os filtros informados são inválidos.",
+      );
     }
   }
   function clear() {
@@ -220,10 +234,35 @@ export function NativeOrganizerPrizeTickets({
           Acompanhe suas cotas
         </Text>
         <Text style={[premiumTypography.body, { color: theme.white }]}>
-          Consulte as cotas instantâneas e o histórico de cada registro. Esta
-          tela não executa apurações.
+          Configure cotas de rascunhos privados. Nas demais campanhas, consulte
+          os resultados e o histórico sem executar apurações, pagamentos ou
+          entregas.
         </Text>
       </View>
+      {onOpenDraft && (
+        <PremiumPanel title="Configurar cotas de um rascunho">
+          <Body muted>
+            Crie, edite ou remova cotas somente em campanhas próprias nunca
+            publicadas.
+          </Body>
+          <PremiumButton
+            filled
+            title={showDrafts ? "Fechar rascunhos" : "Escolher rascunho"}
+            onPress={() => setShowDrafts((v) => !v)}
+          />
+          {showDrafts &&
+            (campaigns.kind !== "ok" ? (
+              <State title="Rascunhos" state={campaigns.kind} retry={reload} />
+            ) : (
+              <DraftPicker
+                campaigns={campaigns.data}
+                onOpen={(id) => {
+                  if (isPrizeTicketsSession(client, session)) onOpenDraft(id);
+                }}
+              />
+            ))}
+        </PremiumPanel>
+      )}
       {summary.kind === "ok" ? (
         <PremiumPanel title="Resumo">
           <Body muted>
@@ -256,6 +295,13 @@ export function NativeOrganizerPrizeTickets({
             value={draft.search}
             onChangeText={(search) => change({ search })}
             maxLength={120}
+          />
+          <PremiumField
+            label="Criadas desde (DD/MM/AAAA, UTC)"
+            value={draft.startDate}
+            maxLength={10}
+            placeholder="DD/MM/AAAA"
+            onChangeText={(startDate) => change({ startDate })}
           />
           <Body>Campanha</Body>
           <View style={styles.choices}>
@@ -360,6 +406,11 @@ export function NativeOrganizerPrizeTickets({
           {list.data.items.map((item) => (
             <PremiumPanel key={item.id} title={item.description}>
               <Body muted>{item.campaign.title}</Body>
+              {campaigns.kind === "ok" &&
+                campaigns.data.some(
+                  (c) =>
+                    c.id === item.campaign.id && canManagePrizeTicketDraft(c),
+                ) && <Body muted>Rascunho privado</Body>}
               <Body>
                 {prizeTicketStates[item.state]} · {prizeTicketTypes[item.type]}{" "}
                 · {money.format(item.value)}
@@ -405,6 +456,28 @@ export function NativeOrganizerPrizeTickets({
   );
 }
 
+function DraftPicker({
+  campaigns,
+  onOpen,
+}: {
+  campaigns: PrizeTicketCampaign[];
+  onOpen: (id: string) => void;
+}) {
+  const drafts = campaigns.filter(canManagePrizeTicketDraft);
+  return drafts.length ? (
+    <>
+      {drafts.map((draft) => (
+        <PremiumButton
+          key={draft.id}
+          title={draft.title}
+          onPress={() => onOpen(draft.id)}
+        />
+      ))}
+    </>
+  ) : (
+    <PremiumMessage message="Nenhuma campanha sua está apta à edição aqui. Abra Campanhas para criar um rascunho." />
+  );
+}
 function TicketDetail({
   client,
   session,
@@ -412,6 +485,7 @@ function TicketDetail({
   back,
 }: Props & { item: OrganizerPrizeTicket; back: () => void }) {
   const [attempt, setAttempt] = useState(0);
+  const delivery = deliveryRecordStatus(item);
   const history = useRead<PrizeTicketEvent[]>(
     `${session.organizerId}:${session.revision}:${item.id}:${attempt}`,
     () => loadPrizeTicketHistory(client, session, item.id),
@@ -448,9 +522,33 @@ function TicketDetail({
                 {isoToLocale(item.result.identifiedAt)}
               </Body>
             )}
-            {item.result?.deliveredAt && (
+            {item.result?.winnerLabel && (
+              <Body>Participante identificado: {item.result.winnerLabel}</Body>
+            )}
+            {item.result?.orderReference && (
               <Body muted>
-                Entrega registrada em {isoToLocale(item.result.deliveredAt)}
+                Referência do pedido: {item.result.orderReference}
+              </Body>
+            )}
+            {delivery === "matched" && item.result?.deliveredAt && (
+              <Body muted>
+                Marcação de entrega consistente com o resultado ·{" "}
+                {isoToLocale(item.result.deliveredAt)}
+              </Body>
+            )}
+            {delivery === "inconsistent" && (
+              <PremiumMessage
+                error
+                message="Há marcação de entrega, mas os registros da cota e do resultado não conferem. Não considere o prêmio entregue."
+              />
+            )}
+            {delivery === "not-recorded" && item.result && (
+              <Body muted>Nenhuma entrega confirmada nos registros.</Body>
+            )}
+            {item.result && (
+              <Body muted>
+                Consulta dos registros da plataforma. Esta tela não registra
+                entregas nem comprova pagamento.
               </Body>
             )}
           </PremiumPanel>

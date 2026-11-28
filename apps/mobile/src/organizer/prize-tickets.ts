@@ -1,6 +1,5 @@
 import { ApiError } from "../api/client";
 import {
-  loadOrganizerOrderCampaigns,
   organizerOrdersSession,
   sameOrganizerOrdersSession,
   type OrganizerOrdersClient,
@@ -11,14 +10,13 @@ export type PrizeTicketsClient = OrganizerOrdersClient;
 export type PrizeTicketsSession = OrganizerOrdersSession;
 export const prizeTicketsSession = organizerOrdersSession;
 export const isPrizeTicketsSession = sameOrganizerOrdersSession;
-export const loadPrizeTicketCampaigns = loadOrganizerOrderCampaigns;
 export const prizeTicketsPageSize = 20;
 export const prizeTicketStates = {
   available: "Disponível",
   reserved: "Reservada",
   found: "Identificada",
   paused: "Pausada",
-  delivered: "Entregue",
+  delivered: "Entrega marcada",
 } as const;
 export const prizeTicketTypes = {
   PIX: "Pix",
@@ -42,6 +40,7 @@ type Sort = keyof typeof prizeTicketSorts;
 export type PrizeTicketFilters = {
   campaignId: string;
   search: string;
+  startDate: string;
   status: "" | State;
   type: "" | Type;
   sort: Sort;
@@ -49,6 +48,7 @@ export type PrizeTicketFilters = {
 export const initialPrizeTicketFilters: PrizeTicketFilters = {
   campaignId: "",
   search: "",
+  startDate: "",
   status: "",
   type: "",
   sort: "recent",
@@ -64,11 +64,14 @@ export type OrganizerPrizeTicket = {
   type: Type;
   state: State;
   createdAt: string;
+  prizeDeliveredAt: string | null;
   reservation: { expiresAt: string } | null;
   result: {
     status: "IDENTIFIED" | "DELIVERED" | "CANCELLED" | "DISPUTED";
     identifiedAt: string;
     deliveredAt: string | null;
+    winnerLabel: string | null;
+    orderReference: string | null;
   } | null;
 };
 export type PrizeTicketPage = {
@@ -107,6 +110,61 @@ const amount = (v: unknown): v is number =>
   v >= 0 &&
   v <= Number.MAX_SAFE_INTEGER / 100;
 const label = (v: unknown): v is string => typeof v === "string" && !!v.trim();
+export type PrizeTicketCampaign = {
+  id: string;
+  title: string;
+  status: string;
+  publishedAt: string | null;
+};
+const campaignStatuses = new Set([
+  "DRAFT",
+  "PENDING_REVIEW",
+  "PUBLISHED",
+  "PAUSED",
+  "SOLD_OUT",
+  "DRAWN",
+  "FINISHED",
+  "CANCELLED",
+]);
+export function parsePrizeTicketCampaigns(
+  payload: unknown,
+  organizerId: string,
+): PrizeTicketCampaign[] {
+  if (!Array.isArray(payload)) throw invalid();
+  const values = payload.map((value) => {
+    const row = obj(value);
+    if (
+      !row ||
+      row.organizerId !== organizerId ||
+      !safeId(row.id) ||
+      !label(row.title) ||
+      typeof row.status !== "string" ||
+      !campaignStatuses.has(row.status) ||
+      (row.publishedAt !== null && !date(row.publishedAt))
+    )
+      throw invalid();
+    return {
+      id: row.id,
+      title: row.title,
+      status: row.status,
+      publishedAt: row.publishedAt,
+    };
+  });
+  if (new Set(values.map((row) => row.id)).size !== values.length)
+    throw invalid();
+  return values;
+}
+export function canManagePrizeTicketDraft(campaign: PrizeTicketCampaign) {
+  return campaign.status === "DRAFT" && campaign.publishedAt === null;
+}
+function prizeStartDate(day: string) {
+  if (!day.trim()) return null;
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(day.trim());
+  const iso = m ? `${m[3]}-${m[2]}-${m[1]}T00:00:00.000Z` : null;
+  if (!iso || !date(iso))
+    throw new Error("Informe a data inicial em DD/MM/AAAA (UTC).");
+  return iso;
+}
 function campaignQuery(campaignId: string) {
   if (!campaignId) return "";
   if (!safeId(campaignId)) throw invalid();
@@ -132,6 +190,8 @@ export function prizeTicketsPath(filters: PrizeTicketFilters, page: number) {
   if (search.length > 120)
     throw new Error("A busca deve ter até 120 caracteres.");
   if (search) q.set("search", search);
+  const start = prizeStartDate(filters.startDate);
+  if (start) q.set("startDate", start);
   if (filters.status) {
     if (!Object.hasOwn(prizeTicketStates, filters.status)) throw invalid();
     q.set("status", filters.status);
@@ -154,6 +214,31 @@ const resultStates = {
   CANCELLED: true,
   DISPUTED: true,
 } as const;
+function maskedWinner(value: unknown) {
+  const name = obj(value)?.name;
+  return typeof name === "string" &&
+    /^[\p{L}\p{M}’'-]{1,40}(?: [\p{L}\p{M}]\.)?$/u.test(name)
+    ? name
+    : null;
+}
+export function deliveryRecordStatus(item: OrganizerPrizeTicket) {
+  const prizeMarked =
+    item.state === "delivered" || item.prizeDeliveredAt !== null;
+  const resultMarked =
+    item.result?.status === "DELIVERED" || !!item.result?.deliveredAt;
+  if (
+    item.state === "delivered" &&
+    !item.reservation &&
+    item.foundCount > 0 &&
+    item.number !== null &&
+    item.prizeDeliveredAt &&
+    item.result?.status === "DELIVERED" &&
+    item.result.deliveredAt
+  )
+    return "matched" as const;
+  if (prizeMarked || resultMarked) return "inconsistent" as const;
+  return "not-recorded" as const;
+}
 function prizeTicket(value: unknown): OrganizerPrizeTicket {
   const v = obj(value);
   const campaign = obj(v?.campaign);
@@ -170,6 +255,9 @@ function prizeTicket(value: unknown): OrganizerPrizeTicket {
     v.quantity === 0 ||
     !count(v.foundCount) ||
     !date(v.createdAt) ||
+    (v.deliveredAt !== undefined &&
+      v.deliveredAt !== null &&
+      !date(v.deliveredAt)) ||
     !(
       v.exactNumber === null ||
       (typeof v.exactNumber === "string" && /^\d{1,16}$/.test(v.exactNumber))
@@ -196,6 +284,14 @@ function prizeTicket(value: unknown): OrganizerPrizeTicket {
   )
     throw invalid();
   const state = states[v.status as keyof typeof states];
+  const hasWinner =
+    !reservation &&
+    v.foundCount > 0 &&
+    v.exactNumber !== null &&
+    (state === "found" || state === "delivered") &&
+    (recentResult?.status === "IDENTIFIED" ||
+      recentResult?.status === "DELIVERED");
+  const purchaseId = obj(recentResult?.purchase)?.id;
   return {
     id: v.id,
     campaign: { id: campaign.id, title: campaign.title },
@@ -207,6 +303,7 @@ function prizeTicket(value: unknown): OrganizerPrizeTicket {
     type: v.type as Type,
     state: reservation && state === "available" ? "reserved" : state,
     createdAt: v.createdAt,
+    prizeDeliveredAt: date(v.deliveredAt) ? v.deliveredAt : null,
     reservation: reservation
       ? { expiresAt: reservation.expiresAt as string }
       : null,
@@ -215,6 +312,11 @@ function prizeTicket(value: unknown): OrganizerPrizeTicket {
           status: recentResult.status as keyof typeof resultStates,
           identifiedAt: recentResult.identifiedAt as string,
           deliveredAt: recentResult.deliveredAt as string | null,
+          winnerLabel: hasWinner ? maskedWinner(recentResult.buyer) : null,
+          orderReference:
+            hasWinner && safeId(purchaseId)
+              ? "#" + purchaseId.slice(-8).toUpperCase()
+              : null,
         }
       : null,
   };
@@ -265,7 +367,7 @@ const auditLabels: Record<string, string> = {
   INSTANT_PRIZE_REMOVED: "Cota removida",
   INSTANT_PRIZE_PAUSE: "Cota pausada",
   INSTANT_PRIZE_REACTIVATE: "Cota reativada",
-  INSTANT_PRIZE_DELIVER: "Entrega registrada",
+  INSTANT_PRIZE_DELIVER: "Marcação de entrega no histórico",
 };
 export function parsePrizeTicketHistory(payload: unknown): PrizeTicketEvent[] {
   if (!Array.isArray(payload)) throw invalid();
@@ -302,6 +404,14 @@ async function scoped<T>(
       return { kind: "missing" } as const;
     throw err;
   }
+}
+export function loadPrizeTicketCampaigns(
+  client: PrizeTicketsClient,
+  session: PrizeTicketsSession,
+) {
+  return scoped(client, session, "/campaigns/my", (payload) =>
+    parsePrizeTicketCampaigns(payload, session.organizerId),
+  );
 }
 export function loadPrizeTicketPage(
   client: PrizeTicketsClient,

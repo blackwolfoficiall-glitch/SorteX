@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Platform, View } from "react-native";
+import { ActivityIndicator, Alert, Keyboard, Platform, View } from "react-native";
+import { useNavigation, usePreventRemove } from "@react-navigation/native";
+import { ApiError } from "../api/client";
 import { client } from "../auth/runtime";
 import {
   draftFields,
@@ -12,6 +14,12 @@ import {
   type OrganizerDraftRecord,
   type OrganizerDrawTemplate,
 } from "../domain/organizer-draft";
+import {
+  changedDraftFields,
+  checkedWizardFields,
+  confirmedDraftWrite,
+  draftWizardStages,
+} from "../domain/organizer-draft-wizard";
 import { NativeOrganizerDraftCover } from "./NativeOrganizerDraftCover";
 import { activeCoverSession } from "../domain/organizer-draft-cover";
 import {
@@ -38,13 +46,21 @@ export function NativeOrganizerDraft({
   revision,
   campaignId,
   onSaved,
+  onPrizes,
+  onPromotions,
 }: {
   organizerId: string;
   revision: number;
   campaignId?: string;
   onSaved: () => void;
+  onPrizes: (campaignId: string) => void;
+  onPromotions: (campaignId: string) => void;
 }) {
   const theme = usePremiumTheme();
+  const navigation = useNavigation();
+  const [step, setStep] = useState(0);
+  const [reload, setReload] = useState(0);
+  const [creationUncertain, setCreationUncertain] = useState(false);
   const [fields, setFields] = useState(emptyOrganizerDraft);
   const [draft, setDraft] = useState<OrganizerDraftRecord>();
   // A cover refresh may return newer content. Keep the form's comparison
@@ -67,11 +83,21 @@ export function NativeOrganizerDraft({
   const errorMessage = (e: unknown) =>
     e instanceof Error ? e.message : "Não foi possível salvar a campanha.";
 
+  const dirty = changedDraftFields(fields, loadedDraft.current);
+  usePreventRemove(dirty || busy || coverBusy, ({ data }) => {
+    if (saving.current || sendingCover.current) return;
+    Alert.alert("Alterações não salvas", "Volte ao editor para salvar ou saia sem manter estas alterações.", [
+      { text: "Continuar editando", style: "cancel" },
+      { text: "Sair sem salvar", style: "destructive", onPress: () => navigation.dispatch(data.action) },
+    ]);
+  });
+
   useEffect(() => {
     active.current = true;
     let alive = true;
     if (campaignId) {
       setLoading(true);
+      setError("");
       client
         .request<OrganizerDraftRecord>(`/campaigns/${encodeURIComponent(campaignId)}`)
         .then((item) => {
@@ -95,7 +121,7 @@ export function NativeOrganizerDraft({
       alive = false;
       active.current = false;
     };
-  }, [campaignId, organizerId, revision]);
+  }, [campaignId, organizerId, revision, reload]);
 
   const update = (field: keyof OrganizerDraftFields) => (value: string) => {
     if (saving.current) return;
@@ -133,27 +159,85 @@ export function NativeOrganizerDraft({
   const title =
     !campaignId && !draft ? "Nova campanha" : copyOnly ? "Editar campanha" : "Editar rascunho";
   const selectedRule = rules?.find((rule) => rule.id === fields.drawRuleTemplateId);
+  const phase = draftWizardStages[step] ?? draftWizardStages[0];
+  const wizard = !copyOnly && editable;
+  const operationBusy = busy || coverBusy;
+  function goStep(next: number) {
+    if (saving.current || sendingCover.current) return;
+    Keyboard.dismiss();
+    if (next > step) {
+      try {
+        checkedWizardFields(phase.key, fields, loadedDraft.current);
+      } catch (cause) {
+        setError(errorMessage(cause));
+        return;
+      }
+    }
+    setError("");
+    setStep(next);
+  }
+
+  function save() {
+    if (saving.current || sendingCover.current || creationUncertain || !sameAccount()) return;
+    saving.current = true;
+    setBusy(true);
+    setError("");
+    const baseline = loadedDraft.current;
+    let responded = false;
+    void (async () => {
+      if (baseline && fields.drawRuleTemplateId !== (baseline.drawRuleTemplateId ?? "") &&
+          !mayChooseOrganizerDrawTemplate(draft))
+        throw new Error("A regra mudou. Abra o rascunho novamente para conferir.");
+      const result = await saveOrganizerCampaign(client, fields, baseline);
+      responded = true;
+      if (!active.current || !sameAccount()) return;
+      if (!confirmedDraftWrite(result, organizerId, baseline))
+        throw new Error("Não foi possível confirmar o salvamento. Confira a campanha na lista.");
+      // Refresh the differential-save baseline only after the owning API confirms.
+      // The no-op path returns the original baseline; do not roll the cover back.
+      if (result !== baseline) {
+        loadedDraft.current = result;
+        setDraft(result);
+        setFields(draftFields(result));
+      }
+      setSaved(true);
+    })().catch((cause: unknown) => {
+      if (!active.current || !sameAccount()) return;
+      if (!baseline && (responded || (cause instanceof ApiError &&
+          (cause.status === 0 || cause.status >= 500 || (cause.status >= 200 && cause.status < 300))))) {
+        setCreationUncertain(true);
+        setError("Não foi possível confirmar se o rascunho foi criado. Confira na lista de campanhas antes de iniciar outro. Os dados ainda estão neste formulário.");
+      } else {
+        setError(errorMessage(cause));
+      }
+    }).finally(() => {
+      saving.current = false;
+      if (active.current && sameAccount()) setBusy(false);
+    });
+  }
+
   return (
-    <PremiumPage title={title} top={false} bottom avoidKeyboard>
+    <PremiumPage key={wizard ? phase.key : title} title={title} top={false} bottom avoidKeyboard>
       {editable && (
         <PremiumMessage
           message={
             copyOnly
               ? "Aqui você pode editar o título, o resumo público e a descrição. As demais opções permanecem no painel web."
-              : draft
-                ? "Complete os dados, salve e confira a publicação na seção Situação da campanha."
-                : "Preencha os dados aos poucos. Salve o rascunho para poder enviar a capa."
+              : "O rascunho é privado. Salve quando quiser e retome pela lista de campanhas."
           }
         />
       )}
       {saved && (
-        <PremiumMessage success message={Platform.OS === "web" ? "Rascunho salvo." : "Rascunho salvo. Você já pode adicionar a capa abaixo."} />
+        <PremiumMessage success message={copyOnly ? "Alterações de texto salvas." : "Rascunho salvo. Nenhuma campanha foi publicada."} />
       )}
       {!!error && <PremiumMessage error message={error} />}
-      {!editable && draft && <PremiumMessage message="Esta campanha não pode mais ser editada." />}
+      {!editable && !draft && campaignId && (
+        <PremiumButton title="Tentar carregar novamente" onPress={() => setReload((n) => n + 1)} />
+      )}
       {editable && (
         <>
-          <PremiumPanel title="Informações da campanha">
+          {wizard && <PremiumMessage message={`Etapa ${step + 1} de ${draftWizardStages.length}: ${phase.title}`} />}
+          {(copyOnly || phase.key === "info") && <PremiumPanel title="Informações da campanha">
             <PremiumField
               testID="sortex-organizer-draft-title"
               label="Título"
@@ -176,10 +260,10 @@ export function NativeOrganizerDraft({
               editable={!busy}
               multiline
             />
-          </PremiumPanel>
-          {!copyOnly && (
+          </PremiumPanel>}
+          {wizard && (
             <>
-              <PremiumPanel title="Regras de participação">
+              {phase.key === "info" && <PremiumPanel title="Regras de participação">
                 <PremiumField
                   label="Regulamento"
                   value={fields.regulation}
@@ -187,8 +271,8 @@ export function NativeOrganizerDraft({
                   editable={!busy}
                   multiline
                 />
-              </PremiumPanel>
-              <PremiumPanel title="Prêmio">
+              </PremiumPanel>}
+              {phase.key === "prizes" && <PremiumPanel title="Prêmio principal">
                 <PremiumField
                   label="Prêmio principal"
                   value={fields.mainPrizeName}
@@ -209,8 +293,8 @@ export function NativeOrganizerDraft({
                   editable={!busy}
                   keyboardType="decimal-pad"
                 />
-              </PremiumPanel>
-              <PremiumPanel title="Cotas">
+              </PremiumPanel>}
+              {phase.key === "numbers" && <PremiumPanel title="Cotas">
                 <PremiumField
                   label="Quantidade de cotas"
                   value={fields.totalNumbers}
@@ -233,8 +317,8 @@ export function NativeOrganizerDraft({
                   keyboardType="number-pad"
                   placeholder="1"
                 />
-              </PremiumPanel>
-              <PremiumPanel title="Calendário">
+              </PremiumPanel>}
+              {phase.key === "dates" && <PremiumPanel title="Calendário">
                 <PremiumField
                   label="Data do sorteio (DD/MM/AAAA)"
                   value={fields.drawDate}
@@ -271,9 +355,27 @@ export function NativeOrganizerDraft({
                   maxLength={5}
                   placeholder="HH:MM"
                 />
-                <PremiumMessage message="O início das vendas usa o fuso horário deste aparelho." />
-              </PremiumPanel>
-              <PremiumPanel title="Regra do sorteio">
+                <PremiumField
+                  label="Data de encerramento das vendas (DD/MM/AAAA)"
+                  value={fields.salesEndDate}
+                  onChangeText={(value) => update("salesEndDate")(dateMask(value))}
+                  editable={!busy}
+                  keyboardType="number-pad"
+                  maxLength={10}
+                  placeholder="DD/MM/AAAA"
+                />
+                <PremiumField
+                  label="Horário de encerramento das vendas (HH:MM)"
+                  value={fields.salesEndTime}
+                  onChangeText={(value) => update("salesEndTime")(timeMask(value))}
+                  editable={!busy}
+                  keyboardType="number-pad"
+                  maxLength={5}
+                  placeholder="HH:MM"
+                />
+                <PremiumMessage message="O período de vendas usa o fuso horário deste aparelho. Horários já salvos são mantidos se não forem editados." />
+              </PremiumPanel>}
+              {phase.key === "rule" && <PremiumPanel title="Regra do sorteio">
                 {mayChooseOrganizerDrawTemplate(draft) ? (
                   <>
                     <PremiumMessage
@@ -332,77 +434,82 @@ export function NativeOrganizerDraft({
                 ) : (
                   <PremiumMessage message="A regra existente será mantida. Use o painel web para editar uma regra personalizada ou mudar a base do sorteio." />
                 )}
-              </PremiumPanel>
+              </PremiumPanel>}
             </>
           )}
-          {draft && !copyOnly && (
-            <NativeOrganizerDraftCover
-              client={client}
-              accountId={organizerId}
-              revision={revision}
-              campaign={draft}
-              disabled={busy}
-              canStart={() => !saving.current}
-              onBusy={(value) => {
-                sendingCover.current = value;
-                setCoverBusy(value);
-              }}
-              onChange={setDraft}
-            />
+          {wizard && phase.key === "media" && (
+            <>
+              {!draft && <PremiumMessage message="Salve o rascunho antes de enviar a foto da capa." />}
+              <PremiumMessage message={Platform.OS === "web"
+                ? "Use o aplicativo instalado para enviar a capa. A galeria e a identidade avançada estão no painel web."
+                : "Este editor permite enviar a capa. Galeria e identidade visual avançada permanecem no painel web."} />
+              {!!draft && Platform.OS !== "web" && (
+                <NativeOrganizerDraftCover
+                  client={client}
+                  accountId={organizerId}
+                  revision={revision}
+                  campaign={draft}
+                  disabled={busy}
+                  canStart={() => !saving.current}
+                  onBusy={(value) => {
+                    sendingCover.current = value;
+                    setCoverBusy(value);
+                  }}
+                  onChange={setDraft}
+                />
+              )}
+            </>
+          )}
+          {wizard && phase.key === "instant" && (
+            <PremiumPanel title="Cotas premiadas do rascunho">
+              <PremiumMessage message={!draft || dirty
+                ? "Salve os dados do rascunho antes de configurar os números premiados."
+                : "Configure as cotas privadas neste rascunho. Isso não apura, entrega nem paga prêmios."} />
+              {!!draft && <PremiumButton title="Abrir cotas premiadas" disabled={dirty || operationBusy}
+                onPress={() => onPrizes(draft.id)} />}
+            </PremiumPanel>
+          )}
+          {wizard && phase.key === "promotions" && (
+            <PremiumPanel title="Promoções do rascunho">
+              <PremiumMessage message={!draft || dirty
+                ? "Salve o rascunho antes de incluir cupons ou pacotes."
+                : "Abra a gestão desta campanha para salvar ofertas como rascunho. Nenhuma promoção é ativada aqui."} />
+              {!!draft && <PremiumButton title="Abrir promoções do rascunho" disabled={dirty || operationBusy}
+                onPress={() => onPromotions(draft.id)} />}
+            </PremiumPanel>
+          )}
+          {wizard && phase.key === "payment" && (
+            <PremiumPanel title="Configurações de pagamento">
+              <PremiumMessage message="Nenhum gateway será configurado por este rascunho. A configuração de pagamentos e os testes com o provedor não fazem parte deste editor." />
+            </PremiumPanel>
+          )}
+          {wizard && phase.key === "review" && (
+            <PremiumPanel title="Revisão do rascunho">
+              <PremiumMessage message={`Campanha: ${fields.title.trim() || "Não informada"}`} />
+              <PremiumMessage message={`Prêmio principal: ${fields.mainPrizeName.trim() || "Não informado"}`} />
+              <PremiumMessage message={`Cotas: ${fields.totalNumbers.trim() || "Não informadas"} · Valor: ${fields.numberPrice.trim() ? `R$ ${fields.numberPrice.trim()}` : "Não informado"}`} />
+              <PremiumMessage message={`Sorteio: ${fields.drawDate.trim() || "Não informado"} ${fields.drawTime.trim()}`} />
+              <PremiumMessage message="Salvar aqui mantém a campanha privada. As exigências de publicação são conferidas separadamente em Situação da campanha." />
+            </PremiumPanel>
+          )}
+          {wizard && step > 0 && (
+            <PremiumButton title="Etapa anterior" onPress={() => goStep(step - 1)} disabled={operationBusy} />
+          )}
+          {wizard && step < draftWizardStages.length - 1 && (
+            <PremiumButton title="Próxima etapa" filled onPress={() => goStep(step + 1)} disabled={operationBusy} />
           )}
           <PremiumButton
-            filled
+            filled={!wizard || phase.key === "review"}
             testID="sortex-organizer-draft-save"
             title={copyOnly ? "Salvar campanha" : "Salvar rascunho"}
             busy={busy}
-            disabled={coverBusy}
-            onPress={() => {
-              if (saving.current || sendingCover.current || !sameAccount()) return;
-              saving.current = true;
-              setBusy(true);
-              setError("");
-              const save = async () => {
-                const baseline = loadedDraft.current;
-                if (
-                  baseline &&
-                  fields.drawRuleTemplateId !== (baseline.drawRuleTemplateId ?? "") &&
-                  !mayChooseOrganizerDrawTemplate(draft)
-                )
-                  throw new Error("A regra mudou. Abra o rascunho novamente para conferir.");
-                return saveOrganizerCampaign(client, fields, baseline);
-              };
-              void save()
-                .then((result) => {
-                  if (!active.current || !sameAccount()) return;
-                  if (
-                    !result.id ||
-                    result.organizerId !== organizerId ||
-                    (draft && (result.id !== draft.id || result.status !== draft.status)) ||
-                    (!draft && result.status !== "DRAFT")
-                  )
-                    throw new Error(
-                      "Não foi possível confirmar o salvamento. Confira a campanha antes de tentar novamente.",
-                    );
-                  if (!draft) {
-                    loadedDraft.current = result;
-                    setDraft(result);
-                    setFields(draftFields(result));
-                    setSaved(true);
-                  } else onSaved();
-                })
-                .catch((e: unknown) => {
-                  if (active.current && sameAccount()) setError(errorMessage(e));
-                })
-                .finally(() => {
-                  saving.current = false;
-                  if (active.current && sameAccount()) setBusy(false);
-                });
-            }}
+            disabled={coverBusy || creationUncertain}
+            onPress={save}
           />
           {saved && (
             <PremiumButton
-              title="Voltar à lista de campanhas"
-              disabled={busy || coverBusy}
+              title="Fechar editor"
+              disabled={dirty || operationBusy}
               onPress={onSaved}
             />
           )}

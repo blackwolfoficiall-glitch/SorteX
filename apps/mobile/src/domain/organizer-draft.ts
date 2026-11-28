@@ -17,13 +17,15 @@ export type OrganizerDraftFields = {
   drawTime: string;
   salesStartDate: string;
   salesStartTime: string;
+  salesEndDate: string;
+  salesEndTime: string;
   drawRuleTemplateId: string;
 };
 
 export const emptyOrganizerDraft: OrganizerDraftFields = {
   title: "", description: "", regulation: "", mainPrizeName: "", mainPrizeDescription: "",
   estimatedPrizeValue: "", numberPrice: "", totalNumbers: "", minimumPurchase: "",
-  drawDate: "", drawTime: "", salesStartDate: "", salesStartTime: "", drawRuleTemplateId: "",
+  drawDate: "", drawTime: "", salesStartDate: "", salesStartTime: "", salesEndDate: "", salesEndTime: "", drawRuleTemplateId: "",
 };
 
 export type OrganizerDraftRecord = {
@@ -48,6 +50,7 @@ export type OrganizerDraftRecord = {
   drawRuleTemplateId?: string | null;
   customDrawRule?: unknown;
   salesStartAt?: string | null;
+  salesEndAt?: string | null;
 };
 
 const amountInput = (value?: number | string | null) =>
@@ -60,14 +63,16 @@ const brazilianDate = (isoDate: string) => /^\d{4}-\d{2}-\d{2}$/.test(isoDate)
 
 function localSalesTime(value?: string | null) {
   const date = value ? new Date(value) : null;
-  if (!date || !Number.isFinite(date.getTime())) return { salesStartDate: "", salesStartTime: "" };
+  if (!date || !Number.isFinite(date.getTime())) return { day: "", time: "" };
   return {
-    salesStartDate: [pad(date.getDate()), pad(date.getMonth() + 1), date.getFullYear()].join("/"),
-    salesStartTime: [pad(date.getHours()), pad(date.getMinutes())].join(":"),
+    day: [pad(date.getDate()), pad(date.getMonth() + 1), date.getFullYear()].join("/"),
+    time: [pad(date.getHours()), pad(date.getMinutes())].join(":"),
   };
 }
 
 export function draftFields(record: OrganizerDraftRecord): OrganizerDraftFields {
+  const start = localSalesTime(record.salesStartAt);
+  const end = localSalesTime(record.salesEndAt);
   return {
     title: record.title,
     description: record.description ?? "",
@@ -82,7 +87,8 @@ export function draftFields(record: OrganizerDraftRecord): OrganizerDraftFields 
     drawDate: brazilianDate(record.drawDate?.slice(0, 10) ?? ""),
     drawTime: record.drawTime ?? "",
     drawRuleTemplateId: record.drawRuleTemplateId ?? "",
-    ...localSalesTime(record.salesStartAt),
+    salesStartDate: start.day, salesStartTime: start.time,
+    salesEndDate: end.day, salesEndTime: end.time,
   };
 }
 
@@ -129,14 +135,14 @@ function clockTime(value: string, label: string) {
   return value;
 }
 
-function parseSalesStart(dateInput: string, timeInput: string) {
-  const datePart = calendarDate(dateInput, "uma data de início das vendas");
-  const time = clockTime(timeInput, "um horário de início das vendas");
+function parseSaleTime(dateInput: string, timeInput: string, moment: "início" | "encerramento") {
+  const datePart = calendarDate(dateInput, `uma data de ${moment} das vendas`);
+  const time = clockTime(timeInput, `um horário de ${moment} das vendas`);
   // As on Web, a local wall time is converted to the corresponding ISO instant.
   const date = new Date(`${datePart}T${time}`);
   const readback = localSalesTime(Number.isFinite(date.getTime()) ? date.toISOString() : null);
-  if (readback.salesStartDate !== dateInput || readback.salesStartTime !== timeInput)
-    throw new Error("O horário de início das vendas não existe no fuso deste aparelho.");
+  if (readback.day !== dateInput || readback.time !== timeInput)
+    throw new Error(`O horário de ${moment} das vendas não existe no fuso deste aparelho.`);
   return date.toISOString();
 }
 
@@ -165,6 +171,8 @@ export function draftPayload(fields: OrganizerDraftFields, current?: OrganizerDr
 
   const salesChanged = changed("salesStartDate") || changed("salesStartTime");
   const dateInput = fields.salesStartDate.trim(), timeInput = fields.salesStartTime.trim();
+  const salesEndChanged = changed("salesEndDate") || changed("salesEndTime");
+  const endDateInput = fields.salesEndDate.trim(), endTimeInput = fields.salesEndTime.trim();
   const drawDate = fields.drawDate.trim(), drawTime = fields.drawTime.trim();
   const prizeValue = fields.estimatedPrizeValue.trim();
   // The API currently only updates these typed fields when a value is present.
@@ -174,11 +182,19 @@ export function draftPayload(fields: OrganizerDraftFields, current?: OrganizerDr
     ["numberPrice", "o valor da cota"], ["estimatedPrizeValue", "o valor estimado do prêmio"],
     ["drawDate", "a data do sorteio"], ["drawTime", "o horário do sorteio"],
     ["salesStartDate", "a data de início das vendas"], ["salesStartTime", "o horário de início das vendas"],
+    ["salesEndDate", "a data de encerramento das vendas"], ["salesEndTime", "o horário de encerramento das vendas"],
     ["drawRuleTemplateId", "o modelo de regra"],
   ] as const) {
     if (previous?.[key]?.trim() && !fields[key]?.trim())
       throw new Error(`Informe outro valor para substituir ${label}.`);
   }
+
+  const start = salesChanged && (dateInput || timeInput) ? parseSaleTime(dateInput, timeInput, "início") : undefined;
+  const end = salesEndChanged && (endDateInput || endTimeInput) ? parseSaleTime(endDateInput, endTimeInput, "encerramento") : undefined;
+  const comparableStart = start ?? current?.salesStartAt;
+  const comparableEnd = end ?? current?.salesEndAt;
+  if ((start || end) && comparableStart && comparableEnd && new Date(comparableStart) >= new Date(comparableEnd))
+    throw new Error("O encerramento das vendas deve ser posterior ao início.");
 
   const rule = fields.drawRuleTemplateId.trim();
   if (changed("drawRuleTemplateId") && rule && !mayChooseOrganizerDrawTemplate(current))
@@ -197,7 +213,8 @@ export function draftPayload(fields: OrganizerDraftFields, current?: OrganizerDr
     ...(changed("estimatedPrizeValue") && prizeValue ? { estimatedPrizeValue: optionalAmount(prizeValue, "Informe um valor estimado válido, com até duas casas decimais.", 0) } : {}),
     ...(changed("drawDate") && drawDate ? { drawDate: calendarDate(drawDate, "uma data de sorteio") } : {}),
     ...(changed("drawTime") && drawTime ? { drawTime: clockTime(drawTime, "um horário de sorteio") } : {}),
-    ...(salesChanged && (dateInput || timeInput) ? { salesStartAt: parseSalesStart(dateInput, timeInput) } : {}),
+    ...(start ? { salesStartAt: start } : {}),
+    ...(end ? { salesEndAt: end } : {}),
     ...(changed("drawRuleTemplateId") && rule ? { drawBasis: "LOTERIA_FEDERAL", drawRuleTemplateId: rule } : {}),
   };
 }

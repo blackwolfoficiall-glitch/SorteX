@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { draftWizardStages, changedDraftFields, checkedWizardFields, confirmedDraftWrite } from "../src/domain/organizer-draft-wizard";
 import { draftFields, draftPayload, emptyOrganizerDraft, isEditableOrganizerCampaign,
   listOrganizerDrawTemplates, mayChooseOrganizerDrawTemplate, saveOrganizerCampaign, saveOrganizerDraft } from "../src/domain/organizer-draft";
 
@@ -196,4 +197,53 @@ test("organizer workspace rejects buyers before network and drops stale reads af
   auth = { status: "signedIn", user: owner };
   assert.equal(await loadOrganizerWorkspace(fixture, expected, "/campaigns/my", parseOwnedCampaignList), null);
   assert.equal(calls, 1);
+});
+
+test("the ten native wizard phases validate only current input; unsaved fields survive switching and persisted drafts hydrate", () => {
+  assert.deepEqual(draftWizardStages.map(({ key }) => key),
+    ["info", "media", "prizes", "numbers", "instant", "promotions", "rule", "dates", "payment", "review"]);
+  const form = { ...emptyOrganizerDraft, title: "Campanha sintética", regulation: "Regulamento",
+    mainPrizeName: "Prêmio sintético", numberPrice: "1,001" };
+  assert.throws(() => checkedWizardFields("info", emptyOrganizerDraft), /título/);
+  assert.doesNotThrow(() => checkedWizardFields("info", form));
+  assert.doesNotThrow(() => checkedWizardFields("prizes", form));
+  assert.throws(() => checkedWizardFields("numbers", form), /preço/);
+  assert.equal(form.regulation, "Regulamento");
+  assert.equal(form.mainPrizeName, "Prêmio sintético");
+  assert.equal(form.numberPrice, "1,001");
+  assert.equal(changedDraftFields(form), true);
+  const record = { id: "draft", status: "DRAFT", organizerId: "a", title: form.title,
+    regulation: form.regulation, mainPrizeName: form.mainPrizeName, numberPrice: 1.12 };
+  assert.equal(changedDraftFields(draftFields(record), record), false);
+  assert.equal(changedDraftFields({ ...draftFields(record), mainPrizeName: "Outro prêmio" }, record), true);
+  assert.equal(confirmedDraftWrite(record, "a"), true);
+  assert.equal(confirmedDraftWrite(record, "b"), false);
+  assert.equal(confirmedDraftWrite({ ...record, id: "wrong" }, "a", record), false);
+  assert.equal(confirmedDraftWrite({ ...record, status: "PUBLISHED" }, "a", record), false);
+});
+
+test("sales closing persists with the existing local-time contract and never resends untouched timestamps", () => {
+  const old = process.env.TZ;
+  try {
+    process.env.TZ = "America/Bahia";
+    const form = { ...emptyOrganizerDraft, title: "Campanha sintética",
+      salesStartDate: "20/02/2028", salesStartTime: "19:30",
+      salesEndDate: "20/02/2028", salesEndTime: "23:45" };
+    const payload = checkedWizardFields("dates", form);
+    assert.equal(payload.salesStartAt, "2028-02-20T22:30:00.000Z");
+    assert.equal(payload.salesEndAt, "2028-02-21T02:45:00.000Z");
+    assert.throws(() => checkedWizardFields("dates", { ...form, salesEndTime: "" }), /horário de encerramento/);
+    assert.throws(() => checkedWizardFields("dates", { ...form, salesEndTime: "19:30" }), /posterior ao início/);
+    const record = { id: "draft", status: "DRAFT", title: form.title,
+      salesStartAt: payload.salesStartAt, salesEndAt: "2028-02-21T02:45:18.004Z", customization: { retained: true } };
+    const loaded = draftFields(record);
+    assert.equal(loaded.salesEndDate, "20/02/2028");
+    assert.equal(loaded.salesEndTime, "23:45");
+    assert.deepEqual(draftPayload({ ...loaded, title: "Novo título" }, record), { title: "Novo título" });
+    assert.throws(() => draftPayload({ ...loaded, salesEndDate: "" }, record), /substituir a data de encerramento/);
+    assert.throws(() => draftPayload({ ...loaded, salesStartTime: "23:46" }, record), /posterior ao início/);
+  } finally {
+    if (old === undefined) delete process.env.TZ;
+    else process.env.TZ = old;
+  }
 });

@@ -3,10 +3,13 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { ApiError, type AuthState } from "../src/api/client";
 import {
+  canManagePrizeTicketDraft,
+  deliveryRecordStatus,
   initialPrizeTicketFilters,
   loadPrizeTicketHistory,
   loadPrizeTicketPage,
   loadPrizeTicketSummary,
+  parsePrizeTicketCampaigns,
   parsePrizeTicketHistory,
   parsePrizeTicketPage,
   parsePrizeTicketSummary,
@@ -46,6 +49,7 @@ test("Cotas Premiadas filters use the exact existing owner read, not a draw", ()
       ...initialPrizeTicketFilters,
       campaignId: "campaign-test",
       search: "00..42",
+      startDate: "28/11/2026",
       type: "PRODUCT",
       status: "found",
       sort: "number",
@@ -61,6 +65,7 @@ test("Cotas Premiadas filters use the exact existing owner read, not a draw", ()
     sort: "number",
     campaignId: "campaign-test",
     search: "00..42",
+    startDate: "2026-11-28T00:00:00.000Z",
     status: "found",
     type: "PRODUCT",
   });
@@ -71,6 +76,14 @@ test("Cotas Premiadas filters use the exact existing owner read, not a draw", ()
     ),
   );
   assert.throws(() => prizeTicketsPath(initialPrizeTicketFilters, 0));
+  assert.throws(
+    () =>
+      prizeTicketsPath(
+        { ...initialPrizeTicketFilters, startDate: "31/11/2026" },
+        1,
+      ),
+    /data inicial/,
+  );
 });
 
 test("Cotas preserve zero, leading zeros and distinct availability/confirmed statuses with minimum data", () => {
@@ -79,8 +92,8 @@ test("Cotas preserve zero, leading zeros and distinct availability/confirmed sta
       status: "IDENTIFIED",
       identifiedAt: time,
       deliveredAt: null,
-      buyer: { phone: "omit" },
-      purchase: { id: "omit" },
+      buyer: { name: "Pessoa S.", phone: "omit", id: "discard", email: "omit" },
+      purchase: { id: "order-12345678", total: 42 },
     },
   ];
   const row = parsePrizeTicketPage(
@@ -96,7 +109,10 @@ test("Cotas preserve zero, leading zeros and distinct availability/confirmed sta
     status: "IDENTIFIED",
     identifiedAt: time,
     deliveredAt: null,
+    winnerLabel: "Pessoa S.",
+    orderReference: "#12345678",
   });
+  assert.equal(deliveryRecordStatus(row), "not-recorded");
   assert.equal("winnerUserId" in row, false);
   assert.equal("generationRule" in row, false);
   const reserved = parsePrizeTicketPage(
@@ -268,4 +284,90 @@ test("Mais has a separate organizer-only Cotas route and keeps the draft editor"
   assert.ok(
     app.includes('navigation.navigate("Main", { screen: "Campaigns" })'),
   );
+});
+
+test("Owner draft picker requires exact never-published DRAFT and keeps original route", () => {
+  const seed = {
+    id: "draft-test",
+    organizerId: "org-test",
+    title: "Rascunho próprio",
+    status: "DRAFT",
+    publishedAt: null,
+  };
+  const list = parsePrizeTicketCampaigns(
+    [
+      seed,
+      { ...seed, id: "paused-test", status: "PAUSED", publishedAt: time },
+      { ...seed, id: "historical", publishedAt: time },
+    ],
+    "org-test",
+  );
+  assert.deepEqual(
+    list.filter(canManagePrizeTicketDraft).map((x) => x.id),
+    ["draft-test"],
+  );
+  assert.throws(() =>
+    parsePrizeTicketCampaigns([{ ...seed, organizerId: "other" }], "org-test"),
+  );
+  const app = readFileSync(new URL("../App.tsx", import.meta.url), "utf8");
+  const view = readFileSync(
+    new URL(
+      "../src/organizer/NativeOrganizerPrizeTickets.tsx",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  assert.match(view, /Escolher rascunho/);
+  assert.match(
+    app,
+    /onOpenDraft=\{\(id\) => navigation.navigate\("OrganizerDraftPrizes", \{ campaignId: id \}\)\}/,
+  );
+  assert.match(
+    app,
+    /name="OrganizerDraftPrizes" component=\{OrganizerDraftPrizesScreen\}/,
+  );
+});
+test("Delivery needs both recorded states and timestamps; generic raw delivery alone is not proof", () => {
+  const fields = {
+    identifiedAt: time,
+    deliveredAt: null,
+    status: "IDENTIFIED",
+    buyer: { name: "Full Unexpected Name" },
+    purchase: { id: "order-12345678" },
+  };
+  const p = (value: unknown) => {
+    const item = parsePrizeTicketPage(
+      envelope(value),
+      1,
+      initialPrizeTicketFilters,
+    ).items[0];
+    assert.ok(item);
+    return item;
+  };
+  const inconsistent = p({
+    ...fixture,
+    status: "DELIVERED",
+    foundCount: 1,
+    deliveredAt: time,
+    results: [fields],
+  });
+  assert.equal(deliveryRecordStatus(inconsistent), "inconsistent");
+  assert.equal(inconsistent.result?.winnerLabel, null);
+  const matched = p({
+    ...fixture,
+    status: "DELIVERED",
+    foundCount: 1,
+    deliveredAt: time,
+    results: [{ ...fields, status: "DELIVERED", deliveredAt: time }],
+  });
+  assert.equal(deliveryRecordStatus(matched), "matched");
+  const reserved = p({
+    ...fixture,
+    status: "AVAILABLE",
+    foundCount: 1,
+    reservation: { expiresAt: time },
+    results: [{ ...fields, buyer: { name: "Pessoa S." } }],
+  });
+  assert.equal(reserved.result?.winnerLabel, null);
+  assert.equal(reserved.result?.orderReference, null);
 });

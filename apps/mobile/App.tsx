@@ -746,7 +746,9 @@ function OrganizerDraftScreen({ navigation, route }: any) {
     return <Page title="Rascunho"><Notice error message="Somente organizadores com sessão ativa podem editar campanhas." /></Page>;
   const campaignId = typeof route.params?.campaignId === "string" ? route.params.campaignId : undefined;
   return <NativeOrganizerDraft key={`${auth.user.id}:${revision}:${campaignId ?? "new"}`} organizerId={auth.user.id}
-    revision={revision} campaignId={campaignId} onSaved={() => navigation.goBack()} />;
+    revision={revision} campaignId={campaignId} onSaved={() => navigation.goBack()}
+    onPrizes={(id) => navigation.navigate("OrganizerDraftPrizes", { campaignId: id })}
+    onPromotions={(id) => navigation.navigate("OrganizerPromotions", { draftCampaignId: id })} />;
 }
 function OrganizerDraftPrizesScreen({ route }: any) {
   const auth = useSyncExternalStore(client.subscribe, client.snapshot);
@@ -780,6 +782,7 @@ function OrganizerPrizeTicketsScreen({ route, navigation }: any) {
       session={session}
       campaignId={campaignId}
       onBrowseCampaignDrafts={() => navigation.navigate("Main", { screen: "Campaigns" })}
+      onOpenDraft={(id) => navigation.navigate("OrganizerDraftPrizes", { campaignId: id })}
     />
   );
 }
@@ -791,13 +794,16 @@ function OrganizerMiniCampaignsScreen() {
     return <Page title="Mini campanhas"><Notice error message="Entre como organizador para consultar suas mini campanhas." /></Page>;
   return <NativeOrganizerMiniCampaigns key={`${session.organizerId}:${session.revision}`} client={client} session={session} />;
 }
-function OrganizerPromotionsScreen() {
+function OrganizerPromotionsScreen({ route }: any) {
   useSyncExternalStore(client.subscribe, client.snapshot);
   useSyncExternalStore(client.subscribe, client.activeSessionRevision);
   const session = promotionsSession(client);
   if (!session)
     return <Page title="Promoções"><Notice error message="Entre como organizador para consultar promoções." /></Page>;
-  return <NativeOrganizerPromotions key={`${session.organizerId}:${session.revision}`} client={client} session={session} />;
+  const draftCampaignId = typeof route?.params?.draftCampaignId === "string" && route.params.draftCampaignId
+    ? route.params.draftCampaignId : undefined;
+  return <NativeOrganizerPromotions key={`${session.organizerId}:${session.revision}:${draftCampaignId ?? ""}`}
+    client={client} session={session} draftCampaignId={draftCampaignId} />;
 }
 function OrganizerFinanceScreen() {
   useSyncExternalStore(client.subscribe, client.snapshot);
