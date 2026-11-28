@@ -30,10 +30,22 @@ async function main() {
   const second = new SortexClient(base, vault);
   await second.restore();
   assert.equal(second.snapshot().user?.id, first.snapshot().user?.id);
-  await second.logout();
-  const third = new SortexClient(base, vault);
+  const exactAuth = second.snapshot();
+  assert.equal(exactAuth.status, 'signedIn');
+  const logout = second.logout();
+  assert.equal(second.activeSessionRevision(), null);
+  await logout;
+  assert.equal(second.snapshot().status, 'signedOut');
+  assert.equal(second.snapshot().logoutStatus, 'confirmed');
+  assert.equal(tokens, null);
+  let coldRequests = 0;
+  const third = new SortexClient(base, vault, (input, init) => {
+    coldRequests += 1;
+    return fetch(input, init);
+  });
   await third.restore();
   assert.equal(third.snapshot().status, 'signedOut');
+  assert.equal(coldRequests, 0);
   console.log('Local HTTP mobile client assertions passed (no iOS simulator).');
 }
 main().catch(() => {

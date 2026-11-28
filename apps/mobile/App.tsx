@@ -138,7 +138,10 @@ function Login({ navigation }: any) {
       <Text style={s.brand}>SorteX</Text>
       <Text style={s.title}>Sua campanha, em outro nível.</Text>
       <Notice message="Aplicativo de teste · dados sintéticos · ambiente isolado" />
-      {!!auth.message && <Notice error message={auth.message} />}
+      {!!auth.message && <Notice error={auth.logoutStatus !== "confirmed"} message={auth.message} />}
+      {auth.logoutStatus === "pending" && (
+        <Notice message="Sessão removida deste aparelho. Confirmando saída no servidor…" />
+      )}
       <View style={s.card}>
         <Text style={s.label}>Google e Apple</Text>
         <Notice message="Indisponíveis: configuração nativa e adaptador seguro da API pendentes. Continue com e-mail." />

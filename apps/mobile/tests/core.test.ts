@@ -297,6 +297,92 @@ test("requisição da conta anterior não é repetida com a sessão de outra pes
   assert.equal(app.client.snapshot().user?.id, "2");
   assert.equal(app.stored()?.accessToken, "a2");
 });
+test("saída inicia a revogação antes de aguardar o cofre e exige as duas confirmações", async () => {
+  let releaseVault: () => void = () => {};
+  let releaseRemote: () => void = () => {};
+  const vaultGate = new Promise<void>((resolve) => { releaseVault = resolve; });
+  const remoteGate = new Promise<void>((resolve) => { releaseRemote = resolve; });
+  let remoteCalls = 0;
+  const app = setup(async (path, options) => {
+    if (path === "/auth/login") return response({ user, accessToken: "a", refreshToken: "r" });
+    if (path === "/auth/me") return response(user);
+    if (path === "/auth/logout") {
+      remoteCalls++;
+      assert.equal(options?.method, "POST");
+      assert.equal(new Headers(options?.headers).get("Authorization"), "Bearer a");
+      await remoteGate;
+      return response({ message: "Logout realizado com sucesso." });
+    }
+    throw Error("Rota inesperada");
+  });
+  await app.client.login(user.email, "synthetic");
+  const clear = app.vault.clear.bind(app.vault);
+  app.vault.clear = async () => { await vaultGate; await clear(); };
+  const observed: Array<string | undefined> = [];
+  app.client.subscribe(() => observed.push(app.client.snapshot().logoutStatus));
+  const work = app.client.logout();
+  assert.equal(remoteCalls, 1);
+  assert.strictEqual(app.client.logout(), work);
+  assert.equal(app.client.activeSessionRevision(), null);
+  await assert.rejects(() => app.client.request("/buyer/profile"));
+  assert.ok(app.stored());
+  assert.notEqual(app.client.snapshot().logoutStatus, "confirmed");
+  releaseVault();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(app.stored(), null);
+  assert.equal(app.client.snapshot().logoutStatus, "pending");
+  const cold = new SortexClient(TEST_API, app.vault, () => {
+    assert.fail("Saída local não pode iniciar renovação ao reabrir");
+  });
+  await cold.restore();
+  assert.equal(cold.snapshot().status, "signedOut");
+  releaseRemote();
+  await work;
+  assert.equal(app.client.snapshot().logoutStatus, "confirmed");
+  assert.equal(app.client.snapshot().message, "Sessão encerrada no servidor.");
+  assert.deepEqual(observed.filter(Boolean), ["pending", "confirmed"]);
+  assert.equal(remoteCalls, 1);
+});
+
+test("saída local continua válida sem confirmação do servidor", async () => {
+  for (const remoteResponse of [
+    response({ message: "indisponível" }, 503),
+    response({ ok: true }),
+  ]) {
+    const app = setup(async (path) => {
+      if (path === "/auth/login") return response({ user, accessToken: "a", refreshToken: "r" });
+      if (path === "/auth/me") return response(user);
+      if (path === "/auth/logout") return remoteResponse;
+      throw Error("Rota inesperada");
+    });
+    await app.client.login(user.email, "synthetic");
+    await app.client.logout();
+    assert.equal(app.stored(), null);
+    assert.equal(app.client.snapshot().status, "signedOut");
+    assert.equal(app.client.snapshot().logoutStatus, "unconfirmed");
+  }
+});
+
+test("2xx do servidor não confirma a saída se o cofre local não pôde ser limpo", async () => {
+  let revoked = false;
+  const app = setup(async (path) => {
+    if (path === "/auth/login") return response({ user, accessToken: "a", refreshToken: "r" });
+    if (path === "/auth/me") return response(user);
+    if (path === "/auth/logout") {
+      revoked = true;
+      return response({ message: "Logout realizado com sucesso." });
+    }
+    throw Error("Rota inesperada");
+  });
+  await app.client.login(user.email, "synthetic");
+  app.vault.clear = async () => { throw Error("cofre indisponível"); };
+  await assert.rejects(() => app.client.logout());
+  assert.equal(revoked, true);
+  assert.equal(app.client.activeSessionRevision(), null);
+  assert.equal(app.client.snapshot().status, "storageError");
+  assert.notEqual(app.client.snapshot().logoutStatus, "confirmed");
+});
+
 test("falha remota tardia do logout não encerra uma nova sessão", async () => {
   let release: () => void = () => {};
   const wait = new Promise<void>((r) => {
@@ -321,6 +407,7 @@ test("falha remota tardia do logout não encerra uma nova sessão", async () => 
   await logout;
   assert.equal(app.client.snapshot().status, "signedIn");
   assert.equal(app.client.snapshot().user?.id, "2");
+  assert.equal(app.client.snapshot().logoutStatus, undefined);
 });
 test("perfil retornado da sessão anterior não substitui o novo usuário", async () => {
   let release: () => void = () => {};

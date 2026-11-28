@@ -196,6 +196,8 @@ final class BuyerJourneys: XCTestCase {
             try requireHittable(logout, in: app)
             logout.tap()
             XCTAssertTrue(email.waitForExistence(timeout: 45), "Signed-out screen did not appear")
+            XCTAssertTrue(app.staticTexts["Sessão encerrada no servidor."].waitForExistence(timeout: 25),
+                          "Server revocation was not confirmed before cold relaunch")
         }
 
         XCTContext.runActivity(named: "sortex-signed-out-relaunch") { _ in

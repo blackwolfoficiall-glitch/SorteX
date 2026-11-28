@@ -339,6 +339,10 @@ esac
         self.assertNotIn('coordinate', campaign_stage.split('campaign-tab-tap', 1)[1])
         self.assertNotIn('app.buttons["Ver campanha"]', swift)
         self.assertIn('app.staticTexts["Regulamento sintetico da campanha iOS."]', swift)
+        logout_stage = swift.split('named: "sortex-logout"', 1)[1].split(
+            'named: "sortex-signed-out-relaunch"', 1)[0]
+        self.assertIn('logout.tap()', logout_stage)
+        self.assertIn('app.staticTexts["Sessão encerrada no servidor."].waitForExistence', logout_stage)
         workflow = (ROOT.parent / "workflows/mobile-native-xcuitest.yml").read_text()
         preflight, full = workflow.split("  buyer-session:", 1)
         self.assertEqual(preflight.count("actions/upload-artifact"), 1)

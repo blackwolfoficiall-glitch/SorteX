@@ -17,10 +17,12 @@ export class ApiError extends Error {
     this.name = "ApiError";
   }
 }
+type LogoutStatus = "pending" | "confirmed" | "unconfirmed";
 export type AuthState = {
   status: "restoring" | "signedOut" | "signedIn" | "offline" | "storageError";
   user: User | null;
   message?: string;
+  logoutStatus?: LogoutStatus;
 };
 export class SortexClient {
   private tokens: Tokens | null = null;
@@ -29,6 +31,7 @@ export class SortexClient {
   private revision = 0;
   private authenticatedRevision = -1;
   private refreshing: Promise<void> | null = null;
+  private loggingOut: { revision: number; work: Promise<void> } | null = null;
   private writes: Promise<void> = Promise.resolve();
   constructor(
     readonly baseUrl: string,
@@ -277,44 +280,69 @@ export class SortexClient {
     assertSession();
     return result;
   }
-  private async clear(message?: string) {
-    this.nextRevision();
+  private async clear(message?: string, logoutStatus?: LogoutStatus) {
+    const revision = this.nextRevision();
     this.tokens = null;
     this.writes = this.writes.catch(() => {}).then(() => this.vault.clear());
     try {
       await this.writes;
     } catch {
-      this.emit({
-        status: "storageError",
-        user: null,
-        message:
-          "Não foi possível remover a sessão do armazenamento seguro. Tente novamente antes de fechar o aplicativo.",
-      });
+      if (revision === this.revision)
+        this.emit({
+          status: "storageError",
+          user: null,
+          message:
+            "Não foi possível remover a sessão do armazenamento seguro. Tente novamente antes de fechar o aplicativo.",
+        });
       throw new ApiError("Falha ao remover a sessão segura.");
     }
-    this.emit({ status: "signedOut", user: null, message });
+    if (revision === this.revision)
+      this.emit({
+        status: "signedOut",
+        user: null,
+        message,
+        ...(logoutStatus ? { logoutStatus } : {}),
+      });
   }
-  async logout() {
-    const access = this.tokens?.accessToken;
+  logout(): Promise<void> {
+    if (this.loggingOut?.revision === this.revision) return this.loggingOut.work;
+    const revision = this.revision + 1;
+    const work = this.finishLogout(this.tokens?.accessToken, revision);
+    this.loggingOut = { revision, work };
+    const finish = () => {
+      if (this.loggingOut?.work === work) this.loggingOut = null;
+    };
+    void work.then(finish, finish);
+    return work;
+  }
+  private async finishLogout(access: string | undefined, revision: number) {
+    // Fence the local session immediately, but start the real POST before
+    // waiting for SecureStore. A confirmation requires both to succeed.
+    const cleared = this.clear(undefined, access ? "pending" : undefined);
+    const revocation = access
+      ? this.raw<{ message?: unknown } | null>("/auth/logout", "POST", {}, access).then(
+          (receipt) => receipt?.message === "Logout realizado com sucesso.",
+          () => false,
+        )
+      : null;
     let storageError: unknown;
-    const clearedRevision = this.revision + 1;
     try {
-      await this.clear();
+      await cleared;
     } catch (e) {
       storageError = e;
     }
-    if (access)
-      try {
-        await this.raw("/auth/logout", "POST", {}, access);
-      } catch {
-        if (!storageError && clearedRevision === this.revision)
-          this.emit({
-            status: "signedOut",
-            user: null,
-            message:
-              "Sessão removida do aparelho. Sem rede, a revogação remota não foi confirmada; você pode encerrar outras sessões ao entrar novamente.",
-          });
-      }
+    if (revocation) {
+      const confirmed = await revocation;
+      if (!storageError && revision === this.revision)
+        this.emit({
+          status: "signedOut",
+          user: null,
+          logoutStatus: confirmed ? "confirmed" : "unconfirmed",
+          message: confirmed
+            ? "Sessão encerrada no servidor."
+            : "Sessão removida do aparelho. Não foi possível confirmar o encerramento no servidor; você pode encerrar outras sessões ao entrar novamente.",
+        });
+    }
     if (storageError) throw storageError;
   }
   async reloadUser() {
