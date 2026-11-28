@@ -36,12 +36,11 @@ final class BuyerJourneys: XCTestCase {
         XCTContext.runActivity(named: "sortex-email-keyboard") { _ in
             XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8), "Email keyboard did not open")
         }
-        // Exact native input control (run 46041710655): this chunk sequence
-        // read back correctly on iPhone 17 / iOS 26.5; bulk typing did not.
-        let buyerChunks = ["sortex", "-ios-", "ui@", "example", ".test"]
-        guard buyerChunks.joined() == buyer else { throw InvalidFixtureEmailChunks() }
+        // In exact native control 46086455689, both character trials read
+        // back exactly; the old chunk strategy failed one trial.
         var expectedPrefix = ""
-        for chunk in buyerChunks {
+        for character in buyer {
+            let chunk = String(character)
             XCTContext.runActivity(named: "sortex-email-type") { _ in
                 email.typeText(chunk)
             }
@@ -300,7 +299,6 @@ final class BuyerJourneys: XCTestCase {
         return .mismatch
     }
 
-    private struct InvalidFixtureEmailChunks: Error {}
     private struct MissingFixturePassword: Error {}
     private struct ElementNotActionable: Error {}
 }
