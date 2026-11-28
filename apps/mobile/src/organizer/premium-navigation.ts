@@ -2,11 +2,11 @@ export const organizerGroups = [
   {
     title: "Gerenciamento",
     entries: [
-      { title: "Ganhadores", icon: "🏆", unavailable: "A gestão de ganhadores ainda não está homologada no aplicativo." },
+      { title: "Ganhadores", icon: "🏆", route: "OrganizerWinners" },
       { title: "Pedidos", icon: "🧾", route: "CampaignOrders" },
       { title: "Mini campanhas", icon: "🎟️", unavailable: "A criação e gestão de mini campanhas ainda não estão homologadas no aplicativo." },
       { title: "Promoções", icon: "🏷️", unavailable: "A gestão de promoções ainda não está homologada no aplicativo." },
-      { title: "Cotas premiadas", icon: "🎁", route: "Campaigns", hint: "Selecione um rascunho e toque em Gerenciar cotas premiadas." },
+      { title: "Cotas premiadas", icon: "🎁", route: "OrganizerPrizeTickets", hint: "Consulte suas cotas, o histórico e os rascunhos das campanhas." },
       { title: "Financeiro", icon: "📊", route: "OrganizerFinance" },
     ],
   },
@@ -24,9 +24,9 @@ export const organizerGroups = [
   {
     title: "Minha operação",
     entries: [
-      { title: "Personalização", icon: "✧", route: "OrganizerProfile", hint: "Atualize o slogan da operação em Perfil." },
+      { title: "Personalização", icon: "✧", unavailable: "A edição completa de marca e aparência ainda não está disponível no app. O slogan continua editável em Perfil." },
       { title: "Integrações", icon: "🔌", unavailable: "As conexões com provedores ainda são configuradas fora do aplicativo." },
-      { title: "Configurações", icon: "⚙", route: "OrganizerProfile", hint: "Abra os dados da conta e a opção de sair." },
+      { title: "Configurações", icon: "⚙", route: "OrganizerSettings", hint: "Abra Perfil, Meu plano e Central Jurídica." },
       { title: "Perfil", icon: "●", route: "OrganizerProfile" },
     ],
   },

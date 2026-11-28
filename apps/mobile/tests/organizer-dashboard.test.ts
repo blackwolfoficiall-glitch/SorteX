@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ApiError, SortexClient, type AuthState } from "../src/api/client";
 import {
@@ -174,6 +175,10 @@ import {
   parsePeriodDashboard,
   periodFor,
 } from "../src/organizer/dashboard-period";
+import {
+  calendarDayAllowed, calendarMonth, dashboardCalendarCells, dashboardCalendarLimits,
+  moveCalendarMonth,
+} from "../src/organizer/dashboard-calendar";
 import { organizerCampaignShareUrl } from "../src/organizer/campaign-share";
 import { QA_API } from "../src/api/config";
 import { organizerGroups } from "../src/organizer/premium-navigation";
@@ -336,4 +341,53 @@ test("30-day chart dates match the existing unrounded bucket boundary and preser
   ]);
   assert.deepEqual(buckets[2], { first: "2026-11-03", last: "2026-11-05", revenue: 0 });
   assert.deepEqual(buckets.at(-1), { first: "2026-11-24", last: "2026-11-26", revenue: 0.02 });
+});
+
+test("calendário civil preserva dias em São Paulo, ano bissexto e virada de ano", () => {
+  const today = dayInSaoPaulo("2024-03-01T01:30:00.000Z");
+  assert.equal(today, "2024-02-29");
+  const feb = dashboardCalendarCells(calendarMonth(today));
+  assert.equal(feb.every((week) => week.length === 7), true);
+  assert.deepEqual(feb[0], [null, null, null, null, "2024-02-01", "2024-02-02", "2024-02-03"]);
+  assert.equal(feb.flat().filter(Boolean).length, 29);
+  assert.equal(feb.flat().filter(Boolean).at(-1), "2024-02-29");
+  assert.equal(dashboardCalendarCells("2026-02-01").flat().filter(Boolean).length, 28);
+  const all = dashboardCalendarLimits("start", { start: "", end: "" }, "2026-11-26")!;
+  assert.equal(moveCalendarMonth("2026-01-01", -1, all), "2025-12-01");
+  assert.equal(moveCalendarMonth("2026-01-01", -12, all), "2025-01-01");
+  assert.equal(moveCalendarMonth("2000-01-01", -1, all), null);
+  assert.equal(moveCalendarMonth("2026-11-01", 1, all), null);
+});
+
+test("seleção inicial/final e aplicação seguem a mesma regra de 367 dias inclusivos", () => {
+  const today = "2026-11-26";
+  const startLimits = dashboardCalendarLimits("start", { start: "", end: "2025-11-26" }, today)!;
+  assert.deepEqual(startLimits, { min: "2024-11-25", max: "2025-11-26" });
+  assert.equal(calendarDayAllowed("2024-11-24", startLimits), false);
+  assert.equal(calendarDayAllowed("2024-11-25", startLimits), true);
+  assert.equal(calendarDayAllowed("2025-11-27", startLimits), false);
+  const endLimits = dashboardCalendarLimits("end", { start: "2025-11-25", end: "" }, today)!;
+  assert.deepEqual(endLimits, { min: "2025-11-25", max: today });
+  assert.equal(calendarDayAllowed("2025-11-24", endLimits), false);
+  assert.equal(calendarDayAllowed("2026-11-27", endLimits), false);
+  assert.equal(calendarDayAllowed("2026-02-29", endLimits), false);
+  assert.equal(calendarDayAllowed("2026-11-26", endLimits), true);
+  assert.deepEqual(parseCustomPeriod("25/11/2025", "26/11/2026", today),
+    { start: "2025-11-25", end: "2026-11-26" });
+  assert.equal(parseCustomPeriod("24/11/2025", "26/11/2026", today), null);
+  assert.equal(dashboardCalendarLimits("start", { start: "", end: "" }, "2026-02-29"), null);
+});
+
+test("botões Data inicial e Data final abrem calendário pt-BR no painel sem consultar antes de aplicar", () => {
+  const screen = readFileSync(new URL("../src/organizer/NativeOrganizerDashboard.tsx", import.meta.url), "utf8");
+  const calendar = readFileSync(new URL("../src/organizer/NativeOrganizerDashboardCalendar.tsx", import.meta.url), "utf8");
+  assert.match(screen, /\["start", "Data inicial"\], \["end", "Data final"\]/);
+  assert.match(screen, /accessibilityHint="Abre o calendário" onPress=\{\(\) => setCalendar\(field\)\}/);
+  assert.match(screen, /calendar && calendarLimits && <NativeOrganizerDashboardCalendar key=\{calendar\}/);
+  assert.match(screen, /parseCustomPeriod\(dateLabel\(inputs.start\), dateLabel\(inputs.end\), today\)/);
+  assert.match(screen, /selected === "custom" \? custom : periodFor\(selected, today\)/);
+  assert.match(calendar, /<Modal visible[\s\S]*accessibilityViewIsModal/);
+  assert.match(calendar, /DateTimeFormat\("pt-BR", \{ dateStyle: "full", timeZone: "UTC" \}\)/);
+  assert.match(calendar, /accessibilityState=\{\{ disabled: !enabled, selected: isSelected \}\}/);
+  assert.match(calendar, /usePremiumTheme\(\)/);
 });

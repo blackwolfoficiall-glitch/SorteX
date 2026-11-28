@@ -58,8 +58,13 @@ const statusLabels: Record<string, string> = {
   CANCELLED: "Cancelado",
   REFUNDED: "Reembolsado",
 };
-const methodLabels: Record<string, string> = {
+const filterMethods = {
   PIX: "Pix",
+  CREDIT_CARD: "Cartão de crédito",
+  DEBIT_CARD: "Cartão de débito",
+};
+const methodLabels: Record<string, string> = {
+  ...filterMethods,
   CARD: "Cartão",
   BOLETO: "Boleto",
 };
@@ -106,6 +111,8 @@ export default function PedidosPage() {
     page: String(page),
     limit: String(limit),
     ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)),
+    ...(filters.from ? { from: `${filters.from}T00:00:00.000Z` } : {}),
+    ...(filters.to ? { to: `${filters.to}T23:59:59.999Z` } : {}),
   }).toString();
   const query = `${params}:${attempt}`;
   const current = result?.query === query ? result : null;
@@ -346,9 +353,9 @@ export default function PedidosPage() {
               className={control}
             >
               <option value="">Todos os métodos</option>
-              <option value="PIX">Pix</option>
-              <option value="CARD">Cartão</option>
-              <option value="BOLETO">Boleto</option>
+              {Object.entries(filterMethods).map(([method, label]) => (
+                <option key={method} value={method}>{label}</option>
+              ))}
             </select>
           </label>
           <div className={styles.dateGroup}>
@@ -403,9 +410,9 @@ export default function PedidosPage() {
           <Quick label="7 dias" onClick={() => quick(7)} />
           <Quick label="30 dias" onClick={() => quick(30)} />
           <Quick label="90 dias" onClick={() => quick(90)} />
-          <Quick label="Pix" onClick={() => change({ method: "PIX" })} />
-          <Quick label="Cartão" onClick={() => change({ method: "CARD" })} />
-          <Quick label="Boleto" onClick={() => change({ method: "BOLETO" })} />
+          {Object.entries(filterMethods).map(([method, label]) => (
+            <Quick key={method} label={label} onClick={() => change({ method })} />
+          ))}
           <Quick
             label="Pendentes"
             onClick={() => change({ status: "AWAITING_PAYMENT" })}

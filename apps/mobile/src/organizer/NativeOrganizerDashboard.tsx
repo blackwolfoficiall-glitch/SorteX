@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import Svg, { Circle, Defs, Line, LinearGradient, Path, Polyline, Stop } from "react-native-svg";
 import { client } from "../auth/runtime";
@@ -11,6 +11,8 @@ import {
   loadOrganizerDashboard, organizerDashboardSession,
   type Dashboard, type DashboardCampaign, type DashboardSession,
 } from "./dashboard";
+import { NativeOrganizerDashboardCalendar } from "./NativeOrganizerDashboardCalendar";
+import { calendarDayAllowed, dashboardCalendarLimits, type CalendarDates, type CalendarField } from "./dashboard-calendar";
 import { OrganizerIcon, type OrganizerIconName } from "./OrganizerIcons";
 import { organizerChartBounds, organizerRevenueGeometry } from "./premium-chart";
 import { DEFAULT_DASHBOARD_PERIOD, chartBucketsFor, dayInSaoPaulo, legacyHistoryCovers, legacyUtcRange, loadDashboardPeriod, parseCustomPeriod, periodFor,
@@ -74,7 +76,8 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
   const [state, setState] = useState<State>({ kind: "loading" });
   const [selected, setSelected] = useState<PeriodKey>(DEFAULT_DASHBOARD_PERIOD);
   const [custom, setCustom] = useState<Period | null>(null);
-  const [inputs, setInputs] = useState({ start: "", end: "" });
+  const [inputs, setInputs] = useState<CalendarDates>({ start: "", end: "" });
+  const [calendar, setCalendar] = useState<CalendarField | null>(null);
   const [customError, setCustomError] = useState(false);
   const [periodState, setPeriodState] = useState<{ key: string; result: PeriodState } | null>(null);
   const [periodRetry, setPeriodRetry] = useState(0);
@@ -101,6 +104,7 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
 
   const dashboard = state.kind === "ok" ? state.data : null;
   const today = dashboard ? dayInSaoPaulo(dashboard.generatedAt) : null;
+  const calendarLimits = calendar && today ? dashboardCalendarLimits(calendar, inputs, today) : null;
   const period = today ? (selected === "custom" ? custom : periodFor(selected, today)) : null;
   const start = period?.start, end = period?.end;
   const key = start && end ? `${dashboard?.generatedAt}:${start}:${end}:${periodRetry}` : null;
@@ -170,24 +174,38 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
               {([["start", "Data inicial"], ["end", "Data final"]] as const).map(([field, label]) => (
                 <View key={field}>
                   <Text style={[premiumTypography.label, { color: t.text, marginBottom: 4 }]}>{label}</Text>
-                  <TextInput accessibilityLabel={label} placeholder="DD/MM/AAAA" placeholderTextColor={t.muted}
-                    value={inputs[field]} maxLength={10}
-                    onChangeText={(value) => {
-                      const parts = value.replace(/[^0-9]/g, "").slice(0, 8).match(/^(\d{0,2})(\d{0,2})(\d{0,4})$/);
-                      setInputs((old) => ({ ...old, [field]: parts?.slice(1).filter(Boolean).join("/") ?? "" }));
-                      setCustom(null);
-                      setCustomError(false);
-                    }}
-                    keyboardType="number-pad"
-                    style={[styles.input, { borderColor: t.line, color: t.text }]} />
+                  <Pressable accessibilityRole="button" accessibilityLabel={`${label}, ${inputs[field] ? dateLabel(inputs[field]) : "não selecionada"}`}
+                    accessibilityHint="Abre o calendário" onPress={() => setCalendar(field)}
+                    style={[styles.dateButton, { borderColor: t.line, backgroundColor: t.bg }]}>
+                    <Text style={[premiumTypography.body, { color: inputs[field] ? t.text : t.muted }]}>
+                      {inputs[field] ? dateLabel(inputs[field]) : "Selecionar data"}
+                    </Text>
+                  </Pressable>
                 </View>
               ))}
-              {customError && <Text accessibilityRole="alert" style={{ color: t.text }}>Informe datas válidas, em ordem, até hoje e em um intervalo de até 367 dias.</Text>}
+              {calendar && calendarLimits && <NativeOrganizerDashboardCalendar key={calendar}
+                label={calendar === "start" ? "Escolher data inicial" : "Escolher data final"}
+                selected={inputs[calendar]} limits={calendarLimits} onClose={() => setCalendar(null)}
+                onChoose={(day) => {
+                  if (!calendarDayAllowed(day, calendarLimits)) return;
+                  if (inputs[calendar] !== day) {
+                    setInputs((old) => ({ ...old, [calendar]: day }));
+                    setCustom(null);
+                    setCustomError(false);
+                  }
+                  setCalendar(null);
+                }} />}
+              {customError && <Text accessibilityRole="alert" style={{ color: t.text }}>Selecione duas datas, em ordem, até hoje e em um intervalo de até 367 dias.</Text>}
               <PremiumButton title="Aplicar período" onPress={() => {
-                const result = today ? parseCustomPeriod(inputs.start, inputs.end, today) : null;
+                const result = today ? parseCustomPeriod(dateLabel(inputs.start), dateLabel(inputs.end), today) : null;
                 setCustom(result);
                 setCustomError(!result);
               }} />
+              {(inputs.start || inputs.end) ? <PremiumButton title="Limpar datas" onPress={() => {
+                setInputs({ start: "", end: "" });
+                setCustom(null);
+                setCustomError(false);
+              }} /> : null}
             </View>
           )}
           <View style={[styles.ticketShell, premiumShadow, { backgroundColor: t.blue }]}>
@@ -401,7 +419,7 @@ const styles = StyleSheet.create({
   filters: { borderWidth: 1, borderRadius: 16, padding: 4, gap: 4, flexDirection: "row", flexWrap: "wrap" },
   filter: { minHeight: 44, paddingHorizontal: 7, borderRadius: 10, justifyContent: "center", flexGrow: 1 },
   surface: { borderWidth: 1, borderRadius: 18, padding: 14, gap: 8 },
-  input: { minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12 },
+  dateButton: { minHeight: 44, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, justifyContent: "center" },
   quickSection: { borderWidth: 1, borderRadius: 19, padding: 12, gap: 10 },
   quickRow: { flexDirection: "row", justifyContent: "space-between", flexWrap: "wrap", gap: 7 },
   quickAction: { alignItems: "center", gap: 7, minHeight: 76 },

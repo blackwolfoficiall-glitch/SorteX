@@ -40,8 +40,19 @@ import { OrganizerCopilot, OrganizerModuleStatus, OrganizerMore, OrganizerTabBar
 import { premiumNotices } from "./src/organizer/premium-navigation";
 import { organizerCampaignShareUrl, shareableSlug } from "./src/organizer/campaign-share";
 import { QA_API } from "./src/api/config";
+import { NativeOrganizerWinners } from "./src/organizer/NativeOrganizerWinners";
+import { organizerWinnersSession } from "./src/organizer/winners";
+import { NativeOrganizerSettings } from "./src/organizer/NativeOrganizerSettings";
+import { organizerSettingsSession } from "./src/organizer/settings";
 import { NativeOrganizerFinance } from "./src/organizer/NativeOrganizerFinance";
 import { organizerFinanceSession } from "./src/organizer/finance";
+import {
+  NativeOrganizerOrders,
+  NativeOrganizerOrderDetail,
+} from "./src/organizer/NativeOrganizerOrders";
+import { organizerOrdersSession } from "./src/organizer/orders";
+import { NativeOrganizerPrizeTickets } from "./src/organizer/NativeOrganizerPrizeTickets";
+import { prizeTicketsSession } from "./src/organizer/prize-tickets";
 import { NativeOrganizerDraftPrizes } from "./src/components/NativeOrganizerDraftPrizes";
 import { NativeOrganizerCampaignLifecycle } from "./src/components/NativeOrganizerCampaignLifecycle";
 import type { OrganizerCampaignState } from "./src/domain/organizer-campaign-lifecycle";
@@ -743,6 +754,32 @@ function OrganizerDraftPrizesScreen({ route }: any) {
   return <NativeOrganizerDraftPrizes key={`${auth.user.id}:${revision}:${campaignId}`}
     accountId={auth.user.id} revision={revision} campaignId={campaignId} />;
 }
+function OrganizerWinnersScreen() {
+  useSyncExternalStore(client.subscribe, client.snapshot);
+  useSyncExternalStore(client.subscribe, client.activeSessionRevision);
+  const session = organizerWinnersSession(client);
+  if (!session) return <Page title="Ganhadores"><Notice error message="Entre como organizador para consultar ganhadores." /></Page>;
+  return <NativeOrganizerWinners key={`${session.organizerId}:${session.revision}`} client={client} session={session} />;
+}
+function OrganizerPrizeTicketsScreen({ route, navigation }: any) {
+  useSyncExternalStore(client.subscribe, client.snapshot);
+  useSyncExternalStore(client.subscribe, client.activeSessionRevision);
+  const session = prizeTicketsSession(client);
+  const campaignId = typeof route?.params?.campaignId === "string"
+    ? route.params.campaignId
+    : undefined;
+  if (!session)
+    return <Page title="Cotas premiadas"><Notice error message="Entre como organizador para consultar suas cotas." /></Page>;
+  return (
+    <NativeOrganizerPrizeTickets
+      key={`${session.organizerId}:${session.revision}:${campaignId ?? ""}`}
+      client={client}
+      session={session}
+      campaignId={campaignId}
+      onBrowseCampaignDrafts={() => navigation.navigate("Main", { screen: "Campaigns" })}
+    />
+  );
+}
 function OrganizerFinanceScreen() {
   useSyncExternalStore(client.subscribe, client.snapshot);
   useSyncExternalStore(client.subscribe, client.activeSessionRevision);
@@ -769,11 +806,19 @@ function Orders({ navigation, route }: any) {
     return <Page title="Pedidos"><Notice error message="Entre para consultar seus pedidos." /></Page>;
   }
   if (auth.user.role === "ORGANIZER") {
-    return <OrganizerOrders
-      key={`${auth.user.id}:${revision}`}
-      navigation={navigation}
-      route={route}
-    />;
+    const session = organizerOrdersSession(client);
+    const campaignId = typeof route?.params?.campaignId === "string"
+      ? route.params.campaignId
+      : undefined;
+    return session ? (
+      <NativeOrganizerOrders
+        key={`${session.organizerId}:${session.revision}:${campaignId ?? ""}`}
+        client={client}
+        session={session}
+        campaignId={campaignId}
+        onOrder={(orderId) => navigation.navigate("Order", { orderId })}
+      />
+    ) : null;
   }
   const session = buyerHistorySession(client);
   return session && focused ? (
@@ -785,80 +830,41 @@ function Orders({ navigation, route }: any) {
     />
   ) : null;
 }
-function OrganizerOrders({ navigation, route }: any) {
-  const [page, setPage] = useState(1);
-  const campaignId = route?.params?.campaignId;
-  const state = useData<PageResult<Purchase>>(
-    `/organizer/orders?page=${page}&limit=20${campaignId ? `&campaignId=${encodeURIComponent(campaignId)}` : ""}`,
-  );
-  const items = state.data?.items || [];
-  return (
-    <Page title={campaignId ? "Pedidos e participantes" : "Pedidos"}>
-      <Load state={state}>
-        {!items.length && <Notice message="Nenhum pedido encontrado." />}
-        {items.map((item) => (
-          <View key={item.id} style={s.card}>
-            <Text style={s.label}>{item.campaign?.title || "Campanha"}</Text>
-            <Text style={s.text}>
-              {money(item.total)} · {status(item.status)}
-            </Text>
-            <Notice
-              message={`${item.quantity} títulos · ${new Date(item.createdAt).toLocaleDateString("pt-BR")}`}
-            />
-            <Text style={s.text}>
-              Participante: {item.buyer?.name || "Não informado"}
-            </Text>
-            <Button
-              secondary
-              title="Ver pedido e títulos"
-              onPress={() => navigation.navigate("Order", { item })}
-            />
-          </View>
-        ))}
-        {state.data && (
-          <>
-            <Notice
-              message={`${state.data.total} pedidos · página ${page}. Participantes correspondem aos pedidos exibidos.`}
-            />
-            {page > 1 && (
-              <Button
-                secondary
-                title="Pedidos anteriores"
-                onPress={() => setPage(page - 1)}
-              />
-            )}
-            {page < state.data.pages && (
-              <Button
-                secondary
-                title="Mais pedidos"
-                onPress={() => setPage(page + 1)}
-              />
-            )}
-          </>
-        )}
-      </Load>
-    </Page>
-  );
-}
 function OrderDetail({ route }: any) {
-  const auth = useSyncExternalStore(client.subscribe, client.snapshot),
-    organizer = auth.user?.role === "ORGANIZER",
-    item = route.params.item as Purchase;
-  const nativeBuyer = reservationTestsEnabled && !organizer;
-  const state = useData<Purchase>(
-    nativeBuyer ? null : organizer ? `/organizer/orders/${item.id}` : `/purchases/${item.id}`,
-  );
-  const tickets = useData<any>(
-    nativeBuyer ? null : !organizer && state.data?.status === "PAID"
-      ? `/purchases/${item.id}/tickets`
-      : organizer ? `/organizer/orders/${item.id}` : null,
-  );
+  const auth = useSyncExternalStore(client.subscribe, client.snapshot);
+  const revision = useSyncExternalStore(client.subscribe, client.activeSessionRevision);
+  const orderId = route?.params?.orderId ?? route?.params?.item?.id;
+  if (auth.status !== "signedIn" || !auth.user || revision === null ||
+      typeof orderId !== "string" || !orderId) {
+    return <Page title="Pedido"><Notice error message="Não foi possível consultar este pedido." /></Page>;
+  }
+  if (auth.user.role === "ORGANIZER") {
+    const session = organizerOrdersSession(client);
+    return session ? (
+      <NativeOrganizerOrderDetail
+        key={`${session.organizerId}:${session.revision}:${orderId}`}
+        client={client}
+        session={session}
+        orderId={orderId}
+      />
+    ) : null;
+  }
+  return auth.user.role === "BUYER" ? (
+    <BuyerOrderDetail key={`${auth.user.id}:${revision}:${orderId}`} route={route} orderId={orderId} />
+  ) : null;
+}
+function BuyerOrderDetail({ route, orderId }: any) {
+  const nativeBuyer = reservationTestsEnabled;
+  const state = useData<Purchase>(nativeBuyer ? null : `/purchases/${orderId}`);
+  const tickets = useData<any>(nativeBuyer || state.data?.status !== "PAID"
+    ? null
+    : `/purchases/${orderId}/tickets`);
   const list = Array.isArray(tickets.data)
     ? tickets.data
     : tickets.data?.tickets || [];
   if (nativeBuyer) return (
     <Page title="Pedido">
-      <NativeBuyerOrder client={client} orderId={item.id}
+      <NativeBuyerOrder client={client} orderId={orderId}
         totalNumbers={typeof route.params.totalNumbers === "number" ? route.params.totalNumbers : undefined} />
     </Page>
   );
@@ -869,11 +875,6 @@ function OrderDetail({ route }: any) {
         <Text style={s.text}>
           {money(state.data?.total)} · {status(state.data?.status || "")}
         </Text>
-        {organizer && (
-          <Text style={s.text}>
-            Participante: {state.data?.buyer?.name || "Não informado"}
-          </Text>
-        )}
         <Text style={s.label}>Títulos</Text>
         <Load state={tickets}>
           {list.length ? (
@@ -890,6 +891,14 @@ function OrderDetail({ route }: any) {
       </Load>
     </Page>
   );
+}
+function OrganizerSettingsScreen({ navigation }: { navigation: { navigate: (route: string) => void } }) {
+  useSyncExternalStore(client.subscribe, client.snapshot);
+  useSyncExternalStore(client.subscribe, client.activeSessionRevision);
+  const session = organizerSettingsSession(client);
+  if (!session) return <Page title="Configurações"><Notice error message="Entre como organizador para abrir Configurações." /></Page>;
+  return <NativeOrganizerSettings key={`${session.organizerId}:${session.revision}`}
+    client={client} session={session} onProfile={() => navigation.navigate("OrganizerProfile")} />;
 }
 function Profile() {
   const auth = useSyncExternalStore(client.subscribe, client.snapshot),
@@ -1267,7 +1276,13 @@ export default function App() {
                 {auth.user?.role === "ORGANIZER" && (
                   <>
                     <Stack.Screen name="OrganizerProfile" component={Profile} options={{ title: "Perfil" }} />
+                    <Stack.Screen name="OrganizerWinners" component={OrganizerWinnersScreen}
+                      options={{ ...organizerCampaignHeader, title: "Ganhadores" }} />
+                    <Stack.Screen name="OrganizerPrizeTickets" component={OrganizerPrizeTicketsScreen}
+                      options={{ ...organizerCampaignHeader, title: "Cotas premiadas" }} />
                     <Stack.Screen name="OrganizerModuleStatus" component={OrganizerModuleStatus} options={{ headerShown: false }} />
+                    <Stack.Screen name="OrganizerSettings" component={OrganizerSettingsScreen}
+                      options={{ ...organizerCampaignHeader, title: "Configurações" }} />
                     <Stack.Screen name="OrganizerShare" component={OrganizerShareScreen} options={{ title: "Divulgar" }} />
                     <Stack.Screen name="OrganizerCampaign" component={OrganizerCampaignScreen}
                       options={{ ...organizerCampaignHeader, title: "Campanha" }} />

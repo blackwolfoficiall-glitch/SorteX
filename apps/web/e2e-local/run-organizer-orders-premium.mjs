@@ -118,6 +118,37 @@ try {
   assert.ok(filtersBody.items.length > 0);
   assert.ok(filtersBody.items.every((row) => row.campaign.id === campaignId && row.status === "PAID" && row.payments[0]?.method === "PIX"));
   await expect(table.getByRole("row")).toHaveCount(filtersBody.items.length + 1);
+  await expect(method.locator("option")).toHaveText([
+    "Todos os métodos", "Pix", "Cartão de crédito", "Cartão de débito",
+  ]);
+  await expect(filters.getByRole("button", { name: "Boleto", exact: true })).toHaveCount(0);
+  for (const [value, label] of [
+    ["CREDIT_CARD", "Cartão de crédito"],
+    ["DEBIT_CARD", "Cartão de débito"],
+  ]) {
+    const [selectedMethod] = await Promise.all([
+      p.waitForResponse((res) => isOrders(res) && new URL(res.url()).searchParams.get("method") === value),
+      filters.getByRole("button", { name: label, exact: true }).click(),
+    ]);
+    assert.equal(selectedMethod.status(), 200);
+    assert.ok(Array.isArray((await selectedMethod.json()).items));
+    await expect(method).toHaveValue(value);
+  }
+  await method.selectOption("PIX");
+  const day = new Date(ownerOrder.createdAt).toISOString().slice(0, 10);
+  const [inclusiveDay] = await Promise.all([
+    p.waitForResponse((res) => {
+      const query = new URL(res.url()).searchParams;
+      return isOrders(res) && query.get("from") === `${day}T00:00:00.000Z` &&
+        query.get("to") === `${day}T23:59:59.999Z`;
+    }),
+    (async () => {
+      await filters.getByLabel("Data inicial").fill(day);
+      await filters.getByLabel("Data final").fill(day);
+    })(),
+  ]);
+  assert.equal(inclusiveDay.status(), 200);
+  assert.ok((await inclusiveDay.json()).items.some((row) => row.id === ownerOrder.id));
   const sort = p.getByLabel("Ordenação");
   const [sorted] = await Promise.all([
     p.waitForResponse((res) => isOrders(res) && new URL(res.url()).searchParams.get("sort") === "value_desc"),
