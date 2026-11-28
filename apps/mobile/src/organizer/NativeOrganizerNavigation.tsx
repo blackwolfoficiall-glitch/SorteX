@@ -119,7 +119,6 @@ export function OrganizerModuleStatus({ route, navigation }: { route: any; navig
     <PremiumPage title={route.params.title} bottom>
       <View style={[styles.info, { borderColor: t.line, backgroundColor: t.surface }]}>
         <Text style={[premiumTypography.body, { color: t.muted }]}>{route.params.message}</Text>
-        {route.params.finance === true && <PremiumButton title="Consultar financeiro" onPress={() => navigation.replace("OrganizerFinance")} />}
         <PremiumButton title="Voltar" onPress={() => navigation.goBack()} />
       </View>
     </PremiumPage>

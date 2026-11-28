@@ -23,7 +23,6 @@ type Actions = {
   onCampaign: (campaign: DashboardCampaign) => void;
   onCreate: () => void;
   onFinance: () => void;
-  onPayout: () => void;
   onProfile: () => void;
   onCopilot: () => void;
   onNotifications: () => void;
@@ -249,7 +248,6 @@ function DashboardContent({ session: { organizerId, revision }, ...actions }: Ac
           <QuickAction title="Criar" icon="plus" onPress={actions.onCreate} />
           <QuickAction title="Sortear" icon="trophy" hint="Consultar disponibilidade da apuração" onPress={actions.onDraw} />
           <QuickAction title="Divulgar" icon="link" onPress={actions.onShare} />
-          <QuickAction title="Sacar" icon="wallet" hint="Consultar disponibilidade e abrir o financeiro" onPress={actions.onPayout} />
         </View>
       </View>
       <View style={[styles.copilot, { backgroundColor: t.deep }]}>

@@ -223,33 +223,33 @@ function FinanceContent({ overview, statement, campaigns }: Data) {
         </div>
       </FinanceHeader>
 
-      <section className="sx-finance-distribution" aria-label="Saldo da conta financeira">
+      <section className="sx-finance-distribution" aria-label="Posição contábil interna">
         <div className="sx-premium-ticket sx-finance-ticket">
           <span className="sx-finance-ticket-icon"><Wallet size={21} aria-hidden="true" /></span>
           <div>
-            <h2>Saldo disponível</h2>
+            <h2>Disponibilidade no controle interno</h2>
             <p className="sx-finance-ticket-amount">{money(balance.available)}</p>
-            <p className="sx-finance-ticket-detail">Saldo interno da SorteX. Não representa depósito bancário ou saque realizado.</p>
+            <p className="sx-finance-ticket-detail">Posição contábil da SorteX, não um saldo bancário. Confira recebimentos e prazos de liquidação diretamente no seu gateway.</p>
           </div>
           <dl className="sx-finance-ticket-splits">
-            <div><dt>Saldo pendente</dt><dd>{money(balance.pending)}</dd></div>
-            <div><dt>Saldo bloqueado</dt><dd>{money(balance.blocked)}</dd></div>
+            <div><dt>Pendente no controle</dt><dd>{money(balance.pending)}</dd></div>
+            <div><dt>Bloqueado no controle</dt><dd>{money(balance.blocked)}</dd></div>
           </dl>
         </div>
         <dl className="sx-finance-metrics">
           <Metric icon={ReceiptText} label="Vendas do dia" value={overview.periods.today.gross} />
           <Metric icon={CalendarRange} label="Vendas do mês" value={overview.periods.currentMonth.gross} />
           <Metric icon={Landmark} label="Faturamento bruto acumulado" value={balance.gross} />
-          <Metric icon={Wallet} label="Receita líquida acumulada" value={balance.net} />
+          <Metric icon={Wallet} label="Receita líquida registrada acumulada" value={balance.net} />
         </dl>
       </section>
 
       <section className={card} aria-labelledby="sx-finance-fees">
         <h2 className="sx-premium-section" id="sx-finance-fees">Taxas acumuladas</h2>
-        <p className="sx-premium-muted">Valores registrados ao longo de toda a operação, sem filtro por período.</p>
+        <p className="sx-premium-muted">Valores registrados em toda a operação, sem filtro por período. A taxa do gateway pode incluir estimativas; confira a cobrança efetiva no gateway.</p>
         <dl className="sx-finance-fees">
           <Summary label="Taxa SorteX" value={balance.platformFees} />
-          <Summary label="Taxa do gateway" value={balance.gatewayFees} />
+          <Summary label="Taxa do gateway registrada" value={balance.gatewayFees} />
         </dl>
       </section>
 
@@ -282,12 +282,12 @@ function FinanceContent({ overview, statement, campaigns }: Data) {
       {!invalidRange && (
         <section className={card} aria-labelledby="sx-finance-period">
           <h2 className="sx-premium-section" id="sx-finance-period">Movimentos no recorte</h2>
-          <p className="sx-premium-muted" role="status">{filteredEntries.length} {filteredEntries.length === 1 ? "lançamento exibido" : "lançamentos exibidos"}. Bruto, líquido, taxas e estornos são lançamentos distintos, inclusive para um mesmo pagamento. Estes valores não devem ser somados entre si e não equivalem a saldo disponível.</p>
+          <p className="sx-premium-muted" role="status">{filteredEntries.length} {filteredEntries.length === 1 ? "lançamento exibido" : "lançamentos exibidos"}. Bruto, líquido, taxas e estornos são lançamentos distintos, inclusive para um mesmo pagamento. Estes valores não devem ser somados entre si e não equivalem a saldo bancário nem a lucro.</p>
           <dl className="sx-finance-period">
             <Summary label="Vendas brutas registradas" value={totals.grossSales} tone="positive" />
             <Summary label="Receita líquida registrada" value={totals.netRevenue} tone="positive" />
             <Summary label="Taxa SorteX no recorte" value={totals.platformFees} />
-            <Summary label="Taxa do gateway no recorte" value={totals.gatewayFees} />
+            <Summary label="Taxa do gateway registrada no recorte" value={totals.gatewayFees} />
             <Summary label="Estornos e contestações" value={totals.reversals} tone="negative" />
           </dl>
         </section>
@@ -372,7 +372,7 @@ function FinanceHeader({ children }: { children?: ReactNode }) {
       <div>
         <p className="sx-premium-badge">Gestão financeira</p>
         <h1 className="sx-premium-title">Financeiro SorteX</h1>
-        <p className="sx-premium-muted">Acompanhe saldo, vendas, taxas e lançamentos da sua operação.</p>
+        <p className="sx-premium-muted">Acompanhe vendas, taxas e lançamentos. Os recebimentos são conferidos no seu gateway.</p>
       </div>
       {children}
     </header>

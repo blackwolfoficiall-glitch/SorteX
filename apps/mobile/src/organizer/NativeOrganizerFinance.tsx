@@ -75,9 +75,9 @@ export function NativeOrganizerFinance({
   const reload = () => setAttempt((current) => current + 1);
   return (
     <PremiumPage title="Financeiro" top={false} bottom>
-      <PremiumMessage message="Consulta interna da SorteX. Não comprova liquidação pelo gateway, split ou dinheiro recebido em conta bancária." />
+      <PremiumMessage message="Este painel mostra os registros internos da SorteX. Confira recebimentos e prazos de liquidação diretamente no seu gateway." />
       {verifiedPrior && (
-        <PremiumMessage message="Saldos e taxas da última consulta enquanto a nova página do extrato é carregada." />
+        <PremiumMessage message="Posição contábil e taxas da última consulta enquanto a nova página do extrato é carregada." />
       )}
       {balance && <BalanceCards balance={balance} />}
 
@@ -148,31 +148,31 @@ function BalanceCards({ balance }: { balance: FinanceBalance }) {
         >
           Saldo interno
         </Text>
-        <Text style={[premiumTypography.label, { color: theme.white }]}>Disponível na SorteX</Text>
+        <Text style={[premiumTypography.label, { color: theme.white }]}>Disponibilidade no controle interno</Text>
         <Text style={[styles.balanceAmount, { color: theme.white }]}>
           {formatFinanceMoney(balance.available)}
         </Text>
         <View style={styles.balanceOthers}>
           <View style={styles.pocket}>
-            <Text style={[premiumTypography.body, { color: theme.white }]}>Pendente</Text>
+            <Text style={[premiumTypography.body, { color: theme.white }]}>Pendente no controle</Text>
             <Text style={[premiumTypography.label, { color: theme.white }]}>
               {formatFinanceMoney(balance.pending)}
             </Text>
           </View>
           <View style={styles.pocket}>
-            <Text style={[premiumTypography.body, { color: theme.white }]}>Bloqueado</Text>
+            <Text style={[premiumTypography.body, { color: theme.white }]}>Bloqueado no controle</Text>
             <Text style={[premiumTypography.label, { color: theme.white }]}>
               {formatFinanceMoney(balance.blocked)}
             </Text>
           </View>
         </View>
       </View>
-      <PremiumPanel title="Receitas e taxas acumuladas">
+      <PremiumPanel title="Receitas e taxas registradas">
         <MoneyRow label="Receita bruta registrada" value={balance.gross} />
         <MoneyRow label="Receita líquida registrada" value={balance.net} />
         <MoneyRow label="Taxas SorteX" value={balance.platformFees} />
         <MoneyRow label="Taxas de gateway registradas" value={balance.gatewayFees} />
-        <PremiumMessage message="Taxas de gateway no saldo interno podem incluir estimativas, não valores efetivamente liquidados." />
+        <PremiumMessage message="Os valores do gateway podem incluir estimativas e não comprovam taxas efetivamente cobradas. A receita registrada não é lucro." />
       </PremiumPanel>
     </>
   );

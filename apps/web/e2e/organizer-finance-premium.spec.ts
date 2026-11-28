@@ -21,14 +21,18 @@ test("organizer reads actual balances and fees, filters and exports the statemen
   expect(statement.ok()).toBe(true);
   const { balance } = await overview.json();
   const statementData = await statement.json();
-  const account = page.getByRole("region", { name: "Saldo da conta financeira" });
-  await expect(account).toContainText("Saldo interno da SorteX");
+  const account = page.getByRole("region", { name: "Posição contábil interna" });
+  await expect(account).toContainText("Confira recebimentos e prazos de liquidação diretamente no seu gateway.");
+  await expect(account.getByRole("heading", { name: "Disponibilidade no controle interno" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /sacar|solicitar saque/i })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: /sacar|solicitar saque/i })).toHaveCount(0);
   await expect(account.locator(".sx-finance-ticket-amount")).toHaveText(currency(balance.available));
-  await expect(account.getByText("Saldo pendente", { exact: true }).locator("..")).toContainText(currency(balance.pending));
-  await expect(account.getByText("Saldo bloqueado", { exact: true }).locator("..")).toContainText(currency(balance.blocked));
+  await expect(account.getByText("Pendente no controle", { exact: true }).locator("..")).toContainText(currency(balance.pending));
+  await expect(account.getByText("Bloqueado no controle", { exact: true }).locator("..")).toContainText(currency(balance.blocked));
   const fees = page.getByRole("region", { name: "Taxas acumuladas" });
+  await expect(fees).toContainText("A taxa do gateway pode incluir estimativas");
   await expect(fees.getByText("Taxa SorteX", { exact: true }).locator("..")).toContainText(currency(balance.platformFees));
-  await expect(fees.getByText("Taxa do gateway", { exact: true }).locator("..")).toContainText(currency(balance.gatewayFees));
+  await expect(fees.getByText("Taxa do gateway registrada", { exact: true }).locator("..")).toContainText(currency(balance.gatewayFees));
 
   const chooser = page.getByLabel("Período", { exact: true });
   await chooser.selectOption("custom");
@@ -75,8 +79,8 @@ test("finance labels an unavailable contract without fictitious zeros and retrie
     route.fulfill({ status: 404, json: {} }), { times: 1 });
   await page.goto(financePath);
   await expect(page.locator(".sx-finance").getByRole("alert")).toContainText("O financeiro não está disponível nesta versão da API");
-  await expect(page.getByRole("region", { name: "Saldo da conta financeira" })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Posição contábil interna" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Exportar Excel" })).toHaveCount(0);
   await page.getByRole("button", { name: "Tentar novamente" }).click();
-  await expect(page.getByRole("region", { name: "Saldo da conta financeira" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Posição contábil interna" })).toBeVisible();
 });

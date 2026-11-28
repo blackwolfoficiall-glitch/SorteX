@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ApiError, SortexClient } from "../src/api/client";
@@ -266,4 +267,26 @@ test("finance pagination distinguishes an empty first page and a page that disap
     previous: 1,
     next: null,
   });
+});
+
+test("Sacar sai das ações rápidas sem remover Financeiro ou o histórico de auditoria", () => {
+  const read = (pathname: string) => readFileSync(new URL(pathname, import.meta.url), "utf8");
+  const dashboard = read("../src/organizer/NativeOrganizerDashboard.tsx");
+  const app = read("../App.tsx");
+  const navigation = read("../src/organizer/premium-navigation.ts");
+  const finance = read("../src/organizer/NativeOrganizerFinance.tsx");
+  const ledger = read("../src/organizer/finance.ts");
+  assert.doesNotMatch(dashboard, /QuickAction title="Financeiro"/);
+  assert.match(navigation, /title: "Financeiro", icon: "📊", route: "OrganizerFinance"/);
+  assert.match(app, /onFinance=\{\(\) => navigation.navigate\("OrganizerFinance"\)\}/);
+  assert.doesNotMatch(dashboard + app + navigation, /onPayout|title="Sacar"|title: "Sacar"/);
+  assert.doesNotMatch(finance, /Disponível na SorteX/);
+  assert.match(finance, /recebimentos e prazos de liquidação diretamente no seu gateway/);
+  assert.match(finance, /Disponibilidade no controle interno/);
+  assert.match(finance, /formatFinanceMoney\(balance.available\)/);
+  assert.match(finance, /podem incluir estimativas/);
+  assert.match(finance, /Extrato interno/);
+  assert.match(ledger, /PAYOUT_REQUEST: "Solicitação de saque registrada"/);
+  assert.match(ledger, /PAYOUT_COMPLETED:/);
+  assert.match(ledger, /PAYOUT_CANCELLED:/);
 });

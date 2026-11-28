@@ -53,6 +53,10 @@ import {
 import { organizerOrdersSession } from "./src/organizer/orders";
 import { NativeOrganizerPrizeTickets } from "./src/organizer/NativeOrganizerPrizeTickets";
 import { prizeTicketsSession } from "./src/organizer/prize-tickets";
+import { NativeOrganizerPromotions } from "./src/organizer/NativeOrganizerPromotions";
+import { promotionsSession } from "./src/organizer/promotions";
+import { NativeOrganizerMiniCampaigns } from "./src/organizer/NativeOrganizerMiniCampaigns";
+import { miniSession } from "./src/organizer/mini-campaigns";
 import { NativeOrganizerDraftPrizes } from "./src/components/NativeOrganizerDraftPrizes";
 import { NativeOrganizerCampaignLifecycle } from "./src/components/NativeOrganizerCampaignLifecycle";
 import type { OrganizerCampaignState } from "./src/domain/organizer-campaign-lifecycle";
@@ -569,7 +573,6 @@ function Home({ navigation }: any) {
       onShare={() => navigation.navigate("OrganizerShare")}
       onCampaigns={() => navigation.navigate("Campaigns")}
       onFinance={() => navigation.navigate("OrganizerFinance")}
-      onPayout={() => navigation.navigate("OrganizerModuleStatus", { title: "Sacar", message: premiumNotices.Sacar, finance: true })}
       onCampaign={(item) => navigation.navigate("OrganizerCampaign", { campaignId: item.id })}
     />
   ) : (
@@ -779,6 +782,22 @@ function OrganizerPrizeTicketsScreen({ route, navigation }: any) {
       onBrowseCampaignDrafts={() => navigation.navigate("Main", { screen: "Campaigns" })}
     />
   );
+}
+function OrganizerMiniCampaignsScreen() {
+  useSyncExternalStore(client.subscribe, client.snapshot);
+  useSyncExternalStore(client.subscribe, client.activeSessionRevision);
+  const session = miniSession(client);
+  if (!session)
+    return <Page title="Mini campanhas"><Notice error message="Entre como organizador para consultar suas mini campanhas." /></Page>;
+  return <NativeOrganizerMiniCampaigns key={`${session.organizerId}:${session.revision}`} client={client} session={session} />;
+}
+function OrganizerPromotionsScreen() {
+  useSyncExternalStore(client.subscribe, client.snapshot);
+  useSyncExternalStore(client.subscribe, client.activeSessionRevision);
+  const session = promotionsSession(client);
+  if (!session)
+    return <Page title="Promoções"><Notice error message="Entre como organizador para consultar promoções." /></Page>;
+  return <NativeOrganizerPromotions key={`${session.organizerId}:${session.revision}`} client={client} session={session} />;
 }
 function OrganizerFinanceScreen() {
   useSyncExternalStore(client.subscribe, client.snapshot);
@@ -1280,6 +1299,10 @@ export default function App() {
                       options={{ ...organizerCampaignHeader, title: "Ganhadores" }} />
                     <Stack.Screen name="OrganizerPrizeTickets" component={OrganizerPrizeTicketsScreen}
                       options={{ ...organizerCampaignHeader, title: "Cotas premiadas" }} />
+                    <Stack.Screen name="OrganizerPromotions" component={OrganizerPromotionsScreen}
+                      options={{ ...organizerCampaignHeader, title: "Promoções" }} />
+                    <Stack.Screen name="OrganizerMiniCampaigns" component={OrganizerMiniCampaignsScreen}
+                      options={{ ...organizerCampaignHeader, title: "Mini campanhas" }} />
                     <Stack.Screen name="OrganizerModuleStatus" component={OrganizerModuleStatus} options={{ headerShown: false }} />
                     <Stack.Screen name="OrganizerSettings" component={OrganizerSettingsScreen}
                       options={{ ...organizerCampaignHeader, title: "Configurações" }} />

@@ -4,8 +4,8 @@ export const organizerGroups = [
     entries: [
       { title: "Ganhadores", icon: "🏆", route: "OrganizerWinners" },
       { title: "Pedidos", icon: "🧾", route: "CampaignOrders" },
-      { title: "Mini campanhas", icon: "🎟️", unavailable: "A criação e gestão de mini campanhas ainda não estão homologadas no aplicativo." },
-      { title: "Promoções", icon: "🏷️", unavailable: "A gestão de promoções ainda não está homologada no aplicativo." },
+      { title: "Mini campanhas", icon: "🎟️", route: "OrganizerMiniCampaigns" },
+      { title: "Promoções", icon: "🏷️", route: "OrganizerPromotions" },
       { title: "Cotas premiadas", icon: "🎁", route: "OrganizerPrizeTickets", hint: "Consulte suas cotas, o histórico e os rascunhos das campanhas." },
       { title: "Financeiro", icon: "📊", route: "OrganizerFinance" },
     ],
@@ -35,5 +35,4 @@ export const organizerGroups = [
 export const premiumNotices = {
   "Notificações": "A central de notificações do organizador ainda não está homologada no aplicativo.",
   "Sortear": "A apuração ainda não está homologada no aplicativo. Nenhum sorteio será iniciado por este atalho.",
-  "Sacar": "A consulta financeira está disponível, mas iniciar saques ainda não está habilitado no aplicativo.",
 } as const;
