@@ -14,25 +14,33 @@ O script **verifica** essa combinação e cria um aparelho virtual novo pelo
 [simctl do Xcode](https://developer.apple.com/documentation/xcode/xcode-command-line-tool-reference);
 se algo faltar, para com `comparison=indeterminate`, sem baixar runtimes,
 escolher outro aparelho ou reaproveitar um existente. Não configura
-preferências globais do teclado. O mesmo dispositivo novo, modelo e runtime
-são usados nos dois casos; cada caso termina e relança o processo, confirma
-que o campo está vazio e usa somente o campo real do Release, via XCTest.
+preferências globais do teclado. As quatro observações usam o mesmo
+dispositivo novo, modelo e runtime. Cada caso termina e relança o processo,
+confirma que o campo está vazio e usa somente o campo real do Release via
+XCTest, sem presumir que a ordem dos casos seja fixa no Xcode.
 
-- `bulk`: uma chamada nativa `typeText`, seguida de igualdade exata.
-- `paced`: chamadas nativas para blocos curtos, cada uma seguida por
-  igualdade exata com o prefixo, e igualdade completa ao terminar.
-- Nenhum caso repete digitação, acessa o valor da senha, submete o
-  formulário, cria conta ou carrega sessão fictícia. Não há API/fixture;
-  a configuração do Release aponta apenas para loopback sem listener.
+- `chunks-a` e `chunks-b`: a sequência anterior de cinco blocos curtos.
+- `characters-a` e `characters-b`: a mesma digitação nativa
+  `typeText`, chamada uma vez para cada caractere, sem usar posições da
+  tela nem presumir rótulos de teclas ou alterar preenchimento automático.
+- Ambos exigem igualdade exata, passiva, após cada ação e mais uma vez ao
+  final. Nenhum caso repete a digitação, acessa o valor da senha, submete o
+  formulário, cria conta ou carrega sessão fictícia. O Release aponta
+  apenas para loopback sem listener; não há API ou fixture de login.
 
-O artefato `sortex-ios-input-control-<SHA>` contém apenas rótulos fixos.
-`paced-only`/`bulk-only` significa que um método produziu igualdade
-exata e o outro foi observado falhando na leitura; `neither-exact`
-significa duas falhas de leitura. Falha antes da leitura, inventário
-incompleto ou resultado não reconhecido são inconclusivos. A execução
-continua falha quando o Xcode reporta falha, mesmo que o experimento
-forneça uma comparação útil. Nenhum resultado prova uma causa física.
-Não publicar Xcode bruto, capturas de entrada, relatórios ou hierarquias.
+A última rodada integral [46075226454](https://github.com/blackwolfoficiall-glitch/SorteX/actions/runs/46075226454) (`c17575e`) falhou na
+conferência de prefixo antes da senha ou de qualquer pedido HTTP. Um único
+`paced-only` anterior não representa repetibilidade. O novo artefato
+`sortex-ios-input-control-<SHA>` usa `characters-repeatable` ou
+`chunks-repeatable` quando só esse método acertou nas duas observações;
+`both-repeatable` indica que ambos acertaram nas duas. `neither-repeatable`
+significa que nenhum acertou nas duas, não que todos os casos falharam.
+Falha antes da leitura, inventário incompleto ou resultado desconhecido
+tornam a comparação `indeterminate`. A execução continua falha quando o
+Xcode reporta falha, mesmo que forneça uma comparação útil. Uma observação
+repetível ainda não comprova login: a jornada com API/PG, Campanhas,
+reabertura e saída continua necessária. Não publicar valores, contagens,
+índices da digitação, dados brutos do Xcode, capturas ou hierarquias.
 
 Sem captura neste controle. Uma futura captura de tela autenticada deve
 ser produzida em outro teste, apenas depois de login real comprovado

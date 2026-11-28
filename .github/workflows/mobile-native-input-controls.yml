@@ -38,7 +38,7 @@ jobs:
           npm ci --no-audit --no-fund
           npx expo prebuild --platform ios --no-install
           node scripts/check-native-config.cjs
-      - name: Comparar duas entradas nativas (sem senha ou submissão)
+      - name: Comparar blocos e caracteres em quatro inicializações independentes
         shell: bash
         run: bash .github/ios-xcuitest-input-controls/run.sh
       - name: Reter somente as categorias de comparação sem conteúdo do campo

@@ -16,8 +16,10 @@ RUNTIME = "com.apple.CoreSimulator.SimRuntime.iOS-26-5"
 MODEL = "com.apple.CoreSimulator.SimDeviceType.iPhone-17"
 DEVICE_NAME = "SortexInputControl"
 TEST_IDS = {
-    "bulk": "BuyerEmailInputControls/testBulk",
-    "paced": "BuyerEmailInputControls/testPaced",
+    "chunks-a": "BuyerEmailInputControls/testAChunks",
+    "characters-a": "BuyerEmailInputControls/testBCharacters",
+    "chunks-b": "BuyerEmailInputControls/testCChunks",
+    "characters-b": "BuyerEmailInputControls/testDCharacters",
 }
 PHASES = ("signed-out", "fresh-input", "tap", "keyboard", "type", "prefix", "readback", "no-submit")
 
@@ -121,10 +123,12 @@ def comparison(outcomes, phases):
             outcomes.get(mode) != "failed" or phases.get(mode) not in {"prefix", "readback"}
         ):
             return "indeterminate"
+    chunks_repeatable = signatures["chunks-a"] and signatures["chunks-b"]
+    characters_repeatable = signatures["characters-a"] and signatures["characters-b"]
     return {
-        (True, True): "both-exact", (True, False): "bulk-only",
-        (False, True): "paced-only", (False, False): "neither-exact",
-    }[signatures["bulk"], signatures["paced"]]
+        (True, True): "both-repeatable", (True, False): "chunks-repeatable",
+        (False, True): "characters-repeatable", (False, False): "neither-repeatable",
+    }[chunks_repeatable, characters_repeatable]
 
 
 def report(bundle):

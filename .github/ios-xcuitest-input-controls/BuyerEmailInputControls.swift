@@ -6,13 +6,23 @@ final class BuyerEmailInputControls: XCTestCase {
     private let expected = "sortex-ios-ui@example.test"
 
     @MainActor
-    func testBulk() {
+    func testAChunks() {
+        observe(paced: true)
+    }
+
+    @MainActor
+    func testBCharacters() {
         observe(paced: false)
     }
 
     @MainActor
-    func testPaced() {
+    func testCChunks() {
         observe(paced: true)
+    }
+
+    @MainActor
+    func testDCharacters() {
+        observe(paced: false)
     }
 
     @MainActor
@@ -46,24 +56,19 @@ final class BuyerEmailInputControls: XCTestCase {
             XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 8))
         }
 
+        // Both lanes use the same field, exact text and native operation. Only
+        // burst size differs; every check must pass before the next action.
+        var prefix = ""
         if paced {
-            // Same email as the bulk case. No retry, overwrite or clear.
-            var prefix = ""
             for chunk in ["sortex", "-ios-", "ui@", "example", ".test"] {
-                XCTContext.runActivity(named: "input-control-type") { _ in
-                    email.typeText(chunk)
-                }
-                prefix += chunk
-                XCTContext.runActivity(named: "input-control-prefix") { _ in
-                    XCTAssertTrue(readsExactly(prefix, from: email))
-                }
+                typeNext(chunk, prefix: &prefix, into: email)
             }
-            XCTAssertTrue(prefix == expected)
         } else {
-            XCTContext.runActivity(named: "input-control-type") { _ in
-                email.typeText(expected)
+            for character in expected {
+                typeNext(String(character), prefix: &prefix, into: email)
             }
         }
+        XCTAssertTrue(prefix == expected)
 
         XCTContext.runActivity(named: "input-control-readback") { _ in
             XCTAssertTrue(readsExactly(expected, from: email))
@@ -71,6 +76,18 @@ final class BuyerEmailInputControls: XCTestCase {
         XCTContext.runActivity(named: "input-control-no-submit") { _ in
             XCTAssertTrue(email.exists && submit.exists)
             XCTAssertFalse(submit.isEnabled)
+        }
+    }
+
+    @MainActor
+    private func typeNext(_ chunk: String, prefix: inout String, into email: XCUIElement) {
+        XCTContext.runActivity(named: "input-control-type") { _ in
+            email.typeText(chunk)
+        }
+        prefix += chunk
+        let expectedPrefix = prefix
+        XCTContext.runActivity(named: "input-control-prefix") { _ in
+            XCTAssertTrue(readsExactly(expectedPrefix, from: email))
         }
     }
 

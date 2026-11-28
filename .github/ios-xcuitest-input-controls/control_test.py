@@ -69,42 +69,59 @@ class ControlTests(unittest.TestCase):
                 }}, app)
 
     def test_excludes_wrong_duplicate_or_nonexact_test_inventory(self):
-        passed = test_case("bulk", "Passed")
-        failed = test_case("paced", "Failed")
+        passed = test_case("chunks-a", "Passed")
+        failed = test_case("characters-a", "Failed")
         self.assertEqual(control.inventory(tree(passed, failed)), {
-            control.TEST_IDS["bulk"]: "exact", control.TEST_IDS["paced"]: "failed",
+            control.TEST_IDS["chunks-a"]: "exact", control.TEST_IDS["characters-a"]: "failed",
         })
         self.assertEqual(control.inventory(tree(passed, passed)), {})
         self.assertEqual(control.inventory(tree(failed | {"nodeIdentifier": PRIVATE})), {})
+        self.assertEqual(control.inventory(tree(failed | {
+            "nodeIdentifier": "BuyerEmailInputControls/testBulk()",
+        })), {})
 
-    def test_comparison_requires_actual_readback_not_an_early_failure(self):
-        self.assertEqual(control.comparison({"bulk": "failed", "paced": "exact"}, {"bulk": "readback"}),
-                         "paced-only")
-        self.assertEqual(control.comparison({"bulk": "exact", "paced": "failed"}, {"paced": "prefix"}),
-                         "bulk-only")
-        self.assertEqual(control.comparison({"bulk": "failed", "paced": "failed"},
-                                            {"bulk": "readback", "paced": "prefix"}), "neither-exact")
+    def test_comparison_requires_both_lanes_and_repeated_exact_readback(self):
+        exact = dict.fromkeys(control.TEST_IDS, "exact")
+        self.assertEqual(control.comparison(exact, {}), "both-repeatable")
+        for loser, result in (
+            ("chunks-a", "characters-repeatable"), ("chunks-b", "characters-repeatable"),
+            ("characters-a", "chunks-repeatable"), ("characters-b", "chunks-repeatable"),
+        ):
+            for phase in ("prefix", "readback"):
+                self.assertEqual(control.comparison(exact | {loser: "failed"}, {loser: phase}), result)
+        mixed = exact | {"chunks-b": "failed", "characters-a": "failed"}
+        self.assertEqual(control.comparison(mixed, {
+            "chunks-b": "prefix", "characters-a": "readback",
+        }), "neither-repeatable")
         for early in ("keyboard", "tap", "type", "fresh-input", "unknown"):
-            self.assertEqual(control.comparison({"bulk": "failed", "paced": "exact"}, {"bulk": early}),
+            self.assertEqual(control.comparison(exact | {"chunks-a": "failed"}, {"chunks-a": early}),
                              "indeterminate")
-        self.assertEqual(control.comparison({"bulk": "exact"}, {}), "indeterminate")
+        for result in ("skipped", "unknown", "not-observed", None):
+            self.assertEqual(control.comparison(exact | {"characters-b": result}, {}), "indeterminate")
+        self.assertEqual(control.comparison({"chunks-a": "exact"}, {}), "indeterminate")
 
     def test_reports_fixed_classifications_only_and_queries_exact_case(self):
         private_results = [
-            tree(test_case("bulk", "Failed"), test_case("paced", "Passed")),
+            tree(*[test_case(mode, "Failed" if mode == "chunks-a" else "Passed")
+                   for mode in control.TEST_IDS]),
             {"testRuns": [{"activities": [
-                {"title": "input-control-type"}, {"title": "input-control-readback"},
+                {"title": "input-control-type"}, {"title": "input-control-prefix"},
                 {"title": PRIVATE, "subactivities": [{"title": PRIVATE}]},
             ]}]},
         ]
         output = StringIO()
         with patch.object(control, "json_command", side_effect=private_results) as command:
             with redirect_stdout(output):
-                self.assertEqual(control.report(Path("/tmp/Control.xcresult")), "paced-only")
-        self.assertEqual(output.getvalue(), ("bulk=failed\nbulk-last-phase=readback\n"
-                                             "paced=exact\npaced-last-phase=unknown\n"
-                                             "comparison=paced-only\n"))
-        self.assertIn(control.TEST_IDS["bulk"] + "()", command.call_args_list[1].args[0])
+                self.assertEqual(control.report(Path("/tmp/Control.xcresult")), "characters-repeatable")
+        self.assertEqual(output.getvalue(), (
+            "chunks-a=failed\nchunks-a-last-phase=prefix\n"
+            "characters-a=exact\ncharacters-a-last-phase=unknown\n"
+            "chunks-b=exact\nchunks-b-last-phase=unknown\n"
+            "characters-b=exact\ncharacters-b-last-phase=unknown\n"
+            "comparison=characters-repeatable\n"
+        ))
+        self.assertIn(control.TEST_IDS["chunks-a"] + "()", command.call_args_list[1].args[0])
+        self.assertEqual(command.call_count, 2)
         self.assertNotIn(PRIVATE, output.getvalue())
 
     def test_control_relaunches_real_input_without_submitting_or_observing_password(self):
@@ -113,10 +130,19 @@ class ControlTests(unittest.TestCase):
         self.assertIn("app.terminate()", swift)
         self.assertIn("app.launch()", swift)
         self.assertIn("value == nil || (value as? String)?.isEmpty == true", swift)
-        self.assertIn("readsExactly(prefix, from: email)", swift)
+        self.assertIn("readsExactly(expectedPrefix, from: email)", swift)
+        self.assertIn("for character in expected", swift)
+        self.assertIn("typeNext(String(character), prefix: &prefix, into: email)", swift)
+        self.assertIn("typeNext(chunk, prefix: &prefix, into: email)", swift)
+        self.assertIn("continueAfterFailure = false", swift)
+        self.assertLess(swift.index("email.typeText(chunk)"), swift.index("readsExactly(expectedPrefix, from: email)"))
+        for case in control.TEST_IDS.values():
+            self.assertIn("func " + case.rsplit("/", 1)[1] + "()", swift)
         self.assertIn("readsExactly(expected, from: email)", swift)
-        self.assertEqual(swift.count("func test"), 2)
-        self.assertEqual(swift.count("typeText("), 2)
+        self.assertEqual(swift.count("func test"), 4)
+        self.assertEqual(swift.count("observe(paced: true)"), 2)
+        self.assertEqual(swift.count("observe(paced: false)"), 2)
+        self.assertEqual(swift.count("typeText("), 1)
         for bypass in ("submit.tap", "secret.typeText", "secret.value", "openURL", "UIPasteboard",
                        "screenshot(", "debugDescription", "print("):
             self.assertNotIn(bypass, swift)
