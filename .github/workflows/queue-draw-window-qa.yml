@@ -1,0 +1,84 @@
+# Inert without a separately approved, single-file intent addition.
+name: SorteX QA | d4 e somente migração 22 (revisão obrigatória)
+on:
+  push:
+    branches: [homologacao/web-ios-integrada]
+    paths: ['.github/qa-release-intents/d4-21-to-22.json']
+permissions:
+  contents: read
+concurrency:
+  group: sortex-web-ios-qa-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event_name == 'push' && github.run_attempt == '1' && github.event.repository.private == false
+    name: Pré-validação QA, sem segredos
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - run: node --test services/api/scripts/queue-draw-window-qa.test.cjs
+      - name: Conferir janela, política do QA, candidata e API atual sem segredos
+        run: |
+          set -euo pipefail
+          gate=services/api/scripts
+          node "$gate/queue-draw-window-qa.cjs" preflight
+          expected=d4e499e29c76a11f4275c2be8d34e6a4a616cb70
+          git merge-base --is-ancestor "$expected" HEAD
+          git archive "$expected" services/api/prisma/migrations | tar -x -C "$RUNNER_TEMP"
+          node -e 'const {pins,readManifest,assertRuntimeHttp}=require("./services/api/scripts/release-draw-window-qa.cjs"); readManifest(process.argv[1]); assertRuntimeHttp(pins.baseSha).then(()=>console.log("Base HTTP QA, candidata e manifestos exatos; nenhuma escrita.")).catch(()=>{console.error("Base HTTP QA não confirmada.");process.exitCode=1;})' "$RUNNER_TEMP/services/api"
+
+  approved_qa:
+    name: Revisar e aprovar o QA | d4 e migração 22
+    needs: preflight
+    if: github.repository == 'blackwolfoficiall-glitch/SorteX' && github.ref == 'refs/heads/homologacao/web-ios-integrada' && github.event_name == 'push' && github.run_attempt == '1' && github.event.repository.private == false
+    environment: sortex-web-ios-qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: d4e499e29c76a11f4275c2be8d34e6a4a616cb70
+          path: qa-pinned-candidate
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 24
+      - name: Revalidar janela e proteção após a aprovação nativa
+        run: node services/api/scripts/queue-draw-window-qa.cjs approved_qa
+      - name: Montar a candidata exata sem segredos
+        working-directory: qa-pinned-candidate/services/api
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = d4e499e29c76a11f4275c2be8d34e6a4a616cb70
+          test -z "$(git status --porcelain --untracked-files=no)"
+          test ! -e dist/neon/sortex-api.zip
+          [[ ! -v SORTEX_QA_DATABASE_URL && ! -v SORTEX_QA_NEON_API_KEY && ! -v DATABASE_URL ]]
+          build_home="$(mktemp -d)"
+          trap 'rm -rf -- "$build_home"' EXIT
+          clean() { env -i PATH="$PATH" HOME="$build_home" CI=true LANG=C.UTF-8 DATABASE_URL=postgresql://validation:validation@127.0.0.1:5432/sortex_build "$@"; }
+          clean npm ci --include=dev --no-audit --no-fund
+          clean npx --no-install prisma generate
+          clean npm run build:neon
+          test -s dist/neon/sortex-api.zip
+      - name: Conferir ledger e executar uma vez, somente após revisão do ambiente
+        env:
+          QA_ENABLE: ${{ vars.SORTEX_QA_BOOTSTRAP }}
+          SORTEX_QA_RELEASE_CONFIRM: QA-13+21-to-22+d4e499e29c76a11f4275c2be8d34e6a4a616cb70
+          SORTEX_QA_DATABASE_URL: ${{ secrets.SORTEX_QA_DATABASE_URL }}
+          SORTEX_QA_NEON_API_KEY: ${{ secrets.SORTEX_QA_NEON_API_KEY }}
+        run: node services/api/scripts/release-draw-window-qa.cjs --apply-approved-intent "$GITHUB_WORKSPACE/qa-pinned-candidate"

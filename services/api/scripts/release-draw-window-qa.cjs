@@ -6,6 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { validateDestination } = require('./migrate-isolated-qa.cjs');
 const { rollout } = require('./redeploy-isolated-qa.cjs');
+const { verifiedQueue } = require('./queue-draw-window-qa.cjs');
 
 const pins = Object.freeze({
   repository: 'blackwolfoficiall-glitch/SorteX',
@@ -183,11 +184,20 @@ async function assertRuntimeHttp(revision, request = fetch) {
 
 async function main() {
   if (process.argv.length !== 4) fail('Uso: node scripts/release-draw-window-qa.cjs --plan|--apply /checkout/candidata');
-  const [mode, checkout] = process.argv.slice(2);
+  const [invocation, checkout] = process.argv.slice(2);
   const env = process.env;
-  const databaseUrl = validateInvocation(mode, env);
+  const workflowRoot = path.resolve(__dirname, '../../..');
+  const queued = invocation === '--apply-approved-intent'
+    ? await verifiedQueue(workflowRoot, 'approved_qa', env) : null;
+  if (queued && (env.QA_ENABLE !== 'yes' || !env.SORTEX_QA_NEON_API_KEY ||
+      !env.SORTEX_QA_DATABASE_URL || env.SORTEX_QA_RELEASE_CONFIRM !== confirmation)) {
+    fail('Portão manual QA recusado: revisão, autorização ou contexto não conferem.');
+  }
+  const mode = queued ? '--apply' : invocation;
+  const databaseUrl = queued ? validateDestination(env.SORTEX_QA_DATABASE_URL)
+    : validateInvocation(mode, env);
   const candidateRoot = fs.realpathSync(checkout);
-  validateCheckout(candidateRoot, path.resolve(__dirname, '../../..'), env);
+  validateCheckout(candidateRoot, workflowRoot, env);
   const cwd = path.join(candidateRoot, 'services/api');
   const manifest = readManifest(cwd);
   const zip = fs.readFileSync(path.join(cwd, 'dist/neon/sortex-api.zip'));
@@ -206,15 +216,27 @@ async function main() {
   client.on('error', () => {});
   try {
     await client.connect();
-    const result = await promote({
-      mode, manifest, client,
+    const args = {
+      manifest, client,
       assertRuntime: async revision => {
         if (revision === pins.baseSha) await run(revision); // baseline path is a verified no-op
         await assertRuntimeHttp(revision);
       },
-      migrate: () => applyPrisma(cwd, databaseUrl),
-      deploy: () => run(pins.candidateSha),
-    });
+      migrate: () => {
+        if (queued) queued.check(150000);
+        return applyPrisma(cwd, databaseUrl);
+      },
+      deploy: () => {
+        if (queued) queued.check(90000);
+        return run(pins.candidateSha);
+      },
+    };
+    if (queued) {
+      // First verify the exact ledger read-only after native environment approval.
+      await promote({ ...args, mode: '--plan' });
+      queued.check();
+    }
+    const result = await promote({ ...args, mode });
     // Only immutable IDs/digests and aggregate status. Never print row bodies.
     console.log(JSON.stringify({ ...result, release: pins.candidateSha, base: pins.baseSha, package: sha256(zip) }));
   } finally {
